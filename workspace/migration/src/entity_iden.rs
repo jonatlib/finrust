@@ -28,6 +28,9 @@ impl EntityIden for OneOffTransaction {}
 impl EntityIden for OneOffTransactionTag {}
 impl EntityIden for RecurringTransaction {}
 impl EntityIden for RecurringTransactionTag {}
+impl EntityIden for ImportedTransaction {}
+impl EntityIden for RecurringIncome {}
+impl EntityIden for RecurringIncomeTag {}
 
 /// A wrapper for table identifiers.
 #[derive(Debug, Clone)]

@@ -6,9 +6,12 @@
 pub mod account;
 pub mod account_allowed_user;
 pub mod account_tag;
+pub mod imported_transaction;
 pub mod manual_account_state;
 pub mod one_off_transaction;
 pub mod one_off_transaction_tag;
+pub mod recurring_income;
+pub mod recurring_income_tag;
 pub mod recurring_transaction;
 pub mod recurring_transaction_tag;
 pub mod tag;
@@ -21,9 +24,12 @@ pub mod prelude {
     pub use super::account::Entity as Account;
     pub use super::account_allowed_user::Entity as AccountAllowedUser;
     pub use super::account_tag::Entity as AccountTag;
+    pub use super::imported_transaction::Entity as ImportedTransaction;
     pub use super::manual_account_state::Entity as ManualAccountState;
     pub use super::one_off_transaction::Entity as OneOffTransaction;
     pub use super::one_off_transaction_tag::Entity as OneOffTransactionTag;
+    pub use super::recurring_income::Entity as RecurringIncome;
+    pub use super::recurring_income_tag::Entity as RecurringIncomeTag;
     pub use super::recurring_transaction::Entity as RecurringTransaction;
     pub use super::recurring_transaction_tag::Entity as RecurringTransactionTag;
     pub use super::tag::Entity as Tag;
@@ -65,15 +71,15 @@ mod test {
             username: Set("user1".to_string()),
             ..Default::default()
         }
-        .insert(&db)
-        .await?;
+            .insert(&db)
+            .await?;
 
         let user2 = user::ActiveModel {
             username: Set("user2".to_string()),
             ..Default::default()
         }
-        .insert(&db)
-        .await?;
+            .insert(&db)
+            .await?;
 
         // Create tags
         let tag1 = tag::ActiveModel {
@@ -83,8 +89,8 @@ mod test {
             ledger_name: Set(None),
             ..Default::default()
         }
-        .insert(&db)
-        .await?;
+            .insert(&db)
+            .await?;
 
         let tag2 = tag::ActiveModel {
             name: Set("Utilities".to_string()),
@@ -93,8 +99,8 @@ mod test {
             ledger_name: Set(None),
             ..Default::default()
         }
-        .insert(&db)
-        .await?;
+            .insert(&db)
+            .await?;
 
         // Create accounts
         let account1 = account::ActiveModel {
@@ -106,8 +112,8 @@ mod test {
             ledger_name: Set(None),
             ..Default::default()
         }
-        .insert(&db)
-        .await?;
+            .insert(&db)
+            .await?;
 
         let account2 = account::ActiveModel {
             name: Set("Savings".to_string()),
@@ -118,8 +124,8 @@ mod test {
             ledger_name: Set(None),
             ..Default::default()
         }
-        .insert(&db)
-        .await?;
+            .insert(&db)
+            .await?;
 
         // Link account to tag
         let account_tag = account_tag::ActiveModel {
@@ -127,8 +133,8 @@ mod test {
             tag_id: Set(tag1.id),
             ..Default::default()
         }
-        .insert(&db)
-        .await?;
+            .insert(&db)
+            .await?;
 
         // Create one-off transaction
         let one_off_tx = one_off_transaction::ActiveModel {
@@ -143,8 +149,8 @@ mod test {
             linked_import_id: Set(None),
             ..Default::default()
         }
-        .insert(&db)
-        .await?;
+            .insert(&db)
+            .await?;
 
         // Link one-off transaction to tag
         let one_off_tx_tag = one_off_transaction_tag::ActiveModel {
@@ -152,8 +158,8 @@ mod test {
             tag_id: Set(tag1.id),
             ..Default::default()
         }
-        .insert(&db)
-        .await?;
+            .insert(&db)
+            .await?;
 
         // Create recurring transaction
         let recurring_tx = recurring_transaction::ActiveModel {
@@ -169,8 +175,8 @@ mod test {
             ledger_name: Set(None),
             ..Default::default()
         }
-        .insert(&db)
-        .await?;
+            .insert(&db)
+            .await?;
 
         // Link recurring transaction to tag
         let recurring_tx_tag = recurring_transaction_tag::ActiveModel {
@@ -178,8 +184,8 @@ mod test {
             tag_id: Set(tag2.id),
             ..Default::default()
         }
-        .insert(&db)
-        .await?;
+            .insert(&db)
+            .await?;
 
         // Create a transfer transaction
         let transfer_tx = one_off_transaction::ActiveModel {
@@ -194,8 +200,8 @@ mod test {
             linked_import_id: Set(None),
             ..Default::default()
         }
-        .insert(&db)
-        .await?;
+            .insert(&db)
+            .await?;
 
         // Allow user2 to access account1
         let account_allowed_user = account_allowed_user::ActiveModel {
@@ -203,8 +209,8 @@ mod test {
             user_id: Set(user2.id),
             ..Default::default()
         }
-        .insert(&db)
-        .await?;
+            .insert(&db)
+            .await?;
 
         // Create manual account state
         let manual_state = manual_account_state::ActiveModel {
@@ -213,8 +219,48 @@ mod test {
             amount: Set(Decimal::new(245000, 2)), // 2450.00
             ..Default::default()
         }
-        .insert(&db)
-        .await?;
+            .insert(&db)
+            .await?;
+
+        // Create imported transaction
+        let imported_tx = imported_transaction::ActiveModel {
+            account_id: Set(account1.id),
+            date: Set(NaiveDate::from_ymd_opt(2023, 1, 20).unwrap()),
+            description: Set("Imported grocery purchase".to_string()),
+            amount: Set(Decimal::new(-4500, 2)), // -45.00
+            import_hash: Set("abc123".to_string()),
+            raw_data: Set(None),
+            reconciled_one_off_transaction_id: Set(Some(one_off_tx.id)),
+            ..Default::default()
+        }
+            .insert(&db)
+            .await?;
+
+        // Create recurring income
+        let recurring_income = recurring_income::ActiveModel {
+            name: Set("Salary".to_string()),
+            description: Set(Some("Monthly salary payment".to_string())),
+            amount: Set(Decimal::new(300000, 2)), // 3000.00
+            start_date: Set(NaiveDate::from_ymd_opt(2023, 1, 25).unwrap()),
+            end_date: Set(None),
+            period: Set(recurring_transaction::RecurrencePeriod::Monthly),
+            include_in_statistics: Set(true),
+            target_account_id: Set(account1.id),
+            source_name: Set(Some("Employer Inc.".to_string())),
+            ledger_name: Set(None),
+            ..Default::default()
+        }
+            .insert(&db)
+            .await?;
+
+        // Link recurring income to tag
+        let recurring_income_tag = recurring_income_tag::ActiveModel {
+            income_id: Set(recurring_income.id),
+            tag_id: Set(tag2.id),
+            ..Default::default()
+        }
+            .insert(&db)
+            .await?;
 
         // Read back and verify data
 
@@ -276,6 +322,27 @@ mod test {
         assert_eq!(manual_states.len(), 1);
         assert_eq!(manual_states[0].account_id, account1.id);
         assert_eq!(manual_states[0].amount, Decimal::new(245000, 2));
+
+        // Verify imported transactions
+        let imported_txs = ImportedTransaction::find().all(&db).await?;
+        assert_eq!(imported_txs.len(), 1);
+        assert_eq!(imported_txs[0].account_id, account1.id);
+        assert_eq!(imported_txs[0].description, "Imported grocery purchase");
+        assert_eq!(imported_txs[0].amount, Decimal::new(-4500, 2));
+        assert_eq!(imported_txs[0].reconciled_one_off_transaction_id, Some(one_off_tx.id));
+
+        // Verify recurring incomes
+        let recurring_incomes = RecurringIncome::find().all(&db).await?;
+        assert_eq!(recurring_incomes.len(), 1);
+        assert_eq!(recurring_incomes[0].name, "Salary");
+        assert_eq!(recurring_incomes[0].amount, Decimal::new(300000, 2));
+        assert_eq!(recurring_incomes[0].target_account_id, account1.id);
+
+        // Verify recurring income-tag relationship
+        let recurring_income_tags = RecurringIncomeTag::find().all(&db).await?;
+        assert_eq!(recurring_income_tags.len(), 1);
+        assert_eq!(recurring_income_tags[0].income_id, recurring_income.id);
+        assert_eq!(recurring_income_tags[0].tag_id, tag2.id);
 
         // Test relationships using Related trait
 

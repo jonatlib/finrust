@@ -1,8 +1,9 @@
 use crate::entity_iden::EntityIden;
 use model::entities::prelude::*;
 use model::entities::{
-    account, account_allowed_user, account_tag, manual_account_state, one_off_transaction,
-    one_off_transaction_tag, recurring_transaction, recurring_transaction_tag, tag, user,
+    account, account_allowed_user, account_tag, imported_transaction, manual_account_state, one_off_transaction,
+    one_off_transaction_tag, recurring_income, recurring_income_tag, recurring_transaction, 
+    recurring_transaction_tag, tag, user,
 };
 use sea_orm_migration::{prelude::*, schema::*};
 
@@ -459,11 +460,213 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
+        // Create imported_transactions table
+        manager
+            .create_table(
+                Table::create()
+                    .table(ImportedTransaction::table())
+                    .if_not_exists()
+                    .col(pk_auto(ImportedTransaction::column(
+                        imported_transaction::Column::Id,
+                    )))
+                    .col(integer(ImportedTransaction::column(
+                        imported_transaction::Column::AccountId,
+                    )))
+                    .col(date(ImportedTransaction::column(
+                        imported_transaction::Column::Date,
+                    )))
+                    .col(string(ImportedTransaction::column(
+                        imported_transaction::Column::Description,
+                    )))
+                    .col(
+                        decimal(ImportedTransaction::column(
+                            imported_transaction::Column::Amount,
+                        ))
+                        .decimal_len(16, 4),
+                    )
+                    .col(string(ImportedTransaction::column(
+                        imported_transaction::Column::ImportHash,
+                    )).unique_key())
+                    .col(json_binary_null(ImportedTransaction::column(
+                        imported_transaction::Column::RawData,
+                    )))
+                    .col(integer_null(ImportedTransaction::column(
+                        imported_transaction::Column::ReconciledOneOffTransactionId,
+                    )))
+                    .foreign_key(
+                        ForeignKey::create()
+                            .name("fk_imported_transactions_account")
+                            .from(
+                                ImportedTransaction::table(),
+                                ImportedTransaction::column(
+                                    imported_transaction::Column::AccountId,
+                                ),
+                            )
+                            .to(Account::table(), Account::column(account::Column::Id))
+                            .on_delete(ForeignKeyAction::Cascade)
+                            .on_update(ForeignKeyAction::Cascade),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .name("fk_imported_transactions_reconciled_transaction")
+                            .from(
+                                ImportedTransaction::table(),
+                                ImportedTransaction::column(
+                                    imported_transaction::Column::ReconciledOneOffTransactionId,
+                                ),
+                            )
+                            .to(
+                                OneOffTransaction::table(),
+                                OneOffTransaction::column(one_off_transaction::Column::Id),
+                            )
+                            .on_delete(ForeignKeyAction::SetNull)
+                            .on_update(ForeignKeyAction::Cascade),
+                    )
+                    .to_owned(),
+            )
+            .await?;
+
+        // Create recurring_incomes table
+        manager
+            .create_table(
+                Table::create()
+                    .table(RecurringIncome::table())
+                    .if_not_exists()
+                    .col(pk_auto(RecurringIncome::column(
+                        recurring_income::Column::Id,
+                    )))
+                    .col(string(RecurringIncome::column(
+                        recurring_income::Column::Name,
+                    )))
+                    .col(string_null(RecurringIncome::column(
+                        recurring_income::Column::Description,
+                    )))
+                    .col(
+                        decimal(RecurringIncome::column(
+                            recurring_income::Column::Amount,
+                        ))
+                        .decimal_len(16, 4),
+                    )
+                    .col(date(RecurringIncome::column(
+                        recurring_income::Column::StartDate,
+                    )))
+                    .col(date_null(RecurringIncome::column(
+                        recurring_income::Column::EndDate,
+                    )))
+                    .col(
+                        string(RecurringIncome::column(
+                            recurring_income::Column::Period,
+                        ))
+                        .string_len(1),
+                    )
+                    .col(
+                        boolean(RecurringIncome::column(
+                            recurring_income::Column::IncludeInStatistics,
+                        ))
+                        .default(true),
+                    )
+                    .col(integer(RecurringIncome::column(
+                        recurring_income::Column::TargetAccountId,
+                    )))
+                    .col(string_null(RecurringIncome::column(
+                        recurring_income::Column::SourceName,
+                    )))
+                    .col(string_null(RecurringIncome::column(
+                        recurring_income::Column::LedgerName,
+                    )))
+                    .foreign_key(
+                        ForeignKey::create()
+                            .name("fk_recurring_incomes_target_account")
+                            .from(
+                                RecurringIncome::table(),
+                                RecurringIncome::column(
+                                    recurring_income::Column::TargetAccountId,
+                                ),
+                            )
+                            .to(Account::table(), Account::column(account::Column::Id))
+                            .on_delete(ForeignKeyAction::Cascade)
+                            .on_update(ForeignKeyAction::Cascade),
+                    )
+                    .to_owned(),
+            )
+            .await?;
+
+        // Create recurring_incomes_tags table (join table)
+        manager
+            .create_table(
+                Table::create()
+                    .table(RecurringIncomeTag::table())
+                    .if_not_exists()
+                    .col(integer(RecurringIncomeTag::column(
+                        recurring_income_tag::Column::IncomeId,
+                    )))
+                    .col(integer(RecurringIncomeTag::column(
+                        recurring_income_tag::Column::TagId,
+                    )))
+                    .primary_key(
+                        Index::create()
+                            .name("pk_recurring_incomes_tags")
+                            .col(RecurringIncomeTag::column(
+                                recurring_income_tag::Column::IncomeId,
+                            ))
+                            .col(RecurringIncomeTag::column(
+                                recurring_income_tag::Column::TagId,
+                            )),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .name("fk_recurring_incomes_tags_income")
+                            .from(
+                                RecurringIncomeTag::table(),
+                                RecurringIncomeTag::column(
+                                    recurring_income_tag::Column::IncomeId,
+                                ),
+                            )
+                            .to(
+                                RecurringIncome::table(),
+                                RecurringIncome::column(recurring_income::Column::Id),
+                            )
+                            .on_delete(ForeignKeyAction::Cascade)
+                            .on_update(ForeignKeyAction::Cascade),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .name("fk_recurring_incomes_tags_tag")
+                            .from(
+                                RecurringIncomeTag::table(),
+                                RecurringIncomeTag::column(
+                                    recurring_income_tag::Column::TagId,
+                                ),
+                            )
+                            .to(Tag::table(), Tag::column(tag::Column::Id))
+                            .on_delete(ForeignKeyAction::Cascade)
+                            .on_update(ForeignKeyAction::Cascade),
+                    )
+                    .to_owned(),
+            )
+            .await?;
+
         Ok(())
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         // Drop tables in reverse order to avoid foreign key constraints
+        manager
+            .drop_table(
+                Table::drop()
+                    .table(RecurringIncomeTag::table())
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .drop_table(
+                Table::drop()
+                    .table(RecurringIncome::table())
+                    .to_owned(),
+            )
+            .await?;
+
         manager
             .drop_table(
                 Table::drop()
@@ -490,6 +693,10 @@ impl MigrationTrait for Migration {
 
         manager
             .drop_table(Table::drop().table(OneOffTransaction::table()).to_owned())
+            .await?;
+
+        manager
+            .drop_table(Table::drop().table(ImportedTransaction::table()).to_owned())
             .await?;
 
         manager
