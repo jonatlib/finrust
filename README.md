@@ -1,6 +1,6 @@
 # FinRust - Home Finance Tracker
 
-![FinRust Logo](assets/logo.png)
+![FinRust Logo](assets/logo-small.png)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
