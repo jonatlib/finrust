@@ -19,7 +19,7 @@ pub struct Model {
     /// The date the balance is valid for.
     pub date: NaiveDate,
     /// The amount in the account on the specified date.
-    #[sea_orm(column_type = "Decimal(Some((19, 4)))")]
+    #[sea_orm(column_type = "Decimal(Some((16, 4)))")]
     pub amount: Decimal,
 }
 

@@ -14,7 +14,7 @@ pub struct Model {
     pub name: String,
     pub description: Option<String>,
     /// The value of the transaction. Positive for income, negative for expense.
-    #[sea_orm(column_type = "Decimal(Some((19, 4)))")]
+    #[sea_orm(column_type = "Decimal(Some((16, 4)))")]
     pub amount: Decimal,
     /// The exact date of the transaction.
     pub date: NaiveDate,
