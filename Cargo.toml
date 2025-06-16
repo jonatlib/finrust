@@ -7,8 +7,10 @@ edition = "2024"
 members = [
     "workspace/model",
     "workspace/migration",
+    "workspace/compute",
 ]
 
 
 [dependencies]
 model = { path = "workspace/model" }
+compute = { path = "workspace/compute" }
