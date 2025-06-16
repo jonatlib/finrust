@@ -1,0 +1,19 @@
+[package]
+name = "model"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+
+[dependencies]
+model = { path = "../model" }
+
+sea-orm = { version = "^1.1.12", features = ["sqlx-sqlite", "runtime-tokio-native-tls", "macros"] }
+rusty-money = "^0.4.1"
+rust_decimal = "^1.37.2"
+chrono = "^0.4.41"
+polars = "^0.48.1"
+
+[dev-dependencies]
+tokio = { version = "1.36.0", features = ["full"] }
+migration = { path = "../migration" }
