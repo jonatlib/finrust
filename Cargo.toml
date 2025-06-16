@@ -10,3 +10,4 @@ members = [
 
 
 [dependencies]
+model = { path = "workspace/model" }
