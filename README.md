@@ -1,155 +1,183 @@
-# FinRust - Personal Finance Management System
+# FinRust - Home Finance Tracker
 
-## Project Overview
-FinRust is a comprehensive personal finance management system designed to help users track, analyze, and manage their financial activities. The system allows for detailed tracking of accounts, transactions, expenses, and financial states over time.
+![FinRust Logo](assets/logo.png)
 
-## Architecture
-The project is structured as a Cargo workspace with distinct crates for different concerns:
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
-- **shared**: Contains data transfer objects (DTOs) that define the public API contract
-- **core**: Contains the business logic and database entities
-- **api**: Implements the HTTP server and API endpoints using Axum
-- **cli**: Provides a command-line interface for data import and export
+This repository contains the backend service for a powerful, self-hosted home finance tracking application. Built with
+Rust, Axum, SeaORM, and Polars, this tool is designed for users who want granular control over their financial data,
+robust forecasting capabilities, and a system based on sound accounting principles.
 
-This architecture ensures a clean separation of concerns and allows for code reuse across different interfaces.
+The core mission of this project is to provide a comprehensive and accurate view of your financial situation, both past
+and future. It allows you to model your entire financial ecosystem—from various bank accounts and currencies to complex
+recurring transactions—and then use that model to gain insights and forecast with precision.
+
+## Table of Contents
+
+- [Core Features](#core-features)
+- [Project Goals](#project-goals)
+- [Technical Stack](#technical-stack)
+- [Getting Started](#getting-started)
+    - [Prerequisites](#prerequisites)
+    - [Installation](#installation)
+    - [Running the Application](#running-the-application)
+- [Project Structure](#project-structure)
+- [Development](#development)
+    - [Setting Up Development Environment](#setting-up-development-environment)
+    - [Running Tests](#running-tests)
+- [Contributing](#contributing)
+- [License](#license)
 
 ## Core Features
 
-### Account Management
-- Create and manage multiple money accounts with different currencies
-- Track account balances over time
-- Support for manual account state snapshots to reconcile with real-world balances
-- User permissions system to control access to accounts
+This application is built around a set of powerful, interconnected features:
 
-### Transaction Tracking
-- Record both regular (recurring) and one-time transactions
-- Support for different transaction periods (daily, weekly, monthly, yearly)
-- Detailed transaction metadata including dates, amounts, descriptions
-- Transaction categorization with tags and categories
+* **Multi-Currency Account Management**:
+    * Track an unlimited number of accounts (e.g., bank accounts, credit cards, cash).
+    * Each account has its own designated currency, with all calculations being currency-aware using `rusty_money`.
+    * Designate specific accounts (e.g., for error correction) to be ignored in statistics and totals.
 
-### Financial Analysis
-- Generate expense reports by category and tag
-- View expenses aggregated by month
-- Track account balances over time
-- Visualize financial data with charts and graphs
-- Compare real vs. expected account balances
+* **Comprehensive Transaction Modeling**:
+    * **Recurring Transactions**: Model regular expenses like rent, subscriptions, or loan payments with flexible
+      recurrence rules (daily, weekly, monthly, etc.).
+    * **Recurring Income**: Separately model recurring income streams like salaries or business revenue.
+    * **One-Off Transactions**: Manually add any extra or non-recurring transactions.
+    * **Imported Transactions**: Import transactions from standard banking formats. The system is designed to let you
+      reconcile these imported items against your manually modeled data to prevent duplicates.
 
-### Categorization System
-- Hierarchical category structure for organizing transactions
-- Tag system for flexible transaction labeling
-- Color-coding for visual organization
-- Group transactions by various attributes for analysis
+* **Double-Entry Accounting System**:
+    * All transactions support an optional source account in addition to the mandatory target account.
+    * When both are specified, the system automatically creates the corresponding transaction on the source account,
+      ensuring that money is never created or destroyed, only moved.
 
-### Accounting Features
-- Double-entry accounting system
-- Ledger export functionality for accounting purposes
-- Support for different currencies with proper formatting
-- Historical record tracking for all financial data
+* **Financial Analysis & Forecasting**:
+    * **Historical View**: Get a cumulative, day-by-day balance for any account up to the present.
+    * **Future Forecast**: Project account balances into the future based on all scheduled recurring transactions and
+      income.
+    * **Per-Account Statistics**: Analyze account performance with metrics like starting/ending balances for a period
+      and lowest/highest balances.
 
-### Reporting and Visualization
-- Interactive charts and graphs for financial data
-- Balance history visualization
-- Expense breakdown by category and tag
-- Monthly expense trends
+* **Advanced Categorization & Reporting**:
+    * **Hierarchical Tagging**: Apply tags to both transactions and accounts. Tags can be nested (e.g.,
+      `Expenses:Food:Groceries`) to allow for detailed, tree-based reporting on spending and income.
+    * **Cross-Account Insights**: Use tags to see total expenses or income in a category, regardless of which account
+      was used.
 
-### Import/Export
-- Support for importing data from banking exports (CSV, OFX)
-- Deduplication of imported transactions
-- Export to Ledger file format for compatibility with other tools
+* **Interoperability**:
+    * **Ledger CLI Compatibility**: Every entity (accounts, transactions, tags) can be configured with a `ledger_name`,
+      allowing the entire financial history to be exported in a format compatible with the powerful, plain-text
+      accounting tool, [Ledger](https://www.ledger-cli.org/).
 
-## Technical Capabilities
-- Data processing and aggregation
-- Time-series financial data handling
-- Currency formatting and conversion using rusty_money
-- Date-based transaction generation for recurring expenses
-- Historical data tracking and versioning
+## Project Goals
+
+The main goals of this project are:
+
+1. **Current Account State Visibility**: Provide a clear and accurate view of all account states over time
+2. **Account Forecasting**: Enable precise forecasting of account balances based on recurring transactions and income
+
+## Technical Stack
+
+This project is built using the following technologies:
+
+* **Backend**:
+    * [Rust](https://www.rust-lang.org/) - Programming language
+    * [Axum](https://github.com/tokio-rs/axum) - Web framework for building REST APIs
+    * [SeaORM](https://www.sea-ql.org/SeaORM/) - Async ORM for Rust
+    * [PolaRS](https://pola.rs/) - Data manipulation and analysis library
+    * [rusty_money](https://github.com/varunsrin/rusty_money) - Currency handling library
+    * [Ledger](https://www.ledger-cli.org/) - Double-entry accounting system integration
+
+* **Database**:
+    * SQLite (development)
+    * PostgreSQL (production)
+
+* **Frontend**:
+    * Separate application (not included in this repository)
 
 ## Getting Started
 
 ### Prerequisites
-- Rust (latest stable version)
-- PostgreSQL database
 
-### Setup
-1. Clone the repository
-2. Set up the database:
+* [Rust](https://www.rust-lang.org/tools/install) (latest stable version)
+* [SQLite](https://www.sqlite.org/download.html) (for development)
+* [PostgreSQL](https://www.postgresql.org/download/) (for production)
+
+### Installation
+
+1. Clone the repository:
    ```bash
-   createdb finrust
-   ```
-3. Set the database URL environment variable:
-   ```bash
-   export DATABASE_URL=postgres://postgres:postgres@localhost/finrust
-   ```
-4. Build the project:
-   ```bash
-   cargo build --release
+   git clone https://github.com/yourusername/finrust.git
+   cd finrust
    ```
 
-### Running the API Server
-```bash
-cargo run --release -p api
+2. Build the project:
+   ```bash
+   cargo build
+   ```
+
+### Running the Application
+
+1. Run the migrations to set up the database:
+   ```bash
+   cargo run --bin migration -- up
+   ```
+
+2. Start the server:
+   ```bash
+   cargo run
+   ```
+
+## Project Structure
+
 ```
-
-The API server will start on http://localhost:3000.
-
-### Using the CLI
-Export transactions to Ledger format:
-```bash
-cargo run --release -p cli -- export --output transactions.ledger
+finrust/
+├── Cargo.toml              # Main workspace configuration
+├── src/                    # Main application code
+└── workspace/
+    ├── model/              # Database models and entities
+    │   └── src/
+    │       └── entities/   # Entity definitions
+    └── migration/          # Database migrations
+        └── src/            # Migration scripts
 ```
-
-Import transactions from a CSV file:
-```bash
-cargo run --release -p cli -- import --input bank_export.csv --account 1
-```
-
-## API Endpoints
-
-### Transactions
-- `GET /api/transactions/:id` - Get a single transaction
-- `GET /api/transactions` - Get all transactions
-- `POST /api/transactions` - Create a new transaction
-- `GET /api/accounts/:id/transactions` - Get transactions for a specific account
 
 ## Development
 
+### Setting Up Development Environment
+
+1. Install Rust and required dependencies:
+   ```bash
+   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+   rustup update stable
+   ```
+
+2. Set up the database:
+   ```bash
+   # For SQLite (development)
+   # No additional setup required
+
+   # For PostgreSQL (production)
+   # Create a database and update the connection string in your configuration
+   ```
+
 ### Running Tests
+
+Run the test suite with:
+
 ```bash
 cargo test
 ```
 
-### Project Structure
-```
-finrust/
-├── api/               # Web API implementation
-├── cli/               # Command-line interface
-├── core/              # Business logic and database entities
-├── shared/            # Shared data models
-└── Cargo.toml         # Workspace definition
-```
+## Contributing
 
-## Design Decisions
+Contributions are welcome! Please feel free to submit a Pull Request.
 
-### Why SeaORM?
-We chose SeaORM as our primary ORM because it is async-native, integrates perfectly with Axum/Tokio, and offers a productive Active Record pattern for standard CRUD operations. Its migration tooling is also written in Rust, providing a unified experience.
-
-### Why rusty_money?
-For all internal logic, monetary values must be handled with a precise decimal type to prevent rounding errors. rusty_money is the ideal library for this, providing both the Money type and currency information.
-
-### Why Axum?
-Axum is our framework of choice because it is built by the Tokio team, guaranteeing stability and seamless integration with the async ecosystem. Its use of the tower service model provides a powerful and composable way to add middleware for concerns like logging, authentication, and error handling.
-
-### Why Clap?
-Clap is the de-facto standard for building powerful and ergonomic CLIs in Rust. Its derive-based API makes it incredibly easy to define complex subcommands and arguments, and it automatically generates helpful --help messages.
-
-## Future Enhancements
-- User authentication and authorization
-- Mobile app integration
-- Budgeting features
-- Investment tracking
-- Tax reporting
-- Multi-user support
-- Notifications for financial events
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ## License
-This project is licensed under the MIT License - see the LICENSE file for details.
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
