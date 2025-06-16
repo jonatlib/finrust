@@ -490,9 +490,16 @@ impl MigrationTrait for Migration {
                     .col(json_binary_null(ImportedTransaction::column(
                         imported_transaction::Column::RawData,
                     )))
-                    .col(integer_null(ImportedTransaction::column(
-                        imported_transaction::Column::ReconciledOneOffTransactionId,
-                    )))
+                    .col(
+                        ColumnDef::new(Alias::new("reconciled_transaction_type"))
+                            .string_len(1)
+                            .null(),
+                    )
+                    .col(
+                        ColumnDef::new(Alias::new("reconciled_transaction_id"))
+                            .integer()
+                            .null(),
+                    )
                     .foreign_key(
                         ForeignKey::create()
                             .name("fk_imported_transactions_account")
@@ -504,22 +511,6 @@ impl MigrationTrait for Migration {
                             )
                             .to(Account::table(), Account::column(account::Column::Id))
                             .on_delete(ForeignKeyAction::Cascade)
-                            .on_update(ForeignKeyAction::Cascade),
-                    )
-                    .foreign_key(
-                        ForeignKey::create()
-                            .name("fk_imported_transactions_reconciled_transaction")
-                            .from(
-                                ImportedTransaction::table(),
-                                ImportedTransaction::column(
-                                    imported_transaction::Column::ReconciledOneOffTransactionId,
-                                ),
-                            )
-                            .to(
-                                OneOffTransaction::table(),
-                                OneOffTransaction::column(one_off_transaction::Column::Id),
-                            )
-                            .on_delete(ForeignKeyAction::SetNull)
                             .on_update(ForeignKeyAction::Cascade),
                     )
                     .to_owned(),

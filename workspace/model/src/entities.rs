@@ -230,7 +230,8 @@ mod test {
             amount: Set(Decimal::new(-4500, 2)), // -45.00
             import_hash: Set("abc123".to_string()),
             raw_data: Set(None),
-            reconciled_one_off_transaction_id: Set(Some(one_off_tx.id)),
+            reconciled_transaction_type: Set(Some(imported_transaction::ReconciledTransactionEntityType::OneOff)),
+            reconciled_transaction_id: Set(Some(one_off_tx.id)),
             ..Default::default()
         }
             .insert(&db)
@@ -329,7 +330,7 @@ mod test {
         assert_eq!(imported_txs[0].account_id, account1.id);
         assert_eq!(imported_txs[0].description, "Imported grocery purchase");
         assert_eq!(imported_txs[0].amount, Decimal::new(-4500, 2));
-        assert_eq!(imported_txs[0].reconciled_one_off_transaction_id, Some(one_off_tx.id));
+        assert_eq!(imported_txs[0].get_reconciled_transaction_type(), Some(imported_transaction::ReconciledTransactionType::OneOff(one_off_tx.id)));
 
         // Verify recurring incomes
         let recurring_incomes = RecurringIncome::find().all(&db).await?;
