@@ -4,15 +4,15 @@
 //! for Rust's type system and the SeaORM framework.
 
 pub mod account;
+pub mod account_allowed_user;
+pub mod account_tag;
 pub mod manual_account_state;
 pub mod one_off_transaction;
+pub mod one_off_transaction_tag;
 pub mod recurring_transaction;
+pub mod recurring_transaction_tag;
 pub mod tag;
 pub mod user;
-pub mod account_tag;
-pub mod one_off_transaction_tag;
-pub mod recurring_transaction_tag;
-pub mod account_allowed_user;
 
 // Define join tables for many-to-many relationships.
 // SeaORM uses these to understand how to link entities.
@@ -35,7 +35,10 @@ mod test {
     use chrono::NaiveDate;
     use migration::{Migrator, MigratorTrait};
     use rust_decimal::Decimal;
-    use sea_orm::{ActiveModelTrait, ColumnTrait, ConnectionTrait, Database, DatabaseConnection, DbErr, EntityTrait, QueryFilter, QuerySelect, Set};
+    use sea_orm::{
+        ActiveModelTrait, ColumnTrait, ConnectionTrait, Database, DatabaseConnection, DbErr,
+        EntityTrait, QueryFilter, QuerySelect, Set,
+    };
 
     use super::*;
     use prelude::*;
@@ -61,12 +64,16 @@ mod test {
         let user1 = user::ActiveModel {
             username: Set("user1".to_string()),
             ..Default::default()
-        }.insert(&db).await?;
+        }
+        .insert(&db)
+        .await?;
 
         let user2 = user::ActiveModel {
             username: Set("user2".to_string()),
             ..Default::default()
-        }.insert(&db).await?;
+        }
+        .insert(&db)
+        .await?;
 
         // Create tags
         let tag1 = tag::ActiveModel {
@@ -75,7 +82,9 @@ mod test {
             parent_id: Set(None),
             ledger_name: Set(None),
             ..Default::default()
-        }.insert(&db).await?;
+        }
+        .insert(&db)
+        .await?;
 
         let tag2 = tag::ActiveModel {
             name: Set("Utilities".to_string()),
@@ -83,7 +92,9 @@ mod test {
             parent_id: Set(None),
             ledger_name: Set(None),
             ..Default::default()
-        }.insert(&db).await?;
+        }
+        .insert(&db)
+        .await?;
 
         // Create accounts
         let account1 = account::ActiveModel {
@@ -94,7 +105,9 @@ mod test {
             include_in_statistics: Set(true),
             ledger_name: Set(None),
             ..Default::default()
-        }.insert(&db).await?;
+        }
+        .insert(&db)
+        .await?;
 
         let account2 = account::ActiveModel {
             name: Set("Savings".to_string()),
@@ -104,14 +117,18 @@ mod test {
             include_in_statistics: Set(true),
             ledger_name: Set(None),
             ..Default::default()
-        }.insert(&db).await?;
+        }
+        .insert(&db)
+        .await?;
 
         // Link account to tag
         let account_tag = account_tag::ActiveModel {
             account_id: Set(account1.id),
             tag_id: Set(tag1.id),
             ..Default::default()
-        }.insert(&db).await?;
+        }
+        .insert(&db)
+        .await?;
 
         // Create one-off transaction
         let one_off_tx = one_off_transaction::ActiveModel {
@@ -125,14 +142,18 @@ mod test {
             ledger_name: Set(None),
             linked_import_id: Set(None),
             ..Default::default()
-        }.insert(&db).await?;
+        }
+        .insert(&db)
+        .await?;
 
         // Link one-off transaction to tag
         let one_off_tx_tag = one_off_transaction_tag::ActiveModel {
             transaction_id: Set(one_off_tx.id),
             tag_id: Set(tag1.id),
             ..Default::default()
-        }.insert(&db).await?;
+        }
+        .insert(&db)
+        .await?;
 
         // Create recurring transaction
         let recurring_tx = recurring_transaction::ActiveModel {
@@ -147,14 +168,18 @@ mod test {
             source_account_id: Set(None),
             ledger_name: Set(None),
             ..Default::default()
-        }.insert(&db).await?;
+        }
+        .insert(&db)
+        .await?;
 
         // Link recurring transaction to tag
         let recurring_tx_tag = recurring_transaction_tag::ActiveModel {
             transaction_id: Set(recurring_tx.id),
             tag_id: Set(tag2.id),
             ..Default::default()
-        }.insert(&db).await?;
+        }
+        .insert(&db)
+        .await?;
 
         // Create a transfer transaction
         let transfer_tx = one_off_transaction::ActiveModel {
@@ -168,14 +193,18 @@ mod test {
             ledger_name: Set(None),
             linked_import_id: Set(None),
             ..Default::default()
-        }.insert(&db).await?;
+        }
+        .insert(&db)
+        .await?;
 
         // Allow user2 to access account1
         let account_allowed_user = account_allowed_user::ActiveModel {
             account_id: Set(account1.id),
             user_id: Set(user2.id),
             ..Default::default()
-        }.insert(&db).await?;
+        }
+        .insert(&db)
+        .await?;
 
         // Create manual account state
         let manual_state = manual_account_state::ActiveModel {
@@ -183,7 +212,9 @@ mod test {
             date: Set(NaiveDate::from_ymd_opt(2023, 1, 31).unwrap()),
             amount: Set(Decimal::new(245000, 2)), // 2450.00
             ..Default::default()
-        }.insert(&db).await?;
+        }
+        .insert(&db)
+        .await?;
 
         // Read back and verify data
 

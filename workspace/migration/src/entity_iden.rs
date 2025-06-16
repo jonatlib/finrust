@@ -1,6 +1,6 @@
-use sea_orm::Iden;
 use model::entities::prelude::*;
 use sea_orm::entity::prelude::*;
+use sea_orm::Iden;
 
 /// A trait for converting an entity into an identifier that can be used in migrations.
 pub trait EntityIden: EntityTrait {

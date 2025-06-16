@@ -21,11 +21,7 @@ pub struct Model {
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
     /// Defines the self-referencing relationship for parent tag.
-    #[sea_orm(
-        belongs_to = "Entity",
-        from = "Column::ParentId",
-        to = "Column::Id"
-    )]
+    #[sea_orm(belongs_to = "Entity", from = "Column::ParentId", to = "Column::Id")]
     Parent,
 }
 

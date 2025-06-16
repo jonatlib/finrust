@@ -18,7 +18,11 @@ pub enum Relation {
         to = "one_off_transaction::Column::Id"
     )]
     Transaction,
-    #[sea_orm(belongs_to = "tag::Entity", from = "Column::TagId", to = "tag::Column::Id")]
+    #[sea_orm(
+        belongs_to = "tag::Entity",
+        from = "Column::TagId",
+        to = "tag::Column::Id"
+    )]
     Tag,
 }
 impl ActiveModelBehavior for ActiveModel {}

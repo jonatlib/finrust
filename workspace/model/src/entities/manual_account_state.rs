@@ -1,10 +1,9 @@
 use chrono::NaiveDate;
 use rust_decimal::Decimal;
-use sea_orm::entity::prelude::*;
 use sea_orm::ActiveModelBehavior;
+use sea_orm::entity::prelude::*;
 
 use super::account;
-
 
 /// Represents a manually set balance for an account at a specific point in time.
 /// This is useful for initializing an account or correcting drift over time.

@@ -18,7 +18,11 @@ pub enum Relation {
         to = "account::Column::Id"
     )]
     Account,
-    #[sea_orm(belongs_to = "user::Entity", from = "Column::UserId", to = "user::Column::Id")]
+    #[sea_orm(
+        belongs_to = "user::Entity",
+        from = "Column::UserId",
+        to = "user::Column::Id"
+    )]
     User,
 }
 

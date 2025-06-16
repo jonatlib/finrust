@@ -60,5 +60,4 @@ impl Related<user::Entity> for Entity {
     }
 }
 
-
 impl ActiveModelBehavior for ActiveModel {}

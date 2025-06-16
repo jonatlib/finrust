@@ -4,7 +4,6 @@ use sea_orm::entity::prelude::*;
 
 use super::{account, tag};
 
-
 /// Enum for recurrence periods.
 #[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum)]
 #[sea_orm(rs_type = "String", db_type = "String(StringLen::N(1))")]
@@ -24,7 +23,6 @@ pub enum RecurrencePeriod {
     #[sea_orm(string_value = "Yearly")]
     Yearly,
 }
-
 
 /// A transaction that repeats on a regular schedule.
 /// Can be used for both income (salary) and expenses (rent, subscriptions).
@@ -78,7 +76,11 @@ impl Related<tag::Entity> for Entity {
         super::recurring_transaction_tag::Relation::Tag.def()
     }
     fn via() -> Option<RelationDef> {
-        Some(super::recurring_transaction_tag::Relation::Transaction.def().rev())
+        Some(
+            super::recurring_transaction_tag::Relation::Transaction
+                .def()
+                .rev(),
+        )
     }
 }
 

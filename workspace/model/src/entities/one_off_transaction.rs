@@ -54,7 +54,11 @@ impl Related<tag::Entity> for Entity {
         super::one_off_transaction_tag::Relation::Tag.def()
     }
     fn via() -> Option<RelationDef> {
-        Some(super::one_off_transaction_tag::Relation::Transaction.def().rev())
+        Some(
+            super::one_off_transaction_tag::Relation::Transaction
+                .def()
+                .rev(),
+        )
     }
 }
 

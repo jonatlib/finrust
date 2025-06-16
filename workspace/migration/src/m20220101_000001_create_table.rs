@@ -1,6 +1,9 @@
 use crate::entity_iden::EntityIden;
 use model::entities::prelude::*;
-use model::entities::{account, account_allowed_user, account_tag, manual_account_state, one_off_transaction, one_off_transaction_tag, recurring_transaction, recurring_transaction_tag, tag, user};
+use model::entities::{
+    account, account_allowed_user, account_tag, manual_account_state, one_off_transaction,
+    one_off_transaction_tag, recurring_transaction, recurring_transaction_tag, tag, user,
+};
 use sea_orm_migration::{prelude::*, schema::*};
 
 #[derive(DeriveMigrationName)]
@@ -55,7 +58,10 @@ impl MigrationTrait for Migration {
                     .col(string_null(Account::column(account::Column::Description)))
                     .col(string(Account::column(account::Column::CurrencyCode)))
                     .col(integer(Account::column(account::Column::OwnerId)))
-                    .col(boolean(Account::column(account::Column::IncludeInStatistics)).default(true))
+                    .col(
+                        boolean(Account::column(account::Column::IncludeInStatistics))
+                            .default(true),
+                    )
                     .col(string_null(Account::column(account::Column::LedgerName)))
                     .foreign_key(
                         ForeignKey::create()
@@ -86,7 +92,10 @@ impl MigrationTrait for Migration {
                     .foreign_key(
                         ForeignKey::create()
                             .name("fk_accounts_tags_account")
-                            .from(AccountTag::table(), AccountTag::column(account_tag::Column::AccountId))
+                            .from(
+                                AccountTag::table(),
+                                AccountTag::column(account_tag::Column::AccountId),
+                            )
                             .to(Account::table(), Account::column(account::Column::Id))
                             .on_delete(ForeignKeyAction::Cascade)
                             .on_update(ForeignKeyAction::Cascade),
@@ -94,7 +103,10 @@ impl MigrationTrait for Migration {
                     .foreign_key(
                         ForeignKey::create()
                             .name("fk_accounts_tags_tag")
-                            .from(AccountTag::table(), AccountTag::column(account_tag::Column::TagId))
+                            .from(
+                                AccountTag::table(),
+                                AccountTag::column(account_tag::Column::TagId),
+                            )
                             .to(Tag::table(), Tag::column(tag::Column::Id))
                             .on_delete(ForeignKeyAction::Cascade)
                             .on_update(ForeignKeyAction::Cascade),
@@ -109,18 +121,29 @@ impl MigrationTrait for Migration {
                 Table::create()
                     .table(AccountAllowedUser::table())
                     .if_not_exists()
-                    .col(integer(AccountAllowedUser::column(account_allowed_user::Column::AccountId)))
-                    .col(integer(AccountAllowedUser::column(account_allowed_user::Column::UserId)))
+                    .col(integer(AccountAllowedUser::column(
+                        account_allowed_user::Column::AccountId,
+                    )))
+                    .col(integer(AccountAllowedUser::column(
+                        account_allowed_user::Column::UserId,
+                    )))
                     .primary_key(
                         Index::create()
                             .name("pk_accounts_allowed_users")
-                            .col(AccountAllowedUser::column(account_allowed_user::Column::AccountId))
-                            .col(AccountAllowedUser::column(account_allowed_user::Column::UserId)),
+                            .col(AccountAllowedUser::column(
+                                account_allowed_user::Column::AccountId,
+                            ))
+                            .col(AccountAllowedUser::column(
+                                account_allowed_user::Column::UserId,
+                            )),
                     )
                     .foreign_key(
                         ForeignKey::create()
                             .name("fk_accounts_allowed_users_account")
-                            .from(AccountAllowedUser::table(), AccountAllowedUser::column(account_allowed_user::Column::AccountId))
+                            .from(
+                                AccountAllowedUser::table(),
+                                AccountAllowedUser::column(account_allowed_user::Column::AccountId),
+                            )
                             .to(Account::table(), Account::column(account::Column::Id))
                             .on_delete(ForeignKeyAction::Cascade)
                             .on_update(ForeignKeyAction::Cascade),
@@ -128,7 +151,10 @@ impl MigrationTrait for Migration {
                     .foreign_key(
                         ForeignKey::create()
                             .name("fk_accounts_allowed_users_user")
-                            .from(AccountAllowedUser::table(), AccountAllowedUser::column(account_allowed_user::Column::UserId))
+                            .from(
+                                AccountAllowedUser::table(),
+                                AccountAllowedUser::column(account_allowed_user::Column::UserId),
+                            )
                             .to(User::table(), User::column(user::Column::Id))
                             .on_delete(ForeignKeyAction::Cascade)
                             .on_update(ForeignKeyAction::Cascade),
@@ -143,14 +169,28 @@ impl MigrationTrait for Migration {
                 Table::create()
                     .table(ManualAccountState::table())
                     .if_not_exists()
-                    .col(pk_auto(ManualAccountState::column(manual_account_state::Column::Id)))
-                    .col(integer(ManualAccountState::column(manual_account_state::Column::AccountId)))
-                    .col(date(ManualAccountState::column(manual_account_state::Column::Date)))
-                    .col(decimal(ManualAccountState::column(manual_account_state::Column::Amount)).decimal_len(16, 4))
+                    .col(pk_auto(ManualAccountState::column(
+                        manual_account_state::Column::Id,
+                    )))
+                    .col(integer(ManualAccountState::column(
+                        manual_account_state::Column::AccountId,
+                    )))
+                    .col(date(ManualAccountState::column(
+                        manual_account_state::Column::Date,
+                    )))
+                    .col(
+                        decimal(ManualAccountState::column(
+                            manual_account_state::Column::Amount,
+                        ))
+                        .decimal_len(16, 4),
+                    )
                     .foreign_key(
                         ForeignKey::create()
                             .name("fk_manual_account_states_account")
-                            .from(ManualAccountState::table(), ManualAccountState::column(manual_account_state::Column::AccountId))
+                            .from(
+                                ManualAccountState::table(),
+                                ManualAccountState::column(manual_account_state::Column::AccountId),
+                            )
                             .to(Account::table(), Account::column(account::Column::Id))
                             .on_delete(ForeignKeyAction::Cascade)
                             .on_update(ForeignKeyAction::Cascade),
@@ -165,20 +205,51 @@ impl MigrationTrait for Migration {
                 Table::create()
                     .table(OneOffTransaction::table())
                     .if_not_exists()
-                    .col(pk_auto(OneOffTransaction::column(one_off_transaction::Column::Id)))
-                    .col(string(OneOffTransaction::column(one_off_transaction::Column::Name)))
-                    .col(string_null(OneOffTransaction::column(one_off_transaction::Column::Description)))
-                    .col(decimal(OneOffTransaction::column(one_off_transaction::Column::Amount)).decimal_len(16, 4))
-                    .col(date(OneOffTransaction::column(one_off_transaction::Column::Date)))
-                    .col(boolean(OneOffTransaction::column(one_off_transaction::Column::IncludeInStatistics)).default(true))
-                    .col(integer(OneOffTransaction::column(one_off_transaction::Column::TargetAccountId)))
-                    .col(integer_null(OneOffTransaction::column(one_off_transaction::Column::SourceAccountId)))
-                    .col(string_null(OneOffTransaction::column(one_off_transaction::Column::LedgerName)))
-                    .col(string_null(OneOffTransaction::column(one_off_transaction::Column::LinkedImportId)))
+                    .col(pk_auto(OneOffTransaction::column(
+                        one_off_transaction::Column::Id,
+                    )))
+                    .col(string(OneOffTransaction::column(
+                        one_off_transaction::Column::Name,
+                    )))
+                    .col(string_null(OneOffTransaction::column(
+                        one_off_transaction::Column::Description,
+                    )))
+                    .col(
+                        decimal(OneOffTransaction::column(
+                            one_off_transaction::Column::Amount,
+                        ))
+                        .decimal_len(16, 4),
+                    )
+                    .col(date(OneOffTransaction::column(
+                        one_off_transaction::Column::Date,
+                    )))
+                    .col(
+                        boolean(OneOffTransaction::column(
+                            one_off_transaction::Column::IncludeInStatistics,
+                        ))
+                        .default(true),
+                    )
+                    .col(integer(OneOffTransaction::column(
+                        one_off_transaction::Column::TargetAccountId,
+                    )))
+                    .col(integer_null(OneOffTransaction::column(
+                        one_off_transaction::Column::SourceAccountId,
+                    )))
+                    .col(string_null(OneOffTransaction::column(
+                        one_off_transaction::Column::LedgerName,
+                    )))
+                    .col(string_null(OneOffTransaction::column(
+                        one_off_transaction::Column::LinkedImportId,
+                    )))
                     .foreign_key(
                         ForeignKey::create()
                             .name("fk_one_off_transactions_target_account")
-                            .from(OneOffTransaction::table(), OneOffTransaction::column(one_off_transaction::Column::TargetAccountId))
+                            .from(
+                                OneOffTransaction::table(),
+                                OneOffTransaction::column(
+                                    one_off_transaction::Column::TargetAccountId,
+                                ),
+                            )
                             .to(Account::table(), Account::column(account::Column::Id))
                             .on_delete(ForeignKeyAction::Cascade)
                             .on_update(ForeignKeyAction::Cascade),
@@ -186,7 +257,12 @@ impl MigrationTrait for Migration {
                     .foreign_key(
                         ForeignKey::create()
                             .name("fk_one_off_transactions_source_account")
-                            .from(OneOffTransaction::table(), OneOffTransaction::column(one_off_transaction::Column::SourceAccountId))
+                            .from(
+                                OneOffTransaction::table(),
+                                OneOffTransaction::column(
+                                    one_off_transaction::Column::SourceAccountId,
+                                ),
+                            )
                             .to(Account::table(), Account::column(account::Column::Id))
                             .on_delete(ForeignKeyAction::SetNull)
                             .on_update(ForeignKeyAction::Cascade),
@@ -201,26 +277,47 @@ impl MigrationTrait for Migration {
                 Table::create()
                     .table(OneOffTransactionTag::table())
                     .if_not_exists()
-                    .col(integer(OneOffTransactionTag::column(one_off_transaction_tag::Column::TransactionId)))
-                    .col(integer(OneOffTransactionTag::column(one_off_transaction_tag::Column::TagId)))
+                    .col(integer(OneOffTransactionTag::column(
+                        one_off_transaction_tag::Column::TransactionId,
+                    )))
+                    .col(integer(OneOffTransactionTag::column(
+                        one_off_transaction_tag::Column::TagId,
+                    )))
                     .primary_key(
                         Index::create()
                             .name("pk_one_off_transactions_tags")
-                            .col(OneOffTransactionTag::column(one_off_transaction_tag::Column::TransactionId))
-                            .col(OneOffTransactionTag::column(one_off_transaction_tag::Column::TagId)),
+                            .col(OneOffTransactionTag::column(
+                                one_off_transaction_tag::Column::TransactionId,
+                            ))
+                            .col(OneOffTransactionTag::column(
+                                one_off_transaction_tag::Column::TagId,
+                            )),
                     )
                     .foreign_key(
                         ForeignKey::create()
                             .name("fk_one_off_transactions_tags_transaction")
-                            .from(OneOffTransactionTag::table(), OneOffTransactionTag::column(one_off_transaction_tag::Column::TransactionId))
-                            .to(OneOffTransaction::table(), OneOffTransaction::column(one_off_transaction::Column::Id))
+                            .from(
+                                OneOffTransactionTag::table(),
+                                OneOffTransactionTag::column(
+                                    one_off_transaction_tag::Column::TransactionId,
+                                ),
+                            )
+                            .to(
+                                OneOffTransaction::table(),
+                                OneOffTransaction::column(one_off_transaction::Column::Id),
+                            )
                             .on_delete(ForeignKeyAction::Cascade)
                             .on_update(ForeignKeyAction::Cascade),
                     )
                     .foreign_key(
                         ForeignKey::create()
                             .name("fk_one_off_transactions_tags_tag")
-                            .from(OneOffTransactionTag::table(), OneOffTransactionTag::column(one_off_transaction_tag::Column::TagId))
+                            .from(
+                                OneOffTransactionTag::table(),
+                                OneOffTransactionTag::column(
+                                    one_off_transaction_tag::Column::TagId,
+                                ),
+                            )
                             .to(Tag::table(), Tag::column(tag::Column::Id))
                             .on_delete(ForeignKeyAction::Cascade)
                             .on_update(ForeignKeyAction::Cascade),
@@ -235,21 +332,57 @@ impl MigrationTrait for Migration {
                 Table::create()
                     .table(RecurringTransaction::table())
                     .if_not_exists()
-                    .col(pk_auto(RecurringTransaction::column(recurring_transaction::Column::Id)))
-                    .col(string(RecurringTransaction::column(recurring_transaction::Column::Name)))
-                    .col(string_null(RecurringTransaction::column(recurring_transaction::Column::Description)))
-                    .col(decimal(RecurringTransaction::column(recurring_transaction::Column::Amount)).decimal_len(16, 4))
-                    .col(date(RecurringTransaction::column(recurring_transaction::Column::StartDate)))
-                    .col(date_null(RecurringTransaction::column(recurring_transaction::Column::EndDate)))
-                    .col(string(RecurringTransaction::column(recurring_transaction::Column::Period)).string_len(1))
-                    .col(boolean(RecurringTransaction::column(recurring_transaction::Column::IncludeInStatistics)).default(true))
-                    .col(integer(RecurringTransaction::column(recurring_transaction::Column::TargetAccountId)))
-                    .col(integer_null(RecurringTransaction::column(recurring_transaction::Column::SourceAccountId)))
-                    .col(string_null(RecurringTransaction::column(recurring_transaction::Column::LedgerName)))
+                    .col(pk_auto(RecurringTransaction::column(
+                        recurring_transaction::Column::Id,
+                    )))
+                    .col(string(RecurringTransaction::column(
+                        recurring_transaction::Column::Name,
+                    )))
+                    .col(string_null(RecurringTransaction::column(
+                        recurring_transaction::Column::Description,
+                    )))
+                    .col(
+                        decimal(RecurringTransaction::column(
+                            recurring_transaction::Column::Amount,
+                        ))
+                        .decimal_len(16, 4),
+                    )
+                    .col(date(RecurringTransaction::column(
+                        recurring_transaction::Column::StartDate,
+                    )))
+                    .col(date_null(RecurringTransaction::column(
+                        recurring_transaction::Column::EndDate,
+                    )))
+                    .col(
+                        string(RecurringTransaction::column(
+                            recurring_transaction::Column::Period,
+                        ))
+                        .string_len(1),
+                    )
+                    .col(
+                        boolean(RecurringTransaction::column(
+                            recurring_transaction::Column::IncludeInStatistics,
+                        ))
+                        .default(true),
+                    )
+                    .col(integer(RecurringTransaction::column(
+                        recurring_transaction::Column::TargetAccountId,
+                    )))
+                    .col(integer_null(RecurringTransaction::column(
+                        recurring_transaction::Column::SourceAccountId,
+                    )))
+                    .col(string_null(RecurringTransaction::column(
+                        recurring_transaction::Column::LedgerName,
+                    )))
                     .foreign_key(
                         ForeignKey::create()
                             .name("fk_recurring_transactions_target_account")
-                            .from(RecurringTransaction::table(), RecurringTransaction::column(recurring_transaction::Column::TargetAccountId))
+                            .from(
+                                RecurringTransaction::table(),
+                                RecurringTransaction::column(
+                                    recurring_transaction::Column::TargetAccountId,
+                                ),
+                            )
                             .to(Account::table(), Account::column(account::Column::Id))
                             .on_delete(ForeignKeyAction::Cascade)
                             .on_update(ForeignKeyAction::Cascade),
@@ -257,7 +390,12 @@ impl MigrationTrait for Migration {
                     .foreign_key(
                         ForeignKey::create()
                             .name("fk_recurring_transactions_source_account")
-                            .from(RecurringTransaction::table(), RecurringTransaction::column(recurring_transaction::Column::SourceAccountId))
+                            .from(
+                                RecurringTransaction::table(),
+                                RecurringTransaction::column(
+                                    recurring_transaction::Column::SourceAccountId,
+                                ),
+                            )
                             .to(Account::table(), Account::column(account::Column::Id))
                             .on_delete(ForeignKeyAction::SetNull)
                             .on_update(ForeignKeyAction::Cascade),
@@ -272,26 +410,47 @@ impl MigrationTrait for Migration {
                 Table::create()
                     .table(RecurringTransactionTag::table())
                     .if_not_exists()
-                    .col(integer(RecurringTransactionTag::column(recurring_transaction_tag::Column::TransactionId)))
-                    .col(integer(RecurringTransactionTag::column(recurring_transaction_tag::Column::TagId)))
+                    .col(integer(RecurringTransactionTag::column(
+                        recurring_transaction_tag::Column::TransactionId,
+                    )))
+                    .col(integer(RecurringTransactionTag::column(
+                        recurring_transaction_tag::Column::TagId,
+                    )))
                     .primary_key(
                         Index::create()
                             .name("pk_recurring_transactions_tags")
-                            .col(RecurringTransactionTag::column(recurring_transaction_tag::Column::TransactionId))
-                            .col(RecurringTransactionTag::column(recurring_transaction_tag::Column::TagId)),
+                            .col(RecurringTransactionTag::column(
+                                recurring_transaction_tag::Column::TransactionId,
+                            ))
+                            .col(RecurringTransactionTag::column(
+                                recurring_transaction_tag::Column::TagId,
+                            )),
                     )
                     .foreign_key(
                         ForeignKey::create()
                             .name("fk_recurring_transactions_tags_transaction")
-                            .from(RecurringTransactionTag::table(), RecurringTransactionTag::column(recurring_transaction_tag::Column::TransactionId))
-                            .to(RecurringTransaction::table(), RecurringTransaction::column(recurring_transaction::Column::Id))
+                            .from(
+                                RecurringTransactionTag::table(),
+                                RecurringTransactionTag::column(
+                                    recurring_transaction_tag::Column::TransactionId,
+                                ),
+                            )
+                            .to(
+                                RecurringTransaction::table(),
+                                RecurringTransaction::column(recurring_transaction::Column::Id),
+                            )
                             .on_delete(ForeignKeyAction::Cascade)
                             .on_update(ForeignKeyAction::Cascade),
                     )
                     .foreign_key(
                         ForeignKey::create()
                             .name("fk_recurring_transactions_tags_tag")
-                            .from(RecurringTransactionTag::table(), RecurringTransactionTag::column(recurring_transaction_tag::Column::TagId))
+                            .from(
+                                RecurringTransactionTag::table(),
+                                RecurringTransactionTag::column(
+                                    recurring_transaction_tag::Column::TagId,
+                                ),
+                            )
                             .to(Tag::table(), Tag::column(tag::Column::Id))
                             .on_delete(ForeignKeyAction::Cascade)
                             .on_update(ForeignKeyAction::Cascade),
@@ -306,15 +465,27 @@ impl MigrationTrait for Migration {
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         // Drop tables in reverse order to avoid foreign key constraints
         manager
-            .drop_table(Table::drop().table(RecurringTransactionTag::table()).to_owned())
+            .drop_table(
+                Table::drop()
+                    .table(RecurringTransactionTag::table())
+                    .to_owned(),
+            )
             .await?;
 
         manager
-            .drop_table(Table::drop().table(RecurringTransaction::table()).to_owned())
+            .drop_table(
+                Table::drop()
+                    .table(RecurringTransaction::table())
+                    .to_owned(),
+            )
             .await?;
 
         manager
-            .drop_table(Table::drop().table(OneOffTransactionTag::table()).to_owned())
+            .drop_table(
+                Table::drop()
+                    .table(OneOffTransactionTag::table())
+                    .to_owned(),
+            )
             .await?;
 
         manager
@@ -348,4 +519,3 @@ impl MigrationTrait for Migration {
         Ok(())
     }
 }
-
