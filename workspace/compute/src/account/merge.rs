@@ -2,6 +2,7 @@ use chrono::NaiveDate;
 use model::entities::account;
 use polars::prelude::*;
 use sea_orm::DatabaseConnection;
+use std::collections::HashMap;
 use tracing::{debug, info, instrument, trace, warn};
 use async_trait::async_trait;
 
@@ -58,15 +59,119 @@ impl MergeCalculator {
 
         debug!("Merging {} DataFrames using method {:?}", dfs.len(), self.merge_method);
 
-        // For simplicity, just concatenate all DataFrames
-        // In a real implementation, we would handle the merge method properly
-        let mut result_df = dfs[0].clone();
+        // Create maps to store data by (account_id, date) pair
+        let mut sum_map: HashMap<(i32, NaiveDate), rust_decimal::Decimal> = HashMap::new();
+        let mut first_wins_map: HashMap<(i32, NaiveDate), String> = HashMap::new();
 
-        for (i, df) in dfs.iter().enumerate().skip(1) {
-            debug!("Merging DataFrame {} with result", i);
-            result_df = result_df.vstack(&df)?;
+        // Process each calculator and its DataFrame
+        for (i, (calculator, df)) in self.calculators.iter().zip(dfs.iter()).enumerate() {
+            debug!("Processing DataFrame {} with merge method {:?}", i, calculator.merge_method());
+
+            // Get the columns we need
+            let account_id_col = df.column("account_id")?;
+            let date_col = df.column("date")?;
+            let balance_col = df.column("balance")?;
+
+            // Process each row in the DataFrame
+            for row_idx in 0..df.height() {
+                // Get account_id
+                let account_id = match account_id_col.get(row_idx) {
+                    Ok(value) => {
+                        match value.try_extract::<i32>() {
+                            Ok(id) => id,
+                            Err(_) => {
+                                warn!("Invalid account_id type in row {}", row_idx);
+                                continue;
+                            }
+                        }
+                    },
+                    Err(e) => {
+                        warn!("Error getting account_id in row {}: {}", row_idx, e);
+                        continue;
+                    }
+                };
+
+                // Get date
+                let date = match date_col.get(row_idx) {
+                    Ok(value) => {
+                        match value.try_extract::<i32>() {
+                            Ok(d) => {
+                                // Convert i32 days since epoch to NaiveDate
+                                NaiveDate::from_ymd_opt(1970, 1, 1).unwrap().checked_add_days(chrono::Days::new(d as u64)).unwrap_or_default()
+                            },
+                            Err(_) => {
+                                warn!("Invalid date type in row {}", row_idx);
+                                continue;
+                            }
+                        }
+                    },
+                    Err(e) => {
+                        warn!("Error getting date in row {}: {}", row_idx, e);
+                        continue;
+                    }
+                };
+
+                // Get balance
+                let balance_str = match balance_col.get(row_idx) {
+                    Ok(value) => {
+                        value.to_string()
+                    },
+                    Err(e) => {
+                        warn!("Error getting balance in row {}: {}", row_idx, e);
+                        continue;
+                    }
+                };
+
+                let key = (account_id, date);
+
+                match calculator.merge_method() {
+                    MergeMethod::Sum => {
+                        // Parse balance and add to sum
+                        if let Ok(balance) = balance_str.parse::<rust_decimal::Decimal>() {
+                            let entry = sum_map.entry(key).or_insert(rust_decimal::Decimal::ZERO);
+                            *entry += balance;
+                        } else {
+                            warn!("Failed to parse balance '{}' as Decimal", balance_str);
+                        }
+                    },
+                    MergeMethod::FirstWins => {
+                        // Insert only if this (account_id, date) pair doesn't exist yet
+                        first_wins_map.entry(key).or_insert(balance_str);
+                    },
+                }
+            }
         }
 
+        // Prepare result DataFrame
+        let mut account_ids = Vec::new();
+        let mut dates = Vec::new();
+        let mut balances = Vec::new();
+
+        // Add Sum results
+        for ((account_id, date), balance) in sum_map {
+            account_ids.push(account_id);
+            dates.push(date);
+            balances.push(balance.to_string());
+        }
+
+        // Add FirstWins results
+        for ((account_id, date), balance) in first_wins_map {
+            // Skip if this (account_id, date) pair was already added from Sum
+            if !account_ids.iter().zip(dates.iter()).any(|(&id, &d)| id == account_id && d == date) {
+                account_ids.push(account_id);
+                dates.push(date);
+                balances.push(balance);
+            }
+        }
+
+        // Create result DataFrame
+        let result_df = DataFrame::new(vec![
+            Series::new("account_id".into(), account_ids).into(),
+            Series::new("date".into(), dates).into(),
+            Series::new("balance".into(), balances).into(),
+        ])?;
+
+        debug!("Merged DataFrame has {} rows", result_df.height());
         Ok(result_df)
     }
 }
