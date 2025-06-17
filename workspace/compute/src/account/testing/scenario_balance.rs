@@ -20,6 +20,15 @@ impl TestScenarioBuilder for ScenarioBalance {
     async fn get_scenario(&self) -> Result<TestScenario, DbErr> {
         let db = setup_db().await?;
 
+        // Create a test user first
+        let user = model::entities::user::ActiveModel {
+            id: Set(1),
+            username: Set("test_user".to_string()),
+            ..Default::default()
+        }
+        .insert(&db)
+        .await?;
+
         // Create a test account
         let account = account::ActiveModel {
             name: Set("Test Account".to_string()),
