@@ -5,6 +5,7 @@ use sea_orm::{
 };
 
 use crate::account::utils::generate_occurrences;
+use crate::error::Result;
 
 /// Gets all recurring transactions for the account within the given date range.
 /// Returns a vector of (date, transaction) pairs for all occurrences within the range.
@@ -13,7 +14,7 @@ pub async fn get_recurring_transactions(
     account_id: i32,
     start_date: NaiveDate,
     end_date: NaiveDate,
-) -> Result<Vec<(NaiveDate, recurring_transaction::Model)>, Box<dyn std::error::Error>> {
+) -> Result<Vec<(NaiveDate, recurring_transaction::Model)>> {
     let transactions = recurring_transaction::Entity::find()
         .filter(
             Condition::any()
@@ -28,9 +29,9 @@ pub async fn get_recurring_transactions(
         .filter(recurring_transaction::Column::StartDate.lte(end_date))
         .all(db)
         .await?;
-    
+
     let mut result = Vec::new();
-    
+
     for tx in transactions {
         let occurrences = generate_occurrences(
             tx.start_date,
@@ -39,12 +40,12 @@ pub async fn get_recurring_transactions(
             start_date,
             end_date,
         );
-        
+
         for date in occurrences {
             result.push((date, tx.clone()));
         }
     }
-    
+
     Ok(result)
 }
 
@@ -55,7 +56,7 @@ pub async fn get_recurring_income(
     account_id: i32,
     start_date: NaiveDate,
     end_date: NaiveDate,
-) -> Result<Vec<(NaiveDate, recurring_income::Model)>, Box<dyn std::error::Error>> {
+) -> Result<Vec<(NaiveDate, recurring_income::Model)>> {
     let incomes = recurring_income::Entity::find()
         .filter(recurring_income::Column::TargetAccountId.eq(account_id))
         .filter(
@@ -66,9 +67,9 @@ pub async fn get_recurring_income(
         .filter(recurring_income::Column::StartDate.lte(end_date))
         .all(db)
         .await?;
-    
+
     let mut result = Vec::new();
-    
+
     for income in incomes {
         let occurrences = generate_occurrences(
             income.start_date,
@@ -77,11 +78,11 @@ pub async fn get_recurring_income(
             start_date,
             end_date,
         );
-        
+
         for date in occurrences {
             result.push((date, income.clone()));
         }
     }
-    
+
     Ok(result)
 }

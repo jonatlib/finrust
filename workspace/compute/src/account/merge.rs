@@ -2,8 +2,8 @@ use chrono::NaiveDate;
 use model::entities::account;
 use polars::prelude::*;
 use sea_orm::DatabaseConnection;
-use std::error::Error;
 
+use crate::error::{ComputeError, Result};
 use super::{balance, forecast};
 
 /// Merges balance and forecast data for accounts within a specified date range.
@@ -15,14 +15,15 @@ pub async fn compute_merged(
     accounts: &[account::Model],
     start_date: NaiveDate,
     end_date: NaiveDate,
-) -> Result<DataFrame, Box<dyn Error>> {
+) -> Result<DataFrame> {
     // Get the current date
     let today = chrono::Local::now().date_naive();
 
     // Compute balance up to today
     let balance_end_date = if today < end_date { today } else { end_date };
     let balance_df = if start_date <= balance_end_date {
-        balance::compute_balance(db, accounts, start_date, balance_end_date).await?
+        balance::compute_balance(db, accounts, start_date, balance_end_date).await
+            .map_err(|e| ComputeError::BalanceComputation(format!("Failed to compute balance: {}", e)))?
     } else {
         // Create an empty DataFrame if the start date is after today
         let empty_df = DataFrame::new(vec![
@@ -36,7 +37,8 @@ pub async fn compute_merged(
     // Compute forecast from tomorrow onwards
     let forecast_start_date = balance_end_date.succ_opt().unwrap_or(balance_end_date);
     let forecast_df = if forecast_start_date <= end_date {
-        forecast::compute_forecast(db, accounts, forecast_start_date, end_date).await?
+        forecast::compute_forecast(db, accounts, forecast_start_date, end_date).await
+            .map_err(|e| ComputeError::ForecastComputation(format!("Failed to compute forecast: {}", e)))?
     } else {
         // Create an empty DataFrame if the forecast start date is after the end date
         let empty_df = DataFrame::new(vec![

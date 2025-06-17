@@ -4,13 +4,15 @@ use sea_orm::{
     ColumnTrait, Condition, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, QuerySelect,
 };
 
+use crate::error::Result;
+
 /// Gets all one-off transactions for the account within the given date range.
 pub async fn get_transactions_for_account(
     db: &DatabaseConnection,
     account_id: i32,
     start_date: NaiveDate,
     end_date: NaiveDate,
-) -> Result<Vec<one_off_transaction::Model>, Box<dyn std::error::Error>> {
+) -> Result<Vec<one_off_transaction::Model>> {
     let transactions = one_off_transaction::Entity::find()
         .filter(
             Condition::any()
@@ -24,7 +26,7 @@ pub async fn get_transactions_for_account(
         )
         .all(db)
         .await?;
-    
+
     Ok(transactions)
 }
 
@@ -34,7 +36,7 @@ pub async fn get_imported_transactions(
     account_id: i32,
     start_date: NaiveDate,
     end_date: NaiveDate,
-) -> Result<Vec<imported_transaction::Model>, Box<dyn std::error::Error>> {
+) -> Result<Vec<imported_transaction::Model>> {
     let transactions = imported_transaction::Entity::find()
         .filter(
             Condition::all()
@@ -44,6 +46,6 @@ pub async fn get_imported_transactions(
         )
         .all(db)
         .await?;
-    
+
     Ok(transactions)
 }

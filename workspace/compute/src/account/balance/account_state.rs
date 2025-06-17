@@ -4,12 +4,14 @@ use sea_orm::{
     ColumnTrait, Condition, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, QuerySelect,
 };
 
+use crate::error::Result;
+
 /// Gets the latest manual account state before the given date.
 pub async fn get_latest_manual_state(
     db: &DatabaseConnection,
     account_id: i32,
     before_date: NaiveDate,
-) -> Result<Option<manual_account_state::Model>, Box<dyn std::error::Error>> {
+) -> Result<Option<manual_account_state::Model>> {
     let state = manual_account_state::Entity::find()
         .filter(
             Condition::all()
@@ -20,7 +22,7 @@ pub async fn get_latest_manual_state(
         .limit(1)
         .one(db)
         .await?;
-    
+
     Ok(state)
 }
 
@@ -30,7 +32,7 @@ pub async fn get_manual_states_in_range(
     account_id: i32,
     start_date: NaiveDate,
     end_date: NaiveDate,
-) -> Result<Vec<manual_account_state::Model>, Box<dyn std::error::Error>> {
+) -> Result<Vec<manual_account_state::Model>> {
     let states = manual_account_state::Entity::find()
         .filter(
             Condition::all()
@@ -41,6 +43,6 @@ pub async fn get_manual_states_in_range(
         .order_by_asc(manual_account_state::Column::Date)
         .all(db)
         .await?;
-    
+
     Ok(states)
 }

@@ -7,6 +7,8 @@ use rust_decimal::Decimal;
 use sea_orm::DatabaseConnection;
 use std::collections::HashMap;
 
+use crate::error::Result;
+
 use self::recurring::{get_recurring_income, get_recurring_transactions};
 
 /// Computes the forecast for accounts within a specified date range.
@@ -20,7 +22,7 @@ pub async fn compute_forecast(
     accounts: &[account::Model],
     start_date: NaiveDate,
     end_date: NaiveDate,
-) -> Result<DataFrame, Box<dyn std::error::Error>> {
+) -> Result<DataFrame> {
     // Create a DataFrame with account_id and date as index, and balance as value
     let mut forecast_data: HashMap<(i32, NaiveDate), Decimal> = HashMap::new();
 

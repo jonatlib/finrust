@@ -9,6 +9,8 @@ use rust_decimal::Decimal;
 use sea_orm::DatabaseConnection;
 use std::collections::HashMap;
 
+use crate::error::{ComputeError, Result};
+
 use self::{
     account_state::{get_latest_manual_state, get_manual_states_in_range},
     recurring::{get_recurring_income, get_recurring_transactions},
@@ -29,7 +31,7 @@ pub async fn compute_balance(
     accounts: &[account::Model],
     start_date: NaiveDate,
     end_date: NaiveDate,
-) -> Result<DataFrame, Box<dyn std::error::Error>> {
+) -> crate::error::Result<DataFrame> {
     // Create a DataFrame with account_id and date as index, and balance as value
     let mut balance_data: HashMap<(i32, NaiveDate), Decimal> = HashMap::new();
 

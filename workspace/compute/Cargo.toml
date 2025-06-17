@@ -13,6 +13,7 @@ rusty-money = "^0.4.1"
 rust_decimal = "^1.37.2"
 chrono = "^0.4.41"
 polars = "^0.48.1"
+thiserror = "1.0"
 
 [dev-dependencies]
 tokio = { version = "1.36.0", features = ["full"] }
