@@ -10,8 +10,9 @@ use crate::error::Result;
 
 /// Gets all recurring transactions for the account within the given date range.
 /// Returns a vector of (date, transaction) pairs for all occurrences within the range.
-#[instrument(skip(db), fields(account_id = account_id, start_date = %start_date, end_date = %end_date))]
-async fn get_recurring_transactions(
+#[instrument(skip(db), fields(account_id = account_id, start_date = %start_date, end_date = %end_date
+))]
+pub async fn get_recurring_transactions(
     db: &DatabaseConnection,
     account_id: i32,
     start_date: NaiveDate,
@@ -64,8 +65,9 @@ async fn get_recurring_transactions(
 
 /// Gets all recurring income for the account within the given date range.
 /// Returns a vector of (date, income) pairs for all occurrences within the range.
-#[instrument(skip(db), fields(account_id = account_id, start_date = %start_date, end_date = %end_date))]
-async fn get_recurring_income(
+#[instrument(skip(db), fields(account_id = account_id, start_date = %start_date, end_date = %end_date
+))]
+pub async fn get_recurring_income(
     db: &DatabaseConnection,
     account_id: i32,
     start_date: NaiveDate,

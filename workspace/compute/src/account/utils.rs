@@ -5,8 +5,9 @@ use tracing::{debug, instrument, trace};
 use super::days_in_month;
 
 /// Generates occurrence dates for a recurring event within the given date range.
-#[instrument(fields(start_date = %start_date, end_date = ?end_date, period = ?period, range_start = %range_start, range_end = %range_end))]
-fn generate_occurrences(
+#[instrument(fields(start_date = %start_date, end_date = ?end_date, period = ?period, range_start = %range_start, range_end = %range_end
+))]
+pub fn generate_occurrences(
     start_date: NaiveDate,
     end_date: Option<NaiveDate>,
     period: &recurring_transaction::RecurrencePeriod,

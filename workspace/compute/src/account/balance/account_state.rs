@@ -9,7 +9,7 @@ use crate::error::Result;
 
 /// Gets the latest manual account state before the given date.
 #[instrument(skip(db), fields(account_id = account_id, before_date = %before_date))]
-async fn get_latest_manual_state(
+pub async fn get_latest_manual_state(
     db: &DatabaseConnection,
     account_id: i32,
     before_date: NaiveDate,
@@ -36,8 +36,9 @@ async fn get_latest_manual_state(
 }
 
 /// Gets all manual account states within the given date range.
-#[instrument(skip(db), fields(account_id = account_id, start_date = %start_date, end_date = %end_date))]
-async fn get_manual_states_in_range(
+#[instrument(skip(db), fields(account_id = account_id, start_date = %start_date, end_date = %end_date
+))]
+pub async fn get_manual_states_in_range(
     db: &DatabaseConnection,
     account_id: i32,
     start_date: NaiveDate,
