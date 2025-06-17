@@ -2,6 +2,7 @@ use chrono::NaiveDate;
 use rust_decimal::Decimal;
 use sea_orm::entity::prelude::*;
 use std::fmt;
+use tracing::{debug, instrument, trace};
 
 use super::{account, one_off_transaction, recurring_income, recurring_transaction};
 
@@ -80,22 +81,40 @@ pub enum Relation {
 
 impl Model {
     /// Get the reconciled transaction type, if any.
+    #[instrument(skip(self), fields(id = self.id, reconciled_type = ?self.reconciled_transaction_type, reconciled_id = ?self.reconciled_transaction_id))]
     pub fn get_reconciled_transaction_type(&self) -> Option<ReconciledTransactionType> {
+        trace!("Getting reconciled transaction type for imported transaction {}", self.id);
+
         // Construct from the database fields
         if let (Some(entity_type), Some(id)) = (self.reconciled_transaction_type.as_ref(), self.reconciled_transaction_id) {
-            match entity_type {
-                ReconciledTransactionEntityType::OneOff => Some(ReconciledTransactionType::OneOff(id)),
-                ReconciledTransactionEntityType::Recurring => Some(ReconciledTransactionType::Recurring(id)),
-                ReconciledTransactionEntityType::RecurringIncome => Some(ReconciledTransactionType::RecurringIncome(id)),
-            }
+            let result = match entity_type {
+                ReconciledTransactionEntityType::OneOff => {
+                    debug!("Imported transaction {} is reconciled with OneOff transaction {}", self.id, id);
+                    Some(ReconciledTransactionType::OneOff(id))
+                },
+                ReconciledTransactionEntityType::Recurring => {
+                    debug!("Imported transaction {} is reconciled with Recurring transaction {}", self.id, id);
+                    Some(ReconciledTransactionType::Recurring(id))
+                },
+                ReconciledTransactionEntityType::RecurringIncome => {
+                    debug!("Imported transaction {} is reconciled with RecurringIncome {}", self.id, id);
+                    Some(ReconciledTransactionType::RecurringIncome(id))
+                },
+            };
+            result
         } else {
+            debug!("Imported transaction {} is not reconciled", self.id);
             None
         }
     }
 
     /// Set the reconciled transaction type.
+    #[instrument(skip(self), fields(id = self.id, transaction_type = ?transaction_type))]
     pub fn set_reconciled_transaction_type(&mut self, transaction_type: Option<ReconciledTransactionType>) {
+        trace!("Setting reconciled transaction type for imported transaction {}", self.id);
+
         // Reset the fields first
+        debug!("Resetting reconciled transaction fields for imported transaction {}", self.id);
         self.reconciled_transaction_type = None;
         self.reconciled_transaction_id = None;
 
@@ -103,18 +122,23 @@ impl Model {
         if let Some(transaction_type) = transaction_type {
             match transaction_type {
                 ReconciledTransactionType::OneOff(id) => {
+                    debug!("Setting imported transaction {} as reconciled with OneOff transaction {}", self.id, id);
                     self.reconciled_transaction_type = Some(ReconciledTransactionEntityType::OneOff);
                     self.reconciled_transaction_id = Some(id);
                 }
                 ReconciledTransactionType::Recurring(id) => {
+                    debug!("Setting imported transaction {} as reconciled with Recurring transaction {}", self.id, id);
                     self.reconciled_transaction_type = Some(ReconciledTransactionEntityType::Recurring);
                     self.reconciled_transaction_id = Some(id);
                 }
                 ReconciledTransactionType::RecurringIncome(id) => {
+                    debug!("Setting imported transaction {} as reconciled with RecurringIncome {}", self.id, id);
                     self.reconciled_transaction_type = Some(ReconciledTransactionEntityType::RecurringIncome);
                     self.reconciled_transaction_id = Some(id);
                 }
             }
+        } else {
+            debug!("Clearing reconciliation for imported transaction {}", self.id);
         }
     }
 

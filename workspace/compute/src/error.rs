@@ -1,4 +1,5 @@
 use thiserror::Error;
+use tracing::{error, instrument};
 
 /// Error types for the compute module
 #[derive(Error, Debug)]
@@ -47,14 +48,39 @@ pub enum ComputeError {
 // Implement From<polars::error::PolarsError> for ComputeError
 impl From<polars::error::PolarsError> for ComputeError {
     fn from(error: polars::error::PolarsError) -> Self {
-        match error {
-            polars::error::PolarsError::NoData(_) => ComputeError::DataFrame(format!("No data: {}", error)),
-            polars::error::PolarsError::ShapeMismatch(_) => ComputeError::DataFrame(format!("Shape mismatch: {}", error)),
-            polars::error::PolarsError::SchemaMismatch(_) => ComputeError::DataFrame(format!("Schema mismatch: {}", error)),
-            polars::error::PolarsError::ComputeError(_) => ComputeError::DataFrame(format!("Compute error: {}", error)),
-            polars::error::PolarsError::OutOfBounds(_) => ComputeError::DataFrame(format!("Out of bounds: {}", error)),
-            _ => ComputeError::Series(format!("Series error: {}", error)),
-        }
+        let compute_error = match error {
+            polars::error::PolarsError::NoData(_) => {
+                let err = ComputeError::DataFrame(format!("No data: {}", error));
+                error!(?err, "DataFrame error: No data");
+                err
+            }
+            polars::error::PolarsError::ShapeMismatch(_) => {
+                let err = ComputeError::DataFrame(format!("Shape mismatch: {}", error));
+                error!(?err, "DataFrame error: Shape mismatch");
+                err
+            }
+            polars::error::PolarsError::SchemaMismatch(_) => {
+                let err = ComputeError::DataFrame(format!("Schema mismatch: {}", error));
+                error!(?err, "DataFrame error: Schema mismatch");
+                err
+            }
+            polars::error::PolarsError::ComputeError(_) => {
+                let err = ComputeError::DataFrame(format!("Compute error: {}", error));
+                error!(?err, "DataFrame error: Compute error");
+                err
+            }
+            polars::error::PolarsError::OutOfBounds(_) => {
+                let err = ComputeError::DataFrame(format!("Out of bounds: {}", error));
+                error!(?err, "DataFrame error: Out of bounds");
+                err
+            }
+            _ => {
+                let err = ComputeError::Series(format!("Series error: {}", error));
+                error!(?err, "Series error");
+                err
+            }
+        };
+        compute_error
     }
 }
 
