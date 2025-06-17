@@ -14,7 +14,10 @@ pub fn generate_occurrences(
     range_start: NaiveDate,
     range_end: NaiveDate,
 ) -> Vec<NaiveDate> {
-    debug!("Generating occurrences for period {:?} from {} to {}", period, range_start, range_end);
+    debug!(
+        "Generating occurrences for period {:?} from {} to {}",
+        period, range_start, range_end
+    );
     let mut occurrences = Vec::new();
     let mut current_date = start_date;
     trace!("Initial date: {}", current_date);
@@ -22,7 +25,10 @@ pub fn generate_occurrences(
     // Check if the event ends before the range starts
     if let Some(end) = end_date {
         if end < range_start {
-            debug!("Event ends at {} which is before range start {}, returning empty list", end, range_start);
+            debug!(
+                "Event ends at {} which is before range start {}, returning empty list",
+                end, range_start
+            );
             return occurrences;
         }
     }
@@ -33,7 +39,10 @@ pub fn generate_occurrences(
             trace!("Adding occurrence: {}", current_date);
             occurrences.push(current_date);
         } else {
-            trace!("Skipping date {} as it's before range start {}", current_date, range_start);
+            trace!(
+                "Skipping date {} as it's before range start {}",
+                current_date, range_start
+            );
         }
 
         // Calculate the next occurrence based on the period
@@ -61,7 +70,10 @@ pub fn generate_occurrences(
                 let year = current_date.year() + (current_date.month() / 12) as i32;
                 let month = (current_date.month() % 12) + 1;
                 let day = std::cmp::min(current_date.day(), days_in_month(year, month));
-                trace!("Monthly: calculating next date with year={}, month={}, day={}", year, month, day);
+                trace!(
+                    "Monthly: calculating next date with year={}, month={}, day={}",
+                    year, month, day
+                );
                 current_date = NaiveDate::from_ymd_opt(year, month, day).unwrap();
                 trace!("Monthly: next date is {}", current_date);
             }
@@ -70,7 +82,10 @@ pub fn generate_occurrences(
                 let year = current_date.year() + (current_date.month() / 12) as i32;
                 let month = ((current_date.month() - 1 + 3) % 12) + 1;
                 let day = std::cmp::min(current_date.day(), days_in_month(year, month));
-                trace!("Quarterly: calculating next date with year={}, month={}, day={}", year, month, day);
+                trace!(
+                    "Quarterly: calculating next date with year={}, month={}, day={}",
+                    year, month, day
+                );
                 current_date = NaiveDate::from_ymd_opt(year, month, day).unwrap();
                 trace!("Quarterly: next date is {}", current_date);
             }
@@ -79,7 +94,10 @@ pub fn generate_occurrences(
                 let year = current_date.year() + (current_date.month() / 12) as i32;
                 let month = ((current_date.month() - 1 + 6) % 12) + 1;
                 let day = std::cmp::min(current_date.day(), days_in_month(year, month));
-                trace!("HalfYearly: calculating next date with year={}, month={}, day={}", year, month, day);
+                trace!(
+                    "HalfYearly: calculating next date with year={}, month={}, day={}",
+                    year, month, day
+                );
                 current_date = NaiveDate::from_ymd_opt(year, month, day).unwrap();
                 trace!("HalfYearly: next date is {}", current_date);
             }
@@ -88,7 +106,10 @@ pub fn generate_occurrences(
                 let year = current_date.year() + 1;
                 let month = current_date.month();
                 let day = std::cmp::min(current_date.day(), days_in_month(year, month));
-                trace!("Yearly: calculating next date with year={}, month={}, day={}", year, month, day);
+                trace!(
+                    "Yearly: calculating next date with year={}, month={}, day={}",
+                    year, month, day
+                );
                 current_date = NaiveDate::from_ymd_opt(year, month, day).unwrap();
                 trace!("Yearly: next date is {}", current_date);
             }

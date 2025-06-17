@@ -1,9 +1,9 @@
 use crate::entity_iden::EntityIden;
 use model::entities::prelude::*;
 use model::entities::{
-    account, account_allowed_user, account_tag, imported_transaction, manual_account_state, one_off_transaction,
-    one_off_transaction_tag, recurring_income, recurring_income_tag, recurring_transaction, 
-    recurring_transaction_tag, tag, user,
+    account, account_allowed_user, account_tag, imported_transaction, manual_account_state,
+    one_off_transaction, one_off_transaction_tag, recurring_income, recurring_income_tag,
+    recurring_transaction, recurring_transaction_tag, tag, user,
 };
 use sea_orm_migration::{prelude::*, schema::*};
 
@@ -484,9 +484,12 @@ impl MigrationTrait for Migration {
                         ))
                         .decimal_len(16, 4),
                     )
-                    .col(string(ImportedTransaction::column(
-                        imported_transaction::Column::ImportHash,
-                    )).unique_key())
+                    .col(
+                        string(ImportedTransaction::column(
+                            imported_transaction::Column::ImportHash,
+                        ))
+                        .unique_key(),
+                    )
                     .col(json_binary_null(ImportedTransaction::column(
                         imported_transaction::Column::RawData,
                     )))
@@ -533,10 +536,8 @@ impl MigrationTrait for Migration {
                         recurring_income::Column::Description,
                     )))
                     .col(
-                        decimal(RecurringIncome::column(
-                            recurring_income::Column::Amount,
-                        ))
-                        .decimal_len(16, 4),
+                        decimal(RecurringIncome::column(recurring_income::Column::Amount))
+                            .decimal_len(16, 4),
                     )
                     .col(date(RecurringIncome::column(
                         recurring_income::Column::StartDate,
@@ -545,10 +546,8 @@ impl MigrationTrait for Migration {
                         recurring_income::Column::EndDate,
                     )))
                     .col(
-                        string(RecurringIncome::column(
-                            recurring_income::Column::Period,
-                        ))
-                        .string_len(1),
+                        string(RecurringIncome::column(recurring_income::Column::Period))
+                            .string_len(1),
                     )
                     .col(
                         boolean(RecurringIncome::column(
@@ -570,9 +569,7 @@ impl MigrationTrait for Migration {
                             .name("fk_recurring_incomes_target_account")
                             .from(
                                 RecurringIncome::table(),
-                                RecurringIncome::column(
-                                    recurring_income::Column::TargetAccountId,
-                                ),
+                                RecurringIncome::column(recurring_income::Column::TargetAccountId),
                             )
                             .to(Account::table(), Account::column(account::Column::Id))
                             .on_delete(ForeignKeyAction::Cascade)
@@ -609,9 +606,7 @@ impl MigrationTrait for Migration {
                             .name("fk_recurring_incomes_tags_income")
                             .from(
                                 RecurringIncomeTag::table(),
-                                RecurringIncomeTag::column(
-                                    recurring_income_tag::Column::IncomeId,
-                                ),
+                                RecurringIncomeTag::column(recurring_income_tag::Column::IncomeId),
                             )
                             .to(
                                 RecurringIncome::table(),
@@ -625,9 +620,7 @@ impl MigrationTrait for Migration {
                             .name("fk_recurring_incomes_tags_tag")
                             .from(
                                 RecurringIncomeTag::table(),
-                                RecurringIncomeTag::column(
-                                    recurring_income_tag::Column::TagId,
-                                ),
+                                RecurringIncomeTag::column(recurring_income_tag::Column::TagId),
                             )
                             .to(Tag::table(), Tag::column(tag::Column::Id))
                             .on_delete(ForeignKeyAction::Cascade)
@@ -643,19 +636,11 @@ impl MigrationTrait for Migration {
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         // Drop tables in reverse order to avoid foreign key constraints
         manager
-            .drop_table(
-                Table::drop()
-                    .table(RecurringIncomeTag::table())
-                    .to_owned(),
-            )
+            .drop_table(Table::drop().table(RecurringIncomeTag::table()).to_owned())
             .await?;
 
         manager
-            .drop_table(
-                Table::drop()
-                    .table(RecurringIncome::table())
-                    .to_owned(),
-            )
+            .drop_table(Table::drop().table(RecurringIncome::table()).to_owned())
             .await?;
 
         manager

@@ -49,11 +49,7 @@ impl Related<tag::Entity> for Entity {
         super::recurring_income_tag::Relation::Tag.def()
     }
     fn via() -> Option<RelationDef> {
-        Some(
-            super::recurring_income_tag::Relation::Income
-                .def()
-                .rev(),
-        )
+        Some(super::recurring_income_tag::Relation::Income.def().rev())
     }
 }
 

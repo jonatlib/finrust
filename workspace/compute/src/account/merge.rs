@@ -1,13 +1,13 @@
+use async_trait::async_trait;
 use chrono::NaiveDate;
 use model::entities::account;
 use polars::prelude::*;
 use sea_orm::DatabaseConnection;
 use std::collections::HashMap;
 use tracing::{debug, info, instrument, trace, warn};
-use async_trait::async_trait;
 
+use super::{AccountStateCalculator, MergeMethod, balance, forecast};
 use crate::error::{ComputeError, Result};
-use super::{balance, forecast, AccountStateCalculator, MergeMethod};
 
 /// A calculator that merges the results of multiple account state calculators.
 pub struct MergeCalculator {
@@ -57,7 +57,11 @@ impl MergeCalculator {
             return Ok(dfs[0].clone());
         }
 
-        debug!("Merging {} DataFrames using method {:?}", dfs.len(), self.merge_method);
+        debug!(
+            "Merging {} DataFrames using method {:?}",
+            dfs.len(),
+            self.merge_method
+        );
 
         // Create maps to store data by (account_id, date) pair
         let mut sum_map: HashMap<(i32, NaiveDate), rust_decimal::Decimal> = HashMap::new();
@@ -65,7 +69,11 @@ impl MergeCalculator {
 
         // Process each calculator and its DataFrame
         for (i, (calculator, df)) in self.calculators.iter().zip(dfs.iter()).enumerate() {
-            debug!("Processing DataFrame {} with merge method {:?}", i, calculator.merge_method());
+            debug!(
+                "Processing DataFrame {} with merge method {:?}",
+                i,
+                calculator.merge_method()
+            );
 
             // Get the columns we need
             let account_id_col = df.column("account_id")?;
@@ -76,13 +84,11 @@ impl MergeCalculator {
             for row_idx in 0..df.height() {
                 // Get account_id
                 let account_id = match account_id_col.get(row_idx) {
-                    Ok(value) => {
-                        match value.try_extract::<i32>() {
-                            Ok(id) => id,
-                            Err(_) => {
-                                warn!("Invalid account_id type in row {}", row_idx);
-                                continue;
-                            }
+                    Ok(value) => match value.try_extract::<i32>() {
+                        Ok(id) => id,
+                        Err(_) => {
+                            warn!("Invalid account_id type in row {}", row_idx);
+                            continue;
                         }
                     },
                     Err(e) => {
@@ -97,14 +103,17 @@ impl MergeCalculator {
                         match value.try_extract::<i32>() {
                             Ok(d) => {
                                 // Convert i32 days since epoch to NaiveDate
-                                NaiveDate::from_ymd_opt(1970, 1, 1).unwrap().checked_add_days(chrono::Days::new(d as u64)).unwrap_or_default()
-                            },
+                                NaiveDate::from_ymd_opt(1970, 1, 1)
+                                    .unwrap()
+                                    .checked_add_days(chrono::Days::new(d as u64))
+                                    .unwrap_or_default()
+                            }
                             Err(_) => {
                                 warn!("Invalid date type in row {}", row_idx);
                                 continue;
                             }
                         }
-                    },
+                    }
                     Err(e) => {
                         warn!("Error getting date in row {}: {}", row_idx, e);
                         continue;
@@ -113,9 +122,7 @@ impl MergeCalculator {
 
                 // Get balance
                 let balance_str = match balance_col.get(row_idx) {
-                    Ok(value) => {
-                        value.to_string()
-                    },
+                    Ok(value) => value.to_string(),
                     Err(e) => {
                         warn!("Error getting balance in row {}: {}", row_idx, e);
                         continue;
@@ -133,11 +140,11 @@ impl MergeCalculator {
                         } else {
                             warn!("Failed to parse balance '{}' as Decimal", balance_str);
                         }
-                    },
+                    }
                     MergeMethod::FirstWins => {
                         // Insert only if this (account_id, date) pair doesn't exist yet
                         first_wins_map.entry(key).or_insert(balance_str);
-                    },
+                    }
                 }
             }
         }
@@ -157,7 +164,11 @@ impl MergeCalculator {
         // Add FirstWins results
         for ((account_id, date), balance) in first_wins_map {
             // Skip if this (account_id, date) pair was already added from Sum
-            if !account_ids.iter().zip(dates.iter()).any(|(&id, &d)| id == account_id && d == date) {
+            if !account_ids
+                .iter()
+                .zip(dates.iter())
+                .any(|(&id, &d)| id == account_id && d == date)
+            {
                 account_ids.push(account_id);
                 dates.push(date);
                 balances.push(balance);
@@ -185,15 +196,26 @@ impl AccountStateCalculator for MergeCalculator {
         start_date: NaiveDate,
         end_date: NaiveDate,
     ) -> Result<DataFrame> {
-        debug!("Computing merged account state for {} accounts from {} to {}", accounts.len(), start_date, end_date);
+        debug!(
+            "Computing merged account state for {} accounts from {} to {}",
+            accounts.len(),
+            start_date,
+            end_date
+        );
 
         // Compute account state using each calculator
         let mut dataframes = Vec::new();
 
         for (i, calculator) in self.calculators.iter().enumerate() {
             debug!("Computing account state using calculator {}", i);
-            let df = calculator.compute_account_state(db, accounts, start_date, end_date).await?;
-            debug!("Calculator {} returned DataFrame with {} rows", i, df.height());
+            let df = calculator
+                .compute_account_state(db, accounts, start_date, end_date)
+                .await?;
+            debug!(
+                "Calculator {} returned DataFrame with {} rows",
+                i,
+                df.height()
+            );
             dataframes.push(df);
         }
 
@@ -217,14 +239,24 @@ async fn compute_merged(
     start_date: NaiveDate,
     end_date: NaiveDate,
 ) -> Result<DataFrame> {
-    info!("Computing merged balance and forecast for {} accounts from {} to {}", accounts.len(), start_date, end_date);
+    info!(
+        "Computing merged balance and forecast for {} accounts from {} to {}",
+        accounts.len(),
+        start_date,
+        end_date
+    );
 
     // Create a merge calculator with default calculators
     let merge_calculator = MergeCalculator::default();
 
     // Use the merge calculator to compute the account state
-    let result = merge_calculator.compute_account_state(db, accounts, start_date, end_date).await?;
+    let result = merge_calculator
+        .compute_account_state(db, accounts, start_date, end_date)
+        .await?;
 
-    info!("Merged computation completed successfully with {} data points", result.height());
+    info!(
+        "Merged computation completed successfully with {} data points",
+        result.height()
+    );
     Ok(result)
 }

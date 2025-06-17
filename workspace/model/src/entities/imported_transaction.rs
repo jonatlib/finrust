@@ -83,23 +83,38 @@ impl Model {
     /// Get the reconciled transaction type, if any.
     #[instrument(skip(self), fields(id = self.id, reconciled_type = ?self.reconciled_transaction_type, reconciled_id = ?self.reconciled_transaction_id))]
     pub fn get_reconciled_transaction_type(&self) -> Option<ReconciledTransactionType> {
-        trace!("Getting reconciled transaction type for imported transaction {}", self.id);
+        trace!(
+            "Getting reconciled transaction type for imported transaction {}",
+            self.id
+        );
 
         // Construct from the database fields
-        if let (Some(entity_type), Some(id)) = (self.reconciled_transaction_type.as_ref(), self.reconciled_transaction_id) {
+        if let (Some(entity_type), Some(id)) = (
+            self.reconciled_transaction_type.as_ref(),
+            self.reconciled_transaction_id,
+        ) {
             let result = match entity_type {
                 ReconciledTransactionEntityType::OneOff => {
-                    debug!("Imported transaction {} is reconciled with OneOff transaction {}", self.id, id);
+                    debug!(
+                        "Imported transaction {} is reconciled with OneOff transaction {}",
+                        self.id, id
+                    );
                     Some(ReconciledTransactionType::OneOff(id))
-                },
+                }
                 ReconciledTransactionEntityType::Recurring => {
-                    debug!("Imported transaction {} is reconciled with Recurring transaction {}", self.id, id);
+                    debug!(
+                        "Imported transaction {} is reconciled with Recurring transaction {}",
+                        self.id, id
+                    );
                     Some(ReconciledTransactionType::Recurring(id))
-                },
+                }
                 ReconciledTransactionEntityType::RecurringIncome => {
-                    debug!("Imported transaction {} is reconciled with RecurringIncome {}", self.id, id);
+                    debug!(
+                        "Imported transaction {} is reconciled with RecurringIncome {}",
+                        self.id, id
+                    );
                     Some(ReconciledTransactionType::RecurringIncome(id))
-                },
+                }
             };
             result
         } else {
@@ -110,11 +125,20 @@ impl Model {
 
     /// Set the reconciled transaction type.
     #[instrument(skip(self), fields(id = self.id, transaction_type = ?transaction_type))]
-    pub fn set_reconciled_transaction_type(&mut self, transaction_type: Option<ReconciledTransactionType>) {
-        trace!("Setting reconciled transaction type for imported transaction {}", self.id);
+    pub fn set_reconciled_transaction_type(
+        &mut self,
+        transaction_type: Option<ReconciledTransactionType>,
+    ) {
+        trace!(
+            "Setting reconciled transaction type for imported transaction {}",
+            self.id
+        );
 
         // Reset the fields first
-        debug!("Resetting reconciled transaction fields for imported transaction {}", self.id);
+        debug!(
+            "Resetting reconciled transaction fields for imported transaction {}",
+            self.id
+        );
         self.reconciled_transaction_type = None;
         self.reconciled_transaction_id = None;
 
@@ -122,26 +146,40 @@ impl Model {
         if let Some(transaction_type) = transaction_type {
             match transaction_type {
                 ReconciledTransactionType::OneOff(id) => {
-                    debug!("Setting imported transaction {} as reconciled with OneOff transaction {}", self.id, id);
-                    self.reconciled_transaction_type = Some(ReconciledTransactionEntityType::OneOff);
+                    debug!(
+                        "Setting imported transaction {} as reconciled with OneOff transaction {}",
+                        self.id, id
+                    );
+                    self.reconciled_transaction_type =
+                        Some(ReconciledTransactionEntityType::OneOff);
                     self.reconciled_transaction_id = Some(id);
                 }
                 ReconciledTransactionType::Recurring(id) => {
-                    debug!("Setting imported transaction {} as reconciled with Recurring transaction {}", self.id, id);
-                    self.reconciled_transaction_type = Some(ReconciledTransactionEntityType::Recurring);
+                    debug!(
+                        "Setting imported transaction {} as reconciled with Recurring transaction {}",
+                        self.id, id
+                    );
+                    self.reconciled_transaction_type =
+                        Some(ReconciledTransactionEntityType::Recurring);
                     self.reconciled_transaction_id = Some(id);
                 }
                 ReconciledTransactionType::RecurringIncome(id) => {
-                    debug!("Setting imported transaction {} as reconciled with RecurringIncome {}", self.id, id);
-                    self.reconciled_transaction_type = Some(ReconciledTransactionEntityType::RecurringIncome);
+                    debug!(
+                        "Setting imported transaction {} as reconciled with RecurringIncome {}",
+                        self.id, id
+                    );
+                    self.reconciled_transaction_type =
+                        Some(ReconciledTransactionEntityType::RecurringIncome);
                     self.reconciled_transaction_id = Some(id);
                 }
             }
         } else {
-            debug!("Clearing reconciliation for imported transaction {}", self.id);
+            debug!(
+                "Clearing reconciliation for imported transaction {}",
+                self.id
+            );
         }
     }
-
 }
 
 impl ActiveModelBehavior for ActiveModel {}

@@ -26,8 +26,8 @@ impl TestScenarioBuilder for ScenarioBalance {
             username: Set("test_user".to_string()),
             ..Default::default()
         }
-            .insert(&db)
-            .await?;
+        .insert(&db)
+        .await?;
 
         // Create a test account
         let account = account::ActiveModel {
@@ -39,8 +39,8 @@ impl TestScenarioBuilder for ScenarioBalance {
             ledger_name: Set(None),
             ..Default::default()
         }
-            .insert(&db)
-            .await?;
+        .insert(&db)
+        .await?;
 
         // Create a manual account state (initial balance)
         let initial_date = NaiveDate::from_ymd_opt(2023, 1, 1).unwrap();
@@ -52,8 +52,8 @@ impl TestScenarioBuilder for ScenarioBalance {
             amount: Set(initial_balance),
             ..Default::default()
         }
-            .insert(&db)
-            .await?;
+        .insert(&db)
+        .await?;
 
         // Create a recurring (monthly) transaction - e.g., rent payment
         let recurring_tx = recurring_transaction::ActiveModel {
@@ -69,8 +69,8 @@ impl TestScenarioBuilder for ScenarioBalance {
             ledger_name: Set(None),
             ..Default::default()
         }
-            .insert(&db)
-            .await?;
+        .insert(&db)
+        .await?;
 
         // Create a one-off transaction - e.g., a purchase
         let _one_off_tx = one_off_transaction::ActiveModel {
@@ -85,8 +85,8 @@ impl TestScenarioBuilder for ScenarioBalance {
             linked_import_id: Set(None),
             ..Default::default()
         }
-            .insert(&db)
-            .await?;
+        .insert(&db)
+        .await?;
 
         // Create another one-off transaction - e.g., a bonus
         let _bonus_tx = one_off_transaction::ActiveModel {
@@ -101,21 +101,49 @@ impl TestScenarioBuilder for ScenarioBalance {
             linked_import_id: Set(None),
             ..Default::default()
         }
-            .insert(&db)
-            .await?;
+        .insert(&db)
+        .await?;
 
         // Create assertions for 3 different months
         // January 31: Initial $1000 - $500 (rent) = $1000, the rent is overridden by the init state
         // February 28: $1000 - $500 (rent) - $150 (groceries) = $350
         // March 31: $350 - $500 (rent) + $300 (bonus) = $150
         let assert_results: AssertResult = vec![
-            (account.id, NaiveDate::from_ymd_opt(2023, 1, 31).unwrap(), Decimal::new(100000, 2)),
-            (account.id, NaiveDate::from_ymd_opt(2023, 2, 01).unwrap(), Decimal::new(50000, 2)),
-            (account.id, NaiveDate::from_ymd_opt(2023, 2, 02).unwrap(), Decimal::new(50000, 2)),
-            (account.id, NaiveDate::from_ymd_opt(2023, 2, 28).unwrap(), Decimal::new(35000, 2)),
-            (account.id, NaiveDate::from_ymd_opt(2023, 3, 31).unwrap(), Decimal::new(15000, 2)),
-            (account.id, NaiveDate::from_ymd_opt(2023, 4, 01).unwrap(), Decimal::new(-35000, 2)),
-            (account.id, NaiveDate::from_ymd_opt(2023, 4, 15).unwrap(), Decimal::new(-35000, 2)),
+            (
+                account.id,
+                NaiveDate::from_ymd_opt(2023, 1, 31).unwrap(),
+                Decimal::new(100000, 2),
+            ),
+            (
+                account.id,
+                NaiveDate::from_ymd_opt(2023, 2, 01).unwrap(),
+                Decimal::new(50000, 2),
+            ),
+            (
+                account.id,
+                NaiveDate::from_ymd_opt(2023, 2, 02).unwrap(),
+                Decimal::new(50000, 2),
+            ),
+            (
+                account.id,
+                NaiveDate::from_ymd_opt(2023, 2, 28).unwrap(),
+                Decimal::new(35000, 2),
+            ),
+            (
+                account.id,
+                NaiveDate::from_ymd_opt(2023, 3, 31).unwrap(),
+                Decimal::new(15000, 2),
+            ),
+            (
+                account.id,
+                NaiveDate::from_ymd_opt(2023, 4, 01).unwrap(),
+                Decimal::new(-35000, 2),
+            ),
+            (
+                account.id,
+                NaiveDate::from_ymd_opt(2023, 4, 15).unwrap(),
+                Decimal::new(-35000, 2),
+            ),
         ];
 
         // Return the test scenario

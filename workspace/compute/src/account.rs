@@ -10,12 +10,18 @@ use crate::error::Result;
 /// Returns the number of days in the given month using chrono.
 #[instrument]
 pub fn days_in_month(year: i32, month: u32) -> u32 {
-    trace!("Calculating days in month for year={}, month={}", year, month);
+    trace!(
+        "Calculating days in month for year={}, month={}",
+        year, month
+    );
 
     // Create a date for the first day of the next month
     let next_month_year = year + (month / 12) as i32;
     let next_month = (month % 12) + 1;
-    trace!("Calculated next month: year={}, month={}", next_month_year, next_month);
+    trace!(
+        "Calculated next month: year={}, month={}",
+        next_month_year, next_month
+    );
 
     // Get the first day of the next month
     let first_day_next_month = NaiveDate::from_ymd_opt(next_month_year, next_month, 1).unwrap();
@@ -71,12 +77,13 @@ mod tests {
     use super::testing::*;
     use super::*;
 
-
     #[tokio::test]
     async fn test_scenario_balance() {
         let scenario = ScenarioBalance::new();
         let computer = balance::BalanceCalculator::new(MergeMethod::FirstWins);
 
-        run_and_assert_scenario(&scenario, &computer).await.expect("Failed to run scenario");
+        run_and_assert_scenario(&scenario, &computer)
+            .await
+            .expect("Failed to run scenario");
     }
 }

@@ -39,19 +39,23 @@ pub trait TestScenarioBuilder {
     async fn get_scenario(&self) -> Result<TestScenario, DbErr>;
 }
 
-pub async fn run_and_assert_scenario(builder: &dyn TestScenarioBuilder, computer: &dyn AccountStateCalculator) -> ComputeResult<()> {
+pub async fn run_and_assert_scenario(
+    builder: &dyn TestScenarioBuilder,
+    computer: &dyn AccountStateCalculator,
+) -> ComputeResult<()> {
     let (db, accounts, assert_result) = builder.get_scenario().await?;
 
-    let min_date = assert_result.iter().map(|v| v.1.to_owned()).min().unwrap() - chrono::Duration::days(55);
-    let max_date = assert_result.iter().map(|v| v.1.to_owned()).max().unwrap() + chrono::Duration::days(55);
+    let min_date =
+        assert_result.iter().map(|v| v.1.to_owned()).min().unwrap() - chrono::Duration::days(55);
+    let max_date =
+        assert_result.iter().map(|v| v.1.to_owned()).max().unwrap() + chrono::Duration::days(55);
 
-    let mut computer_result = computer.compute_account_state(
-        &db,
-        &accounts,
-        min_date,
-        max_date,
-    ).await?;
-    computer_result.sort_in_place(vec!["date"], SortMultipleOptions::new()).expect("Failed to sort result.");
+    let mut computer_result = computer
+        .compute_account_state(&db, &accounts, min_date, max_date)
+        .await?;
+    computer_result
+        .sort_in_place(vec!["date"], SortMultipleOptions::new())
+        .expect("Failed to sort result.");
 
     println!("{:#?}", computer_result);
     assert_results(db, assert_result, computer_result).await?;
@@ -59,7 +63,11 @@ pub async fn run_and_assert_scenario(builder: &dyn TestScenarioBuilder, computer
     Ok(())
 }
 
-async fn assert_results(db: DatabaseConnection, assert_result: AssertResult, computer_result: DataFrame) -> ComputeResult<()> {
+async fn assert_results(
+    db: DatabaseConnection,
+    assert_result: AssertResult,
+    computer_result: DataFrame,
+) -> ComputeResult<()> {
     println!("Asserting results...");
     for (account_id, date, expected_balance) in assert_result {
         // Use lazy evaluation to find matching rows
@@ -67,10 +75,14 @@ async fn assert_results(db: DatabaseConnection, assert_result: AssertResult, com
         let date_str = date.to_string();
 
         // Create a lazy DataFrame and apply filters
-        let filtered_df = computer_result.clone().lazy()
+        let filtered_df = computer_result
+            .clone()
+            .lazy()
             .filter(
-                col("account_id").cast(DataType::String).eq(lit(account_id_str))
-                    .and(col("date").cast(DataType::String).eq(lit(date_str)))
+                col("account_id")
+                    .cast(DataType::String)
+                    .eq(lit(account_id_str))
+                    .and(col("date").cast(DataType::String).eq(lit(date_str))),
             )
             .collect()?;
 
@@ -78,8 +90,11 @@ async fn assert_results(db: DatabaseConnection, assert_result: AssertResult, com
         if filtered_df.height() != 1 {
             return Err(ComputeError::DataFrame(format!(
                 "Expected exactly one row for account_id={}, date={}, but found {}",
-                account_id, date, filtered_df.height()
-            )).into());
+                account_id,
+                date,
+                filtered_df.height()
+            ))
+            .into());
         }
 
         // Extract the balance value from the filtered DataFrame
@@ -93,10 +108,14 @@ async fn assert_results(db: DatabaseConnection, assert_result: AssertResult, com
             return Err(ComputeError::DataFrame(format!(
                 "Balance mismatch for account_id={}, date={}: expected {}, got {}",
                 account_id, date, expected_balance, actual_balance
-            )).into());
+            ))
+            .into());
         }
 
-        println!("Assertion passed for account_id={}, date={}: balance={}", account_id, date, actual_balance);
+        println!(
+            "Assertion passed for account_id={}, date={}: balance={}",
+            account_id, date, actual_balance
+        );
     }
 
     Ok(())
