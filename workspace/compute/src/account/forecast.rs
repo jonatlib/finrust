@@ -7,10 +7,47 @@ use rust_decimal::Decimal;
 use sea_orm::DatabaseConnection;
 use std::collections::HashMap;
 use tracing::{debug, info, instrument, trace};
+use async_trait::async_trait;
 
 use crate::error::Result;
+use super::{AccountStateCalculator, MergeMethod};
 
 use self::recurring::{get_recurring_income, get_recurring_transactions};
+
+/// A calculator that computes account forecasts based on recurring transactions and income.
+pub struct ForecastCalculator {
+    /// The merge method to use when combining results from multiple calculators.
+    merge_method: MergeMethod,
+}
+
+impl ForecastCalculator {
+    /// Creates a new forecast calculator with the specified merge method.
+    pub fn new(merge_method: MergeMethod) -> Self {
+        Self { merge_method }
+    }
+
+    /// Creates a new forecast calculator with the default merge method (FirstWins).
+    pub fn default() -> Self {
+        Self { merge_method: MergeMethod::FirstWins }
+    }
+}
+
+#[async_trait]
+impl AccountStateCalculator for ForecastCalculator {
+    async fn compute_account_state(
+        &self,
+        db: &DatabaseConnection,
+        accounts: &[account::Model],
+        start_date: NaiveDate,
+        end_date: NaiveDate,
+    ) -> Result<DataFrame> {
+        compute_forecast(db, accounts, start_date, end_date).await
+    }
+
+    fn merge_method(&self) -> MergeMethod {
+        self.merge_method
+    }
+}
 
 /// Computes the forecast for accounts within a specified date range.
 ///
@@ -19,7 +56,7 @@ use self::recurring::{get_recurring_income, get_recurring_transactions};
 ///
 /// It considers transactions where the account is both source and target.
 #[instrument(skip(db, accounts), fields(num_accounts = accounts.len(), start_date = %start_date, end_date = %end_date))]
-pub async fn compute_forecast(
+async fn compute_forecast(
     db: &DatabaseConnection,
     accounts: &[account::Model],
     start_date: NaiveDate,

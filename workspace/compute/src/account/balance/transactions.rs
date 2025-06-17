@@ -9,7 +9,7 @@ use crate::error::Result;
 
 /// Gets all one-off transactions for the account within the given date range.
 #[instrument(skip(db), fields(account_id = account_id, start_date = %start_date, end_date = %end_date))]
-pub async fn get_transactions_for_account(
+async fn get_transactions_for_account(
     db: &DatabaseConnection,
     account_id: i32,
     start_date: NaiveDate,
@@ -44,7 +44,7 @@ pub async fn get_transactions_for_account(
 
 /// Gets all imported transactions for the account within the given date range.
 #[instrument(skip(db), fields(account_id = account_id, start_date = %start_date, end_date = %end_date))]
-pub async fn get_imported_transactions(
+async fn get_imported_transactions(
     db: &DatabaseConnection,
     account_id: i32,
     start_date: NaiveDate,

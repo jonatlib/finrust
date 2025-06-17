@@ -9,8 +9,45 @@ use rust_decimal::Decimal;
 use sea_orm::DatabaseConnection;
 use std::collections::HashMap;
 use tracing::{debug, info, instrument, trace};
+use async_trait::async_trait;
 
 use crate::error::{ComputeError, Result};
+use super::{AccountStateCalculator, MergeMethod};
+
+/// A calculator that computes account balances based on transactions and manual states.
+pub struct BalanceCalculator {
+    /// The merge method to use when combining results from multiple calculators.
+    merge_method: MergeMethod,
+}
+
+impl BalanceCalculator {
+    /// Creates a new balance calculator with the specified merge method.
+    pub fn new(merge_method: MergeMethod) -> Self {
+        Self { merge_method }
+    }
+
+    /// Creates a new balance calculator with the default merge method (FirstWins).
+    pub fn default() -> Self {
+        Self { merge_method: MergeMethod::FirstWins }
+    }
+}
+
+#[async_trait]
+impl AccountStateCalculator for BalanceCalculator {
+    async fn compute_account_state(
+        &self,
+        db: &DatabaseConnection,
+        accounts: &[account::Model],
+        start_date: NaiveDate,
+        end_date: NaiveDate,
+    ) -> Result<DataFrame> {
+        compute_balance(db, accounts, start_date, end_date).await
+    }
+
+    fn merge_method(&self) -> MergeMethod {
+        self.merge_method
+    }
+}
 
 use self::{
     account_state::{get_latest_manual_state, get_manual_states_in_range},
@@ -28,7 +65,7 @@ use self::{
 ///
 /// It considers transactions where the account is both source and target.
 #[instrument(skip(db, accounts), fields(num_accounts = accounts.len(), start_date = %start_date, end_date = %end_date))]
-pub async fn compute_balance(
+async fn compute_balance(
     db: &DatabaseConnection,
     accounts: &[account::Model],
     start_date: NaiveDate,
