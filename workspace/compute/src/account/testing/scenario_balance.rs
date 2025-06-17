@@ -9,6 +9,12 @@ use model::entities::{account, manual_account_state, one_off_transaction, recurr
 
 pub struct ScenarioBalance {}
 
+impl ScenarioBalance {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
 #[async_trait]
 impl TestScenarioBuilder for ScenarioBalance {
     async fn get_scenario(&self) -> Result<TestScenario, DbErr> {
@@ -24,8 +30,8 @@ impl TestScenarioBuilder for ScenarioBalance {
             ledger_name: Set(None),
             ..Default::default()
         }
-        .insert(&db)
-        .await?;
+            .insert(&db)
+            .await?;
 
         // Create a manual account state (initial balance)
         let initial_date = NaiveDate::from_ymd_opt(2023, 1, 1).unwrap();
@@ -37,8 +43,8 @@ impl TestScenarioBuilder for ScenarioBalance {
             amount: Set(initial_balance),
             ..Default::default()
         }
-        .insert(&db)
-        .await?;
+            .insert(&db)
+            .await?;
 
         // Create a recurring (monthly) transaction - e.g., rent payment
         let recurring_tx = recurring_transaction::ActiveModel {
@@ -54,8 +60,8 @@ impl TestScenarioBuilder for ScenarioBalance {
             ledger_name: Set(None),
             ..Default::default()
         }
-        .insert(&db)
-        .await?;
+            .insert(&db)
+            .await?;
 
         // Create a one-off transaction - e.g., a purchase
         let _one_off_tx = one_off_transaction::ActiveModel {
@@ -70,8 +76,8 @@ impl TestScenarioBuilder for ScenarioBalance {
             linked_import_id: Set(None),
             ..Default::default()
         }
-        .insert(&db)
-        .await?;
+            .insert(&db)
+            .await?;
 
         // Create another one-off transaction - e.g., a bonus
         let _bonus_tx = one_off_transaction::ActiveModel {
@@ -86,8 +92,8 @@ impl TestScenarioBuilder for ScenarioBalance {
             linked_import_id: Set(None),
             ..Default::default()
         }
-        .insert(&db)
-        .await?;
+            .insert(&db)
+            .await?;
 
         // Create assertions for 3 different months
         // January 31: Initial $1000 - $500 (rent) = $500

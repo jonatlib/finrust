@@ -7,6 +7,8 @@ use chrono::NaiveDate;
 use rust_decimal::Decimal;
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbErr};
 
+use crate::account::AccountStateCalculator;
+use crate::error::Result as ComputeResult;
 use migration::{Migrator, MigratorTrait};
 use model::entities::account;
 
@@ -33,4 +35,22 @@ pub type TestScenario = (DatabaseConnection, Vec<account::Model>, AssertResult);
 #[async_trait]
 pub trait TestScenarioBuilder {
     async fn get_scenario(&self) -> Result<TestScenario, DbErr>;
+}
+
+pub async fn run_and_assert_scenario(builder: &dyn TestScenarioBuilder, computer: &dyn AccountStateCalculator) -> ComputeResult<()> {
+    let (db, accounts, assert_result) = builder.get_scenario().await?;
+
+    let min_date = assert_result.iter().map(|v| v.1.to_owned()).min().unwrap();
+    let max_date = assert_result.iter().map(|v| v.1.to_owned()).max().unwrap();
+
+    let computer_result = computer.compute_account_state(
+        &db,
+        &accounts,
+        min_date,
+        max_date,
+    ).await?;
+
+    println!("{:#?}", computer_result);
+
+    Ok(())
 }

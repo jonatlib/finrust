@@ -65,3 +65,18 @@ pub mod utils;
 
 #[cfg(test)]
 pub mod testing;
+
+#[cfg(test)]
+mod tests {
+    use super::testing::*;
+    use super::*;
+
+
+    #[tokio::test]
+    async fn test_scenario_balance() {
+        let scenario = ScenarioBalance::new();
+        let computer = balance::BalanceCalculator::new(MergeMethod::FirstWins);
+
+        run_and_assert_scenario(&scenario, &computer).await.expect("Failed to run scenario");
+    }
+}
