@@ -70,7 +70,7 @@ impl TestScenarioBuilder for ScenarioForecast {
 
         // Create assertions for 3 different months
         // For forecast, we start with 0 balance and accumulate transactions
-        // 
+        //
         // For both balance calculator and forecast calculator:
         // January 31: 0 - $500 (rent) = -$500
         // February 1: -$500 - $500 (rent) = -$1000 (monthly rent applied on the 1st)

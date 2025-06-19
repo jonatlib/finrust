@@ -68,7 +68,7 @@ impl TestScenarioBuilder for ScenarioMultipleAccounts {
 
         // Set initial balances for each account (on different days)
         let initial_date = NaiveDate::from_ymd_opt(2023, 1, 1).unwrap();
-        
+
         // Checking account starts with $2,500.00 on Jan 1
         let _checking_initial = manual_account_state::ActiveModel {
             account_id: Set(checking_account.id),
@@ -100,7 +100,7 @@ impl TestScenarioBuilder for ScenarioMultipleAccounts {
         .await?;
 
         // Create recurring transactions for each account
-        
+
         // Checking account: Monthly salary deposit on the 15th
         let _salary = recurring_transaction::ActiveModel {
             name: Set("Monthly Salary".to_string()),
@@ -170,7 +170,7 @@ impl TestScenarioBuilder for ScenarioMultipleAccounts {
         .await?;
 
         // Create one-off transactions for each account on different days
-        
+
         // Checking account: Car repair on Feb 10
         let _car_repair = one_off_transaction::ActiveModel {
             name: Set("Car Repair".to_string()),
@@ -272,7 +272,6 @@ impl TestScenarioBuilder for ScenarioMultipleAccounts {
                 NaiveDate::from_ymd_opt(2023, 3, 5).unwrap(),
                 Decimal::new(535000, 2), // No change (date with no transactions)
             ),
-            
             // Savings account assertions
             (
                 savings_account.id,
@@ -304,7 +303,6 @@ impl TestScenarioBuilder for ScenarioMultipleAccounts {
                 NaiveDate::from_ymd_opt(2023, 3, 20).unwrap(),
                 Decimal::new(1270000, 2), // After transfer from checking
             ),
-            
             // Investment account assertions
             (
                 investment_account.id,
@@ -339,6 +337,10 @@ impl TestScenarioBuilder for ScenarioMultipleAccounts {
         ];
 
         // Return the test scenario with all three accounts
-        Ok((db, vec![checking_account, savings_account, investment_account], assert_results))
+        Ok((
+            db,
+            vec![checking_account, savings_account, investment_account],
+            assert_results,
+        ))
     }
 }

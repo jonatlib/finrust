@@ -125,7 +125,7 @@ impl MergeCalculator {
                     Ok(value) => {
                         // Extract the string value directly
                         value.str_value().to_string()
-                    },
+                    }
                     Err(e) => {
                         warn!("Error getting balance in row {}: {}", row_idx, e);
                         continue;
