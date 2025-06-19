@@ -119,4 +119,28 @@ mod tests {
             .await
             .expect("Failed to run scenario");
     }
+
+    #[tokio::test]
+    async fn test_scenario_multiple_accounts() {
+        let scenario = ScenarioMultipleAccounts::new();
+        let computer = balance::BalanceCalculator::new(MergeMethod::FirstWins);
+
+        run_and_assert_scenario(&scenario, &computer)
+            .await
+            .expect("Failed to run scenario");
+    }
+
+
+    #[tokio::test]
+    async fn test_scenario_multiple_accounts_merge_simple() {
+        let scenario = ScenarioMultipleAccounts::new();
+        let computer1 = Box::new(balance::BalanceCalculator::new(MergeMethod::FirstWins));
+        let computer2 = Box::new(forecast::ForecastCalculator::new(MergeMethod::FirstWins));
+
+        let computer = merge::MergeCalculator::new(vec![computer1, computer2], MergeMethod::FirstWins);
+
+        run_and_assert_scenario(&scenario, &computer)
+            .await
+            .expect("Failed to run scenario");
+    }
 }

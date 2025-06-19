@@ -1,8 +1,10 @@
 pub mod scenario_balance;
 pub mod scenario_forecast;
+pub mod scenario_multiple_accounts;
 
 pub use scenario_balance::ScenarioBalance;
 pub use scenario_forecast::ScenarioForecast;
+pub use scenario_multiple_accounts::ScenarioMultipleAccounts;
 
 use async_trait::async_trait;
 use chrono::NaiveDate;
