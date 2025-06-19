@@ -1,6 +1,8 @@
 pub mod scenario_balance;
+pub mod scenario_forecast;
 
 pub use scenario_balance::ScenarioBalance;
+pub use scenario_forecast::ScenarioForecast;
 
 use async_trait::async_trait;
 use chrono::NaiveDate;

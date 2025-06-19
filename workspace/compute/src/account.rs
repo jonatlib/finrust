@@ -86,4 +86,24 @@ mod tests {
             .await
             .expect("Failed to run scenario");
     }
+
+    #[tokio::test]
+    async fn test_scenario_forecast_with_balance_calculator() {
+        let scenario = ScenarioForecast::new();
+        let computer = balance::BalanceCalculator::new(MergeMethod::FirstWins);
+
+        run_and_assert_scenario(&scenario, &computer)
+            .await
+            .expect("Failed to run scenario");
+    }
+
+    #[tokio::test]
+    async fn test_scenario_forecast() {
+        let scenario = ScenarioForecast::new();
+        let computer = forecast::ForecastCalculator::new(MergeMethod::FirstWins);
+
+        run_and_assert_scenario(&scenario, &computer)
+            .await
+            .expect("Failed to run scenario");
+    }
 }
