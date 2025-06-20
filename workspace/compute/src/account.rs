@@ -194,4 +194,62 @@ mod tests {
             .await
             .expect("Failed to run scenario");
     }
+
+    #[tokio::test]
+    async fn test_scenario_balance_no_instances() {
+        let scenario = ScenarioBalanceNoInstances::new();
+        // Use March 15, 2023 as "today" so that April 1 transactions are treated as future
+        let today = chrono::NaiveDate::from_ymd_opt(2023, 3, 15).unwrap();
+        println!("Using today date: {}", today);
+        let computer = balance::BalanceCalculator::new_with_today(MergeMethod::FirstWins, today);
+
+        run_and_assert_scenario(&scenario, &computer, true)
+            .await
+            .expect("Failed to run scenario");
+    }
+
+    #[tokio::test]
+    async fn test_scenario_balance_no_instances_outside_range() {
+        let scenario = ScenarioBalanceNoInstances::new();
+        // Use March 15, 2023 as "today" so that April 1 transactions are treated as future
+        let today = chrono::NaiveDate::from_ymd_opt(2023, 3, 15).unwrap();
+        let computer = balance::BalanceCalculator::new_with_today(MergeMethod::FirstWins, today);
+
+        run_and_assert_scenario(&scenario, &computer, false)
+            .await
+            .expect("Failed to run scenario");
+    }
+
+    #[tokio::test]
+    async fn test_scenario_forecast_no_instances() {
+        let scenario = ScenarioForecastNoInstances::new();
+        // Use March 15, 2023 as "today" so that March 16 is today + future_offset
+        let today = chrono::NaiveDate::from_ymd_opt(2023, 3, 15).unwrap();
+        let future_offset = chrono::Duration::days(1);
+        println!("Using today date: {} with future_offset: {} days", today, future_offset.num_days());
+        let computer = forecast::ForecastCalculator::new_with_params(
+            MergeMethod::FirstWins,
+            rust_decimal::Decimal::new(0, 2), // $0.00
+            today,
+            future_offset,
+        );
+
+        run_and_assert_scenario(&scenario, &computer, true)
+            .await
+            .expect("Failed to run scenario");
+    }
+
+    #[tokio::test]
+    async fn test_scenario_forecast_no_instances_outside_range() {
+        let scenario = ScenarioForecastNoInstances::new();
+        // Use initial balance of 0 when testing outside the range
+        let computer = forecast::ForecastCalculator::new_with_initial_balance(
+            MergeMethod::FirstWins,
+            rust_decimal::Decimal::new(0, 2), // $0.00
+        );
+
+        run_and_assert_scenario(&scenario, &computer, false)
+            .await
+            .expect("Failed to run scenario");
+    }
 }

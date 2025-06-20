@@ -1,5 +1,6 @@
 use chrono::{Duration, NaiveDate};
 use model::entities::{recurring_income, recurring_transaction, recurring_transaction_instance};
+use rust_decimal::Decimal;
 use sea_orm::{
     ColumnTrait, Condition, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, QuerySelect,
     RelationTrait,
@@ -71,6 +72,46 @@ pub async fn get_recurring_transactions(
             instances.len(),
             tx.id
         );
+
+        // Handle recurring transactions without instances
+        if instances.is_empty() {
+            trace!("Handling recurring transaction without instances (id={})", tx.id);
+
+            // For past occurrences, we need to generate all occurrences from start_date to today
+            if tx.start_date < today {
+                // Generate all past occurrences from transaction start date to today
+                let past_occurrences = generate_occurrences(tx.start_date, tx.end_date, &tx.period, tx.start_date, today);
+
+                // Move all past occurrences to today + future_offset
+                let new_date = today + future_offset;
+                for date in past_occurrences {
+                    if date < today {  // Only include dates before today
+                        result.push((new_date, tx.clone()));
+                    }
+                }
+
+                // For transactions that start before today, we need to find the next occurrence after today + future_offset
+                let next_date_after_offset = new_date.succ_opt().unwrap(); // Start from the day after today + future_offset
+                let future_occurrences = generate_occurrences(tx.start_date, tx.end_date, &tx.period, next_date_after_offset, end_date);
+
+                // Add future occurrences on their original dates
+                for date in future_occurrences {
+                    trace!("Adding future occurrence on {} for recurring transaction id={}", date, tx.id);
+                    result.push((date, tx.clone()));
+                }
+            } else {
+                // For transactions that start on or after today, generate future occurrences from start_date to end_date
+                let future_occurrences = generate_occurrences(tx.start_date, tx.end_date, &tx.period, tx.start_date, end_date);
+
+                // Add future occurrences on their original dates
+                for date in future_occurrences {
+                    result.push((date, tx.clone()));
+                }
+            }
+
+            // Skip the normal processing for this transaction
+            continue;
+        }
 
         let occurrences =
             generate_occurrences(tx.start_date, tx.end_date, &tx.period, start_date, end_date);

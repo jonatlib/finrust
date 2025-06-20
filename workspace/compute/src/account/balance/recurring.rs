@@ -53,6 +53,10 @@ pub async fn get_recurring_transactions(
     let mut result = Vec::new();
 
     for tx in &transactions {
+        println!(
+            "Processing recurring transaction: id={}, name={}, description={:?}, amount={}, period={:?}, start_date={}",
+            tx.id, tx.name, tx.description, tx.amount, tx.period, tx.start_date
+        );
         trace!(
             "Processing recurring transaction: id={}, description={:?}, amount={}, period={:?}",
             tx.id, tx.description, tx.amount, tx.period
@@ -64,6 +68,11 @@ pub async fn get_recurring_transactions(
             .all(db)
             .await?;
 
+        println!(
+            "Found {} instances for recurring transaction id={}",
+            instances.len(),
+            tx.id
+        );
         debug!(
             "Found {} instances for recurring transaction id={}",
             instances.len(),
@@ -73,6 +82,12 @@ pub async fn get_recurring_transactions(
         let occurrences =
             generate_occurrences(tx.start_date, tx.end_date, &tx.period, start_date, end_date);
 
+        println!(
+            "Generated {} occurrences for recurring transaction id={}: {:?}",
+            occurrences.len(),
+            tx.id,
+            occurrences
+        );
         debug!(
             "Generated {} occurrences for recurring transaction id={}",
             occurrences.len(),
@@ -92,7 +107,7 @@ pub async fn get_recurring_transactions(
                 // Check if there's an instance for this date
                 let instance = instances.iter().find(|i| i.due_date == date);
 
-                if let Some(instance) = instance {
+                if let Some(_instance) = instance {
                     // If there's an instance, include it on its due date
                     trace!(
                         "Adding past occurrence with instance on {} for recurring transaction id={}",
@@ -105,6 +120,7 @@ pub async fn get_recurring_transactions(
                         "Ignoring past occurrence without instance on {} for recurring transaction id={}",
                         date, tx.id
                     );
+                    // Do not add to result
                 }
             }
         }
@@ -203,7 +219,7 @@ pub async fn get_recurring_income(
                 // Check if there's an instance for this date
                 let instance = instances.iter().find(|i| i.due_date == date);
 
-                if let Some(instance) = instance {
+                if let Some(_instance) = instance {
                     // If there's an instance, include it on its due date
                     trace!(
                         "Adding past occurrence with instance on {} for recurring income id={}",
@@ -216,6 +232,7 @@ pub async fn get_recurring_income(
                         "Ignoring past occurrence without instance on {} for recurring income id={}",
                         date, income.id
                     );
+                    // Do not add to result
                 }
             }
         }
