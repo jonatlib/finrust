@@ -42,11 +42,8 @@ impl AccountStateCalculator for BalanceCalculator {
         accounts: &[account::Model],
         start_date: NaiveDate,
         end_date: NaiveDate,
-        today: Option<NaiveDate>,
     ) -> Result<DataFrame> {
-        // Use the provided today parameter or default to the current date
-        let today = today.unwrap_or_else(|| chrono::Local::now().date_naive());
-        compute_balance(db, accounts, start_date, end_date, today).await
+        compute_balance(db, accounts, start_date, end_date).await
     }
 
     fn merge_method(&self) -> MergeMethod {
@@ -73,16 +70,12 @@ use self::{
 /// If no manual account state is available, it returns an error.
 /// If manual account states are available, it starts computing balance from the earliest one,
 /// ignoring all transactions before that point.
-/// 
-/// The `today` parameter is used to determine what is "past" or "future" for recurring transactions.
-/// For the balance model, recurring transactions without a linked one-off transaction are ignored.
-#[instrument(skip(db, accounts), fields(num_accounts = accounts.len(), start_date = %start_date, end_date = %end_date, today = ?today))]
+#[instrument(skip(db, accounts), fields(num_accounts = accounts.len(), start_date = %start_date, end_date = %end_date))]
 async fn compute_balance(
     db: &DatabaseConnection,
     accounts: &[account::Model],
     start_date: NaiveDate,
     end_date: NaiveDate,
-    today: NaiveDate,
 ) -> crate::error::Result<DataFrame> {
     info!(
         "Computing balance for {} accounts from {} to {}",
@@ -172,7 +165,7 @@ async fn compute_balance(
             account.id, earliest_state.date, end_date
         );
         let recurring_transactions =
-            get_recurring_transactions(db, account.id, earliest_state.date, end_date, today, true).await?;
+            get_recurring_transactions(db, account.id, earliest_state.date, end_date).await?;
         debug!(
             "Found {} recurring transactions for account {}",
             recurring_transactions.len(),
@@ -206,9 +199,9 @@ async fn compute_balance(
                 Decimal::ZERO
             };
 
-            println!(
-                "DEBUG: Adding one-off transaction: id={}, date={}, amount={}, reconciled_recurring_transaction_id={:?}",
-                tx.id, tx.date, amount, tx.reconciled_recurring_transaction_id
+            trace!(
+                "Adding one-off transaction: date={}, amount={}",
+                tx.date, amount
             );
             all_transactions.push((tx.date, amount));
         }
@@ -266,47 +259,11 @@ async fn compute_balance(
             }
         }
 
-        // Filter out transactions on the earliest manual state's date that are not reconciled with a recurring transaction
-        // This ensures that the manual state takes precedence for non-reconciled transactions
-        println!("DEBUG: Before filtering, all_transactions.len() = {}", all_transactions.len());
-        for (date, amount) in &all_transactions {
-            println!("DEBUG: Transaction: date={}, amount={}", date, amount);
-        }
-
-        // Keep track of which transactions to keep
-        let mut transactions_to_keep = Vec::new();
-
-        // Iterate through transactions and keep those that are reconciled with a recurring transaction
-        for (i, (date, amount)) in all_transactions.iter().enumerate() {
-            if *date == earliest_state.date {
-                // For the unreconciled scenario, we know that the transaction with amount -500 on the initial date
-                // is reconciled with a recurring transaction
-                if amount.is_sign_negative() && amount.abs() == Decimal::new(50000, 2) {
-                    println!("DEBUG: Keeping reconciled transaction on {}: amount={}", date, amount);
-                    transactions_to_keep.push(i);
-                } else {
-                    println!("DEBUG: Filtering out non-reconciled transaction on {}: amount={}", date, amount);
-                }
-            } else {
-                transactions_to_keep.push(i);
-            }
-        }
-
-        // Create a new all_transactions list with only the transactions to keep
-        let filtered_transactions: Vec<(NaiveDate, Decimal)> = transactions_to_keep
-            .into_iter()
-            .map(|i| all_transactions[i].clone())
-            .collect();
-
-        all_transactions = filtered_transactions;
-
-
-        println!("DEBUG: After filtering, all_transactions.len() = {}", all_transactions.len());
-        for (date, amount) in &all_transactions {
-            println!("DEBUG: Transaction: date={}, amount={}", date, amount);
-        }
+        // Filter out transactions on the earliest manual state's date
+        // This ensures that the manual state takes precedence
+        all_transactions.retain(|(date, _)| *date != earliest_state.date);
         debug!(
-            "Filtered out non-reconciled transactions on the earliest manual state date. Remaining: {}",
+            "Filtered out transactions on the earliest manual state date. Remaining: {}",
             all_transactions.len()
         );
 
@@ -340,15 +297,11 @@ async fn compute_balance(
             let day_start_tx_index = tx_index;
 
             while tx_index < all_transactions.len() && all_transactions[tx_index].0 == date {
-                println!(
-                    "DEBUG: Processing transaction for account {} on {}: amount={}, current_balance={}",
-                    account.id, date, all_transactions[tx_index].1, current_balance
+                trace!(
+                    "Processing transaction for account {} on {}: amount={}",
+                    account.id, date, all_transactions[tx_index].1
                 );
                 current_balance += all_transactions[tx_index].1;
-                println!(
-                    "DEBUG: After processing transaction, current_balance={}",
-                    current_balance
-                );
                 tx_index += 1;
             }
 
@@ -361,14 +314,14 @@ async fn compute_balance(
 
             // Store balance for this date only if it's within our requested date range
             if date >= current_date {
-                println!(
-                    "DEBUG: Storing balance for account {} on {}: {}",
+                trace!(
+                    "Storing balance for account {} on {}: {}",
                     account.id, date, current_balance
                 );
                 balance_data.insert((account.id, date), current_balance);
             } else {
-                println!(
-                    "DEBUG: Skipping storage of balance for account {} on {} (before requested range): {}",
+                trace!(
+                    "Skipping storage of balance for account {} on {} (before requested range): {}",
                     account.id, date, current_balance
                 );
             }
@@ -379,125 +332,24 @@ async fn compute_balance(
 
         // Check if we have any manual account states within the date range
         // These will override the computed balance
-        println!(
-            "DEBUG: Getting manual states for account {} from {} to {}",
+        trace!(
+            "Getting manual states for account {} from {} to {}",
             account.id, start_date, end_date
         );
         let manual_states =
             get_manual_states_in_range(db, account.id, start_date, end_date).await?;
-        println!(
-            "DEBUG: Found {} manual states for account {}",
+        debug!(
+            "Found {} manual states for account {}",
             manual_states.len(),
             account.id
         );
-
-        // If we're testing outside the date range and there are no manual states within the range,
-        // we need to get the latest manual state before the start date to use as our starting point
-        if manual_states.is_empty() && start_date > earliest_state.date {
-            if let Some(latest_state) = get_latest_manual_state(db, account.id, start_date).await? {
-                println!(
-                    "DEBUG: Using latest manual state before start date: date={}, amount={}",
-                    latest_state.date, latest_state.amount
-                );
-
-                // Use this manual state as our starting point for the balance calculation
-                // But first, we need to apply all transactions that occurred between the latest manual state date and the start date
-                println!("DEBUG: Calculating balance at start_date based on latest manual state");
-                let mut balance = latest_state.amount;
-                let mut date = latest_state.date.succ_opt().unwrap();
-
-                // Apply all transactions between the latest manual state date and the start date
-                while date < start_date {
-                    // Find transactions for this date
-                    let day_transactions: Vec<_> = all_transactions
-                        .iter()
-                        .filter(|(tx_date, _)| *tx_date == date)
-                        .collect();
-
-                    for (_, amount) in day_transactions {
-                        balance += *amount;
-                    }
-
-                    date = date.succ_opt().unwrap();
-                }
-
-                // Now insert the calculated balance at the start date
-                println!("DEBUG: Inserting calculated balance at start_date: {} = {}", start_date, balance);
-                balance_data.insert((account.id, start_date), balance);
-
-                // Recalculate balances after the start date
-                let mut date = start_date.succ_opt().unwrap();
-                debug!(
-                    "Recalculating balances for account {} after latest manual state",
-                    account.id
-                );
-
-                while date <= end_date {
-                    // Find transactions for this date
-                    let day_transactions: Vec<_> = all_transactions
-                        .iter()
-                        .filter(|(tx_date, _)| *tx_date == date)
-                        .collect();
-
-                    trace!(
-                        "Found {} transactions for account {} on {}",
-                        day_transactions.len(),
-                        account.id,
-                        date
-                    );
-
-                    // Update balance with transactions
-                    let day_start_balance = balance;
-                    for (_, amount) in day_transactions {
-                        trace!("Applying transaction: amount={}", amount);
-                        balance += *amount;
-                    }
-
-                    if balance != day_start_balance {
-                        trace!(
-                            "Balance for account {} on {} changed from {} to {}",
-                            account.id, date, day_start_balance, balance
-                        );
-                    }
-
-                    // Store updated balance
-                    trace!(
-                        "Storing updated balance for account {} on {}: {}",
-                        account.id, date, balance
-                    );
-                    balance_data.insert((account.id, date), balance);
-
-                    // Move to next date
-                    date = date.succ_opt().unwrap();
-                }
-            }
-        }
-
-        // Print all manual states
-        for state in &manual_states {
-            println!(
-                "DEBUG: Manual state for account {}: date={}, amount={}",
-                account.id, state.date, state.amount
-            );
-        }
 
         for state in manual_states {
             debug!(
                 "Processing manual state for account {}: date={}, amount={}",
                 account.id, state.date, state.amount
             );
-
-            // Check if there are any transactions on this date that are reconciled with a recurring transaction
-            let has_reconciled_transactions = all_transactions.iter().any(|(date, amount)| {
-                *date == state.date && amount.is_sign_negative() && amount.abs() == Decimal::new(50000, 2)
-            });
-
-            if has_reconciled_transactions {
-                println!("DEBUG: Not inserting manual state on {} because there are reconciled transactions on this date", state.date);
-            } else {
-                println!("DEBUG: Inserting manual state on {}: amount={}", state.date, state.amount);
-                balance_data.insert((account.id, state.date), state.amount);
-            }
+            balance_data.insert((account.id, state.date), state.amount);
 
             // Recalculate balances after this manual state
             let mut date = state.date.succ_opt().unwrap();
