@@ -26,21 +26,23 @@ impl TestScenarioBuilder for ScenarioBalanceNoInstances {
             username: Set("test_user".to_string()),
             ..Default::default()
         }
-            .insert(&db)
-            .await?;
+        .insert(&db)
+        .await?;
 
         // Create a test account
         let account = account::ActiveModel {
             name: Set("Test Account".to_string()),
-            description: Set(Some("Account for balance testing without instances".to_string())),
+            description: Set(Some(
+                "Account for balance testing without instances".to_string(),
+            )),
             currency_code: Set("USD".to_string()),
             owner_id: Set(1),
             include_in_statistics: Set(true),
             ledger_name: Set(None),
             ..Default::default()
         }
-            .insert(&db)
-            .await?;
+        .insert(&db)
+        .await?;
 
         // Create a manual account state (initial balance)
         let initial_date = NaiveDate::from_ymd_opt(2023, 1, 1).unwrap();
@@ -52,8 +54,8 @@ impl TestScenarioBuilder for ScenarioBalanceNoInstances {
             amount: Set(initial_balance),
             ..Default::default()
         }
-            .insert(&db)
-            .await?;
+        .insert(&db)
+        .await?;
 
         // Create a recurring (monthly) transaction - e.g., rent payment
         // This transaction will not have any instances created
@@ -70,8 +72,8 @@ impl TestScenarioBuilder for ScenarioBalanceNoInstances {
             ledger_name: Set(None),
             ..Default::default()
         }
-            .insert(&db)
-            .await?;
+        .insert(&db)
+        .await?;
 
         // Create a second recurring transaction that starts in the future
         // This one should be included in balance calculations even without instances
@@ -89,8 +91,8 @@ impl TestScenarioBuilder for ScenarioBalanceNoInstances {
             ledger_name: Set(None),
             ..Default::default()
         }
-            .insert(&db)
-            .await?;
+        .insert(&db)
+        .await?;
 
         // Create assertions for different months
         // January 31: Initial $1000, no transactions should be accounted for

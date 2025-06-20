@@ -16,12 +16,21 @@ use polars::prelude::*;
 use polars::prelude::{col, lit};
 use rust_decimal::Decimal;
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbErr};
+use tracing::{debug, info, trace};
 
 use crate::account::AccountStateCalculator;
 use crate::error::{ComputeError, Result as ComputeResult};
 use migration::{Migrator, MigratorTrait};
 use model::entities::account;
 
+/// Sets up an in-memory SQLite database for testing.
+///
+/// Creates a new in-memory SQLite database, enables foreign keys,
+/// and applies all migrations.
+///
+/// # Returns
+///
+/// A connection to the in-memory database.
 async fn setup_db() -> Result<DatabaseConnection, DbErr> {
     // Connect to the SQLite database
     let db = Database::connect("sqlite::memory:").await?;
@@ -47,6 +56,23 @@ pub trait TestScenarioBuilder {
     async fn get_scenario(&self) -> Result<TestScenario, DbErr>;
 }
 
+/// Runs a test scenario and asserts that the computed results match the expected results.
+///
+/// This function takes a test scenario builder, an account state calculator, and a flag
+/// indicating whether to use the full date range from the scenario or a narrower range.
+/// It computes the account state using the calculator and asserts that the results
+/// match the expected values from the scenario.
+///
+/// # Arguments
+///
+/// * `builder` - The test scenario builder that provides the test data
+/// * `computer` - The account state calculator to test
+/// * `use_scenario_date_range` - If true, uses the full date range from the scenario;
+///   if false, uses a narrower range to test edge cases
+///
+/// # Returns
+///
+/// A result indicating success or an error with details about the failure
 pub async fn run_and_assert_scenario(
     builder: &dyn TestScenarioBuilder,
     computer: &dyn AccountStateCalculator,
@@ -58,15 +84,15 @@ pub async fn run_and_assert_scenario(
     let max_date;
 
     if use_scenario_date_range {
-        min_date =
-            assert_result.iter().map(|v| v.1.to_owned()).min().unwrap() - chrono::Duration::days(55);
-        max_date =
-            assert_result.iter().map(|v| v.1.to_owned()).max().unwrap() + chrono::Duration::days(55);
+        min_date = assert_result.iter().map(|v| v.1.to_owned()).min().unwrap()
+            - chrono::Duration::days(55);
+        max_date = assert_result.iter().map(|v| v.1.to_owned()).max().unwrap()
+            + chrono::Duration::days(55);
     } else {
-        min_date =
-            assert_result.iter().map(|v| v.1.to_owned()).min().unwrap() + chrono::Duration::days(20);
-        max_date =
-            assert_result.iter().map(|v| v.1.to_owned()).max().unwrap() - chrono::Duration::days(20);
+        min_date = assert_result.iter().map(|v| v.1.to_owned()).min().unwrap()
+            + chrono::Duration::days(20);
+        max_date = assert_result.iter().map(|v| v.1.to_owned()).max().unwrap()
+            - chrono::Duration::days(20);
     }
 
     let mut computer_result = computer
@@ -76,7 +102,7 @@ pub async fn run_and_assert_scenario(
         .sort_in_place(vec!["date"], SortMultipleOptions::new())
         .expect("Failed to sort result.");
 
-    println!("{:#?}", computer_result);
+    debug!("Computer result: {:#?}", computer_result);
 
     // Filter assertion results to only include dates within the requested date range
     // when use_scenario_date_range is false
@@ -94,12 +120,27 @@ pub async fn run_and_assert_scenario(
     Ok(())
 }
 
+/// Asserts that the computed results match the expected results.
+///
+/// This function compares each expected result (account_id, date, balance) with the
+/// corresponding row in the computed results DataFrame. It verifies that exactly one
+/// matching row exists for each expected result and that the balance values match.
+///
+/// # Arguments
+///
+/// * `db` - The database connection (consumed by this function)
+/// * `assert_result` - The expected results as a vector of (account_id, date, balance) tuples
+/// * `computer_result` - The computed results as a DataFrame
+///
+/// # Returns
+///
+/// A result indicating success or an error with details about the failure
 async fn assert_results(
     db: DatabaseConnection,
     assert_result: AssertResult,
     computer_result: DataFrame,
 ) -> ComputeResult<()> {
-    println!("Asserting results...");
+    info!("Asserting results...");
     for (account_id, date, expected_balance) in assert_result {
         // Use lazy evaluation to find matching rows
         let account_id_str = account_id.to_string();
@@ -125,7 +166,7 @@ async fn assert_results(
                 date,
                 filtered_df.height()
             ))
-                .into());
+            .into());
         }
 
         // Extract the balance value from the filtered DataFrame
@@ -140,10 +181,10 @@ async fn assert_results(
                 "Balance mismatch for account_id={}, date={}: expected {}, got {}",
                 account_id, date, expected_balance, actual_balance
             ))
-                .into());
+            .into());
         }
 
-        println!(
+        info!(
             "Assertion passed for account_id={}, date={}: balance={}",
             account_id, date, actual_balance
         );

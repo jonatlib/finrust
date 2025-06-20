@@ -22,7 +22,9 @@ impl fmt::Display for ReconciledTransactionType {
             ReconciledTransactionType::OneOff(id) => write!(f, "OneOff({})", id),
             ReconciledTransactionType::Recurring(id) => write!(f, "Recurring({})", id),
             ReconciledTransactionType::RecurringIncome(id) => write!(f, "RecurringIncome({})", id),
-            ReconciledTransactionType::RecurringInstance(id) => write!(f, "RecurringInstance({})", id),
+            ReconciledTransactionType::RecurringInstance(id) => {
+                write!(f, "RecurringInstance({})", id)
+            }
         }
     }
 }

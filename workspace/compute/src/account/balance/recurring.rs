@@ -10,7 +10,7 @@ use crate::error::Result;
 
 /// Gets all recurring transactions for the account within the given date range.
 /// Returns a vector of (date, transaction) pairs for all occurrences within the range.
-/// 
+///
 /// For balance calculator:
 /// - Future recurring transactions (date >= today) are treated as if they were accounted on their date
 /// - Past recurring transactions (date < today) with instances are included on their due date
@@ -53,7 +53,7 @@ pub async fn get_recurring_transactions(
     let mut result = Vec::new();
 
     for tx in &transactions {
-        println!(
+        debug!(
             "Processing recurring transaction: id={}, name={}, description={:?}, amount={}, period={:?}, start_date={}",
             tx.id, tx.name, tx.description, tx.amount, tx.period, tx.start_date
         );
@@ -64,15 +64,13 @@ pub async fn get_recurring_transactions(
 
         // Get instances for this recurring transaction
         let instances = model::entities::recurring_transaction_instance::Entity::find()
-            .filter(model::entities::recurring_transaction_instance::Column::RecurringTransactionId.eq(tx.id))
+            .filter(
+                model::entities::recurring_transaction_instance::Column::RecurringTransactionId
+                    .eq(tx.id),
+            )
             .all(db)
             .await?;
 
-        println!(
-            "Found {} instances for recurring transaction id={}",
-            instances.len(),
-            tx.id
-        );
         debug!(
             "Found {} instances for recurring transaction id={}",
             instances.len(),
@@ -82,16 +80,14 @@ pub async fn get_recurring_transactions(
         let occurrences =
             generate_occurrences(tx.start_date, tx.end_date, &tx.period, start_date, end_date);
 
-        println!(
-            "Generated {} occurrences for recurring transaction id={}: {:?}",
-            occurrences.len(),
-            tx.id,
-            occurrences
-        );
         debug!(
             "Generated {} occurrences for recurring transaction id={}",
             occurrences.len(),
             tx.id
+        );
+        trace!(
+            "Occurrences for recurring transaction id={}: {:?}",
+            tx.id, occurrences
         );
 
         for date in occurrences {
@@ -136,7 +132,7 @@ pub async fn get_recurring_transactions(
 
 /// Gets all recurring income for the account within the given date range.
 /// Returns a vector of (date, income) pairs for all occurrences within the range.
-/// 
+///
 /// For balance calculator:
 /// - Future recurring income (date >= today) is treated as if it were accounted on its date
 /// - Past recurring income (date < today) with instances are included on their due date
@@ -182,7 +178,10 @@ pub async fn get_recurring_income(
 
         // Get instances for this recurring income
         let instances = model::entities::recurring_transaction_instance::Entity::find()
-            .filter(model::entities::recurring_transaction_instance::Column::RecurringTransactionId.eq(income.id))
+            .filter(
+                model::entities::recurring_transaction_instance::Column::RecurringTransactionId
+                    .eq(income.id),
+            )
             .all(db)
             .await?;
 

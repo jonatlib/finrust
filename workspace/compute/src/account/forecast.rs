@@ -29,7 +29,7 @@ pub struct ForecastCalculator {
 impl ForecastCalculator {
     /// Creates a new forecast calculator with the specified merge method.
     pub fn new(merge_method: MergeMethod) -> Self {
-        Self { 
+        Self {
             merge_method,
             initial_balance: Decimal::ZERO,
             today: None,
@@ -39,7 +39,7 @@ impl ForecastCalculator {
 
     /// Creates a new forecast calculator with the specified merge method and initial balance.
     pub fn new_with_initial_balance(merge_method: MergeMethod, initial_balance: Decimal) -> Self {
-        Self { 
+        Self {
             merge_method,
             initial_balance,
             today: None,
@@ -49,12 +49,12 @@ impl ForecastCalculator {
 
     /// Creates a new forecast calculator with the specified merge method, initial balance, today date, and future offset.
     pub fn new_with_params(
-        merge_method: MergeMethod, 
+        merge_method: MergeMethod,
         initial_balance: Decimal,
         today: NaiveDate,
         future_offset: Duration,
     ) -> Self {
-        Self { 
+        Self {
             merge_method,
             initial_balance,
             today: Some(today),
@@ -83,11 +83,22 @@ impl AccountStateCalculator for ForecastCalculator {
         end_date: NaiveDate,
     ) -> Result<DataFrame> {
         // Use the provided today date or default to the current date
-        let today = self.today.unwrap_or_else(|| chrono::Local::now().date_naive());
+        let today = self
+            .today
+            .unwrap_or_else(|| chrono::Local::now().date_naive());
         // Use the provided future offset or default to 7 days
         let future_offset = self.future_offset.unwrap_or_else(|| Duration::days(7));
 
-        compute_forecast(db, accounts, start_date, end_date, self.initial_balance, today, future_offset).await
+        compute_forecast(
+            db,
+            accounts,
+            start_date,
+            end_date,
+            self.initial_balance,
+            today,
+            future_offset,
+        )
+        .await
     }
 
     fn merge_method(&self) -> MergeMethod {
@@ -101,7 +112,7 @@ impl AccountStateCalculator for ForecastCalculator {
 /// - Recurring transactions and income
 ///
 /// It considers transactions where the account is both source and target.
-/// 
+///
 /// The initial_balance parameter allows setting a starting balance for the forecast,
 /// which is useful when computing forecasts for dates outside the range of available transaction data.
 #[instrument(skip(db, accounts), fields(num_accounts = accounts.len(), start_date = %start_date, end_date = %end_date, today = %today, future_offset = %future_offset.num_days()))]
@@ -141,10 +152,21 @@ async fn compute_forecast(
         // Get all recurring transactions for this account within the date range
         trace!(
             "Getting recurring transactions for account {} from {} to {} (today={}, future_offset={}d)",
-            account.id, current_date, end_date, today, future_offset.num_days()
+            account.id,
+            current_date,
+            end_date,
+            today,
+            future_offset.num_days()
         );
-        let recurring_transactions =
-            get_recurring_transactions(db, account.id, current_date, end_date, today, future_offset).await?;
+        let recurring_transactions = get_recurring_transactions(
+            db,
+            account.id,
+            current_date,
+            end_date,
+            today,
+            future_offset,
+        )
+        .await?;
         debug!(
             "Found {} recurring transactions for account {}",
             recurring_transactions.len(),
@@ -154,9 +176,15 @@ async fn compute_forecast(
         // Get all recurring income for this account within the date range
         trace!(
             "Getting recurring income for account {} from {} to {} (today={}, future_offset={}d)",
-            account.id, current_date, end_date, today, future_offset.num_days()
+            account.id,
+            current_date,
+            end_date,
+            today,
+            future_offset.num_days()
         );
-        let recurring_income = get_recurring_income(db, account.id, current_date, end_date, today, future_offset).await?;
+        let recurring_income =
+            get_recurring_income(db, account.id, current_date, end_date, today, future_offset)
+                .await?;
         debug!(
             "Found {} recurring income entries for account {}",
             recurring_income.len(),

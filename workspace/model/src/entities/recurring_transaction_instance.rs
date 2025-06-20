@@ -11,7 +11,7 @@ pub enum InstanceStatus {
     #[sea_orm(string_value = "Pending")]
     Pending, // The transaction is expected but not yet paid.
     #[sea_orm(string_value = "Paid")]
-    Paid,    // The transaction has been paid and reconciled.
+    Paid, // The transaction has been paid and reconciled.
     #[sea_orm(string_value = "Skipped")]
     Skipped, // The user has marked this instance as skipped for this period.
 }

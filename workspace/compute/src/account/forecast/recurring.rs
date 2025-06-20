@@ -12,7 +12,7 @@ use crate::error::Result;
 
 /// Gets all recurring transactions for the account within the given date range.
 /// Returns a vector of (date, transaction) pairs for all occurrences within the range.
-/// 
+///
 /// For forecast calculator:
 /// - Future recurring transactions (date >= today) are treated as if they were accounted on their date
 /// - Past recurring transactions (date < today) with instances are accounted according to those instances
@@ -29,7 +29,11 @@ pub async fn get_recurring_transactions(
 ) -> Result<Vec<(NaiveDate, recurring_transaction::Model)>> {
     trace!(
         "Getting recurring transactions for account_id={} from {} to {} (today={}, future_offset={}d)",
-        account_id, start_date, end_date, today, future_offset.num_days()
+        account_id,
+        start_date,
+        end_date,
+        today,
+        future_offset.num_days()
     );
 
     let transactions = recurring_transaction::Entity::find()
@@ -75,33 +79,58 @@ pub async fn get_recurring_transactions(
 
         // Handle recurring transactions without instances
         if instances.is_empty() {
-            trace!("Handling recurring transaction without instances (id={})", tx.id);
+            trace!(
+                "Handling recurring transaction without instances (id={})",
+                tx.id
+            );
 
             // For past occurrences, we need to generate all occurrences from start_date to today
             if tx.start_date < today {
                 // Generate all past occurrences from transaction start date to today
-                let past_occurrences = generate_occurrences(tx.start_date, tx.end_date, &tx.period, tx.start_date, today);
+                let past_occurrences = generate_occurrences(
+                    tx.start_date,
+                    tx.end_date,
+                    &tx.period,
+                    tx.start_date,
+                    today,
+                );
 
                 // Move all past occurrences to today + future_offset
                 let new_date = today + future_offset;
                 for date in past_occurrences {
-                    if date < today {  // Only include dates before today
+                    if date < today {
+                        // Only include dates before today
                         result.push((new_date, tx.clone()));
                     }
                 }
 
                 // For transactions that start before today, we need to find the next occurrence after today + future_offset
                 let next_date_after_offset = new_date.succ_opt().unwrap(); // Start from the day after today + future_offset
-                let future_occurrences = generate_occurrences(tx.start_date, tx.end_date, &tx.period, next_date_after_offset, end_date);
+                let future_occurrences = generate_occurrences(
+                    tx.start_date,
+                    tx.end_date,
+                    &tx.period,
+                    next_date_after_offset,
+                    end_date,
+                );
 
                 // Add future occurrences on their original dates
                 for date in future_occurrences {
-                    trace!("Adding future occurrence on {} for recurring transaction id={}", date, tx.id);
+                    trace!(
+                        "Adding future occurrence on {} for recurring transaction id={}",
+                        date, tx.id
+                    );
                     result.push((date, tx.clone()));
                 }
             } else {
                 // For transactions that start on or after today, generate future occurrences from start_date to end_date
-                let future_occurrences = generate_occurrences(tx.start_date, tx.end_date, &tx.period, tx.start_date, end_date);
+                let future_occurrences = generate_occurrences(
+                    tx.start_date,
+                    tx.end_date,
+                    &tx.period,
+                    tx.start_date,
+                    end_date,
+                );
 
                 // Add future occurrences on their original dates
                 for date in future_occurrences {
@@ -158,14 +187,14 @@ pub async fn get_recurring_transactions(
                                 );
                                 result.push((date, tx.clone()));
                             }
-                        },
+                        }
                         recurring_transaction_instance::InstanceStatus::Skipped => {
                             // If skipped, ignore it
                             trace!(
                                 "Ignoring skipped instance on {} for recurring transaction id={}",
                                 date, tx.id
                             );
-                        },
+                        }
                         recurring_transaction_instance::InstanceStatus::Pending => {
                             // If pending, keep it on its original due date
                             trace!(
@@ -173,7 +202,7 @@ pub async fn get_recurring_transactions(
                                 date, tx.id
                             );
                             result.push((date, tx.clone()));
-                        },
+                        }
                     }
                 } else {
                     // If no instance, move it to today + future_offset
@@ -198,7 +227,7 @@ pub async fn get_recurring_transactions(
 
 /// Gets all recurring income for the account within the given date range.
 /// Returns a vector of (date, income) pairs for all occurrences within the range.
-/// 
+///
 /// For forecast calculator:
 /// - Future recurring income (date >= today) is treated as if it were accounted on its date
 /// - Past recurring income (date < today) is moved to today + future_offset
@@ -214,7 +243,11 @@ pub async fn get_recurring_income(
 ) -> Result<Vec<(NaiveDate, recurring_income::Model)>> {
     trace!(
         "Getting recurring income for account_id={} from {} to {} (today={}, future_offset={}d)",
-        account_id, start_date, end_date, today, future_offset.num_days()
+        account_id,
+        start_date,
+        end_date,
+        today,
+        future_offset.num_days()
     );
 
     let incomes = recurring_income::Entity::find()

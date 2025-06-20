@@ -25,7 +25,7 @@ pub struct BalanceCalculator {
 impl BalanceCalculator {
     /// Creates a new balance calculator with the specified merge method.
     pub fn new(merge_method: MergeMethod) -> Self {
-        Self { 
+        Self {
             merge_method,
             today: None,
         }
@@ -33,7 +33,7 @@ impl BalanceCalculator {
 
     /// Creates a new balance calculator with the specified merge method and today date.
     pub fn new_with_today(merge_method: MergeMethod, today: NaiveDate) -> Self {
-        Self { 
+        Self {
             merge_method,
             today: Some(today),
         }
@@ -58,7 +58,9 @@ impl AccountStateCalculator for BalanceCalculator {
         end_date: NaiveDate,
     ) -> Result<DataFrame> {
         // Use the provided today date or default to the current date
-        let today = self.today.unwrap_or_else(|| chrono::Local::now().date_naive());
+        let today = self
+            .today
+            .unwrap_or_else(|| chrono::Local::now().date_naive());
         compute_balance(db, accounts, start_date, end_date, today).await
     }
 
@@ -111,10 +113,7 @@ async fn compute_balance(
         );
 
         // Get all manual account states for this account
-        trace!(
-            "Getting all manual states for account {}",
-            account.id
-        );
+        trace!("Getting all manual states for account {}", account.id);
 
         // Get all manual states for this account (regardless of date range)
         // We'll use the earliest one as our starting point
@@ -128,7 +127,8 @@ async fn compute_balance(
         }
 
         // Find the earliest manual state to use as our starting point
-        let earliest_state = all_manual_states.iter()
+        let earliest_state = all_manual_states
+            .iter()
             .min_by_key(|state| state.date)
             .unwrap(); // Safe to unwrap as we checked for empty above
 
@@ -182,7 +182,8 @@ async fn compute_balance(
             account.id, earliest_state.date, end_date, today
         );
         let recurring_transactions =
-            get_recurring_transactions(db, account.id, earliest_state.date, end_date, today).await?;
+            get_recurring_transactions(db, account.id, earliest_state.date, end_date, today)
+                .await?;
         debug!(
             "Found {} recurring transactions for account {}",
             recurring_transactions.len(),
@@ -194,7 +195,8 @@ async fn compute_balance(
             "Getting recurring income for account {} from {} to {} (today={})",
             account.id, earliest_state.date, end_date, today
         );
-        let recurring_income = get_recurring_income(db, account.id, earliest_state.date, end_date, today).await?;
+        let recurring_income =
+            get_recurring_income(db, account.id, earliest_state.date, end_date, today).await?;
         debug!(
             "Found {} recurring income entries for account {}",
             recurring_income.len(),
@@ -294,10 +296,7 @@ async fn compute_balance(
 
         // Debug: Print all transactions
         for (date, amount) in &all_transactions {
-            debug!(
-                "Transaction: date={}, amount={}",
-                date, amount
-            );
+            debug!("Transaction: date={}, amount={}", date, amount);
         }
 
         // Process transactions and update balance

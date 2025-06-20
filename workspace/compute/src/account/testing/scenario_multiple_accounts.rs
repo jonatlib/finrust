@@ -5,7 +5,10 @@ use sea_orm::{ActiveModelTrait, DbErr, Set};
 
 use super::setup_db;
 use crate::account::testing::{AssertResult, TestScenario, TestScenarioBuilder};
-use model::entities::{account, manual_account_state, one_off_transaction, recurring_transaction, recurring_transaction_instance};
+use model::entities::{
+    account, manual_account_state, one_off_transaction, recurring_transaction,
+    recurring_transaction_instance,
+};
 
 pub struct ScenarioMultipleAccounts {}
 

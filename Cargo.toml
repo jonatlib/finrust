@@ -14,3 +14,5 @@ members = [
 [dependencies]
 model = { path = "workspace/model" }
 compute = { path = "workspace/compute" }
+tracing = "0.1"
+tracing-subscriber = "0.3"

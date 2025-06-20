@@ -160,6 +160,31 @@ finrust/
    # Create a database and update the connection string in your configuration
    ```
 
+### Code Standards
+
+#### Logging
+
+This project uses the `tracing` crate for structured logging. Follow these guidelines for logging:
+
+- Use appropriate log levels:
+  - `error!` - For errors that prevent the application from functioning correctly
+  - `warn!` - For unexpected conditions that don't prevent the application from working
+  - `info!` - For important events that should be visible in normal operation
+  - `debug!` - For detailed information useful during development
+  - `trace!` - For very detailed diagnostic information
+
+- Never use `println!` in production code; always use the appropriate tracing macro
+- Use the `#[instrument]` attribute on functions to automatically trace function entry and exit
+
+#### Documentation
+
+All code should be well-documented following these guidelines:
+
+- Every public struct, enum, trait, and function must have a docstring
+- Docstrings should explain the purpose, behavior, and usage of the item
+- Use the standard Rust documentation format with sections like `# Arguments`, `# Returns`, etc.
+- Follow the DRY principle: don't explain what the code is doing line by line, but focus on the intent and special cases
+
 ### Running Tests
 
 Run the test suite with:

@@ -99,10 +99,7 @@ pub async fn get_all_manual_states(
     );
 
     let states = manual_account_state::Entity::find()
-        .filter(
-            Condition::all()
-                .add(manual_account_state::Column::AccountId.eq(account_id))
-        )
+        .filter(Condition::all().add(manual_account_state::Column::AccountId.eq(account_id)))
         .order_by_asc(manual_account_state::Column::Date)
         .all(db)
         .await?;

@@ -32,7 +32,9 @@ impl TestScenarioBuilder for ScenarioForecastNoInstances {
         // Create a test account
         let account = account::ActiveModel {
             name: Set("Test Account".to_string()),
-            description: Set(Some("Account for forecast testing without instances".to_string())),
+            description: Set(Some(
+                "Account for forecast testing without instances".to_string(),
+            )),
             currency_code: Set("USD".to_string()),
             owner_id: Set(1),
             include_in_statistics: Set(true),
