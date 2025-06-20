@@ -4,7 +4,7 @@ use sea_orm::entity::prelude::*;
 use std::fmt;
 use tracing::{debug, instrument, trace};
 
-use super::{account, one_off_transaction, recurring_income, recurring_transaction};
+use super::account;
 
 /// Enum representing the type of transaction that an imported transaction is reconciled with.
 /// This enum includes the ID of the reconciled transaction directly in its variants.
@@ -13,6 +13,7 @@ pub enum ReconciledTransactionType {
     OneOff(i32),
     Recurring(i32),
     RecurringIncome(i32),
+    RecurringInstance(i32),
 }
 
 impl fmt::Display for ReconciledTransactionType {
@@ -21,6 +22,7 @@ impl fmt::Display for ReconciledTransactionType {
             ReconciledTransactionType::OneOff(id) => write!(f, "OneOff({})", id),
             ReconciledTransactionType::Recurring(id) => write!(f, "Recurring({})", id),
             ReconciledTransactionType::RecurringIncome(id) => write!(f, "RecurringIncome({})", id),
+            ReconciledTransactionType::RecurringInstance(id) => write!(f, "RecurringInstance({})", id),
         }
     }
 }
@@ -35,6 +37,8 @@ pub enum ReconciledTransactionEntityType {
     Recurring,
     #[sea_orm(string_value = "I")]
     RecurringIncome,
+    #[sea_orm(string_value = "T")]
+    RecurringInstance,
 }
 
 /// Represents a transaction imported from a bank file (e.g., CSV, OFX).
@@ -115,6 +119,13 @@ impl Model {
                     );
                     Some(ReconciledTransactionType::RecurringIncome(id))
                 }
+                ReconciledTransactionEntityType::RecurringInstance => {
+                    debug!(
+                        "Imported transaction {} is reconciled with RecurringInstance {}",
+                        self.id, id
+                    );
+                    Some(ReconciledTransactionType::RecurringInstance(id))
+                }
             };
             result
         } else {
@@ -170,6 +181,15 @@ impl Model {
                     );
                     self.reconciled_transaction_type =
                         Some(ReconciledTransactionEntityType::RecurringIncome);
+                    self.reconciled_transaction_id = Some(id);
+                }
+                ReconciledTransactionType::RecurringInstance(id) => {
+                    debug!(
+                        "Setting imported transaction {} as reconciled with RecurringInstance {}",
+                        self.id, id
+                    );
+                    self.reconciled_transaction_type =
+                        Some(ReconciledTransactionEntityType::RecurringInstance);
                     self.reconciled_transaction_id = Some(id);
                 }
             }

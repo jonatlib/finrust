@@ -13,6 +13,7 @@ pub mod one_off_transaction_tag;
 pub mod recurring_income;
 pub mod recurring_income_tag;
 pub mod recurring_transaction;
+pub mod recurring_transaction_instance;
 pub mod recurring_transaction_tag;
 pub mod tag;
 pub mod user;
@@ -31,6 +32,7 @@ pub mod prelude {
     pub use super::recurring_income::Entity as RecurringIncome;
     pub use super::recurring_income_tag::Entity as RecurringIncomeTag;
     pub use super::recurring_transaction::Entity as RecurringTransaction;
+    pub use super::recurring_transaction_instance::Entity as RecurringTransactionInstance;
     pub use super::recurring_transaction_tag::Entity as RecurringTransactionTag;
     pub use super::tag::Entity as Tag;
     pub use super::user::Entity as User;

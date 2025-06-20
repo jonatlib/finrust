@@ -31,6 +31,7 @@ impl EntityIden for RecurringTransactionTag {}
 impl EntityIden for ImportedTransaction {}
 impl EntityIden for RecurringIncome {}
 impl EntityIden for RecurringIncomeTag {}
+impl EntityIden for RecurringTransactionInstance {}
 
 /// A wrapper for table identifiers.
 #[derive(Debug, Clone)]
