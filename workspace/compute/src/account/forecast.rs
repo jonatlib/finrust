@@ -18,18 +18,32 @@ use self::recurring::{get_recurring_income, get_recurring_transactions};
 pub struct ForecastCalculator {
     /// The merge method to use when combining results from multiple calculators.
     merge_method: MergeMethod,
+    /// The initial balance to use when computing forecasts.
+    initial_balance: Decimal,
 }
 
 impl ForecastCalculator {
-    /// Creates a new forecast calculator with the specified merge method.
+    /// Creates a new forecast calculator with the specified merge method and initial balance.
     pub fn new(merge_method: MergeMethod) -> Self {
-        Self { merge_method }
+        Self { 
+            merge_method,
+            initial_balance: Decimal::ZERO,
+        }
     }
 
-    /// Creates a new forecast calculator with the default merge method (FirstWins).
+    /// Creates a new forecast calculator with the specified merge method and initial balance.
+    pub fn new_with_initial_balance(merge_method: MergeMethod, initial_balance: Decimal) -> Self {
+        Self { 
+            merge_method,
+            initial_balance,
+        }
+    }
+
+    /// Creates a new forecast calculator with the default merge method (FirstWins) and zero initial balance.
     pub fn default() -> Self {
         Self {
             merge_method: MergeMethod::FirstWins,
+            initial_balance: Decimal::ZERO,
         }
     }
 }
@@ -43,7 +57,7 @@ impl AccountStateCalculator for ForecastCalculator {
         start_date: NaiveDate,
         end_date: NaiveDate,
     ) -> Result<DataFrame> {
-        compute_forecast(db, accounts, start_date, end_date).await
+        compute_forecast(db, accounts, start_date, end_date, self.initial_balance).await
     }
 
     fn merge_method(&self) -> MergeMethod {
@@ -57,12 +71,16 @@ impl AccountStateCalculator for ForecastCalculator {
 /// - Recurring transactions and income
 ///
 /// It considers transactions where the account is both source and target.
+/// 
+/// The initial_balance parameter allows setting a starting balance for the forecast,
+/// which is useful when computing forecasts for dates outside the range of available transaction data.
 #[instrument(skip(db, accounts), fields(num_accounts = accounts.len(), start_date = %start_date, end_date = %end_date))]
 async fn compute_forecast(
     db: &DatabaseConnection,
     accounts: &[account::Model],
     start_date: NaiveDate,
     end_date: NaiveDate,
+    initial_balance: Decimal,
 ) -> Result<DataFrame> {
     info!(
         "Computing forecast for {} accounts from {} to {}",
@@ -80,12 +98,12 @@ async fn compute_forecast(
             account.id, account.name
         );
 
-        // Initialize balance with zero
-        let mut current_balance = Decimal::ZERO;
+        // Initialize balance with the provided initial balance
+        let mut current_balance = initial_balance;
         let current_date = start_date;
         trace!(
-            "Initialized balance for account {} to zero, starting from {}",
-            account.id, current_date
+            "Initialized balance for account {} to {}, starting from {}",
+            account.id, current_balance, current_date
         );
 
         // Get all recurring transactions for this account within the date range

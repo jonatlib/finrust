@@ -122,7 +122,11 @@ mod tests {
     #[tokio::test]
     async fn test_scenario_forecast_outside_range() {
         let scenario = ScenarioForecast::new();
-        let computer = forecast::ForecastCalculator::new(MergeMethod::FirstWins);
+        // Use initial balance of -$1000 (the balance on Feb 28) when testing outside the range
+        let computer = forecast::ForecastCalculator::new_with_initial_balance(
+            MergeMethod::FirstWins,
+            rust_decimal::Decimal::new(-100000, 2), // -$1000.00
+        );
 
         run_and_assert_scenario(&scenario, &computer, false)
             .await
