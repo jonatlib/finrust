@@ -10,17 +10,23 @@ use crate::error::Result;
 
 /// Gets all recurring transactions for the account within the given date range.
 /// Returns a vector of (date, transaction) pairs for all occurrences within the range.
-#[instrument(skip(db), fields(account_id = account_id, start_date = %start_date, end_date = %end_date
+/// 
+/// For balance calculator:
+/// - Future recurring transactions (date >= today) are treated as if they were accounted on their date
+/// - Past recurring transactions (date < today) with instances are included on their due date
+/// - Past recurring transactions (date < today) without instances are ignored
+#[instrument(skip(db), fields(account_id = account_id, start_date = %start_date, end_date = %end_date, today = %today
 ))]
 pub async fn get_recurring_transactions(
     db: &DatabaseConnection,
     account_id: i32,
     start_date: NaiveDate,
     end_date: NaiveDate,
+    today: NaiveDate,
 ) -> Result<Vec<(NaiveDate, recurring_transaction::Model)>> {
     trace!(
-        "Getting recurring transactions for account_id={} from {} to {}",
-        account_id, start_date, end_date
+        "Getting recurring transactions for account_id={} from {} to {} (today={})",
+        account_id, start_date, end_date, today
     );
 
     let transactions = recurring_transaction::Entity::find()
@@ -52,6 +58,18 @@ pub async fn get_recurring_transactions(
             tx.id, tx.description, tx.amount, tx.period
         );
 
+        // Get instances for this recurring transaction
+        let instances = model::entities::recurring_transaction_instance::Entity::find()
+            .filter(model::entities::recurring_transaction_instance::Column::RecurringTransactionId.eq(tx.id))
+            .all(db)
+            .await?;
+
+        debug!(
+            "Found {} instances for recurring transaction id={}",
+            instances.len(),
+            tx.id
+        );
+
         let occurrences =
             generate_occurrences(tx.start_date, tx.end_date, &tx.period, start_date, end_date);
 
@@ -62,11 +80,33 @@ pub async fn get_recurring_transactions(
         );
 
         for date in occurrences {
-            trace!(
-                "Adding occurrence on {} for recurring transaction id={}",
-                date, tx.id
-            );
-            result.push((date, tx.clone()));
+            if date >= today {
+                // Future recurring transactions are treated as if they were accounted on their date
+                trace!(
+                    "Adding future occurrence on {} for recurring transaction id={}",
+                    date, tx.id
+                );
+                result.push((date, tx.clone()));
+            } else {
+                // Past recurring transactions
+                // Check if there's an instance for this date
+                let instance = instances.iter().find(|i| i.due_date == date);
+
+                if let Some(instance) = instance {
+                    // If there's an instance, include it on its due date
+                    trace!(
+                        "Adding past occurrence with instance on {} for recurring transaction id={}",
+                        date, tx.id
+                    );
+                    result.push((date, tx.clone()));
+                } else {
+                    // If no instance, ignore it
+                    trace!(
+                        "Ignoring past occurrence without instance on {} for recurring transaction id={}",
+                        date, tx.id
+                    );
+                }
+            }
         }
     }
 
@@ -80,17 +120,23 @@ pub async fn get_recurring_transactions(
 
 /// Gets all recurring income for the account within the given date range.
 /// Returns a vector of (date, income) pairs for all occurrences within the range.
-#[instrument(skip(db), fields(account_id = account_id, start_date = %start_date, end_date = %end_date
+/// 
+/// For balance calculator:
+/// - Future recurring income (date >= today) is treated as if it were accounted on its date
+/// - Past recurring income (date < today) with instances are included on their due date
+/// - Past recurring income (date < today) without instances are ignored
+#[instrument(skip(db), fields(account_id = account_id, start_date = %start_date, end_date = %end_date, today = %today
 ))]
 pub async fn get_recurring_income(
     db: &DatabaseConnection,
     account_id: i32,
     start_date: NaiveDate,
     end_date: NaiveDate,
+    today: NaiveDate,
 ) -> Result<Vec<(NaiveDate, recurring_income::Model)>> {
     trace!(
-        "Getting recurring income for account_id={} from {} to {}",
-        account_id, start_date, end_date
+        "Getting recurring income for account_id={} from {} to {} (today={})",
+        account_id, start_date, end_date, today
     );
 
     let incomes = recurring_income::Entity::find()
@@ -118,6 +164,18 @@ pub async fn get_recurring_income(
             income.id, income.description, income.amount, income.period
         );
 
+        // Get instances for this recurring income
+        let instances = model::entities::recurring_transaction_instance::Entity::find()
+            .filter(model::entities::recurring_transaction_instance::Column::RecurringTransactionId.eq(income.id))
+            .all(db)
+            .await?;
+
+        debug!(
+            "Found {} instances for recurring income id={}",
+            instances.len(),
+            income.id
+        );
+
         let occurrences = generate_occurrences(
             income.start_date,
             income.end_date,
@@ -133,11 +191,33 @@ pub async fn get_recurring_income(
         );
 
         for date in occurrences {
-            trace!(
-                "Adding occurrence on {} for recurring income id={}",
-                date, income.id
-            );
-            result.push((date, income.clone()));
+            if date >= today {
+                // Future recurring income is treated as if it were accounted on its date
+                trace!(
+                    "Adding future occurrence on {} for recurring income id={}",
+                    date, income.id
+                );
+                result.push((date, income.clone()));
+            } else {
+                // Past recurring income
+                // Check if there's an instance for this date
+                let instance = instances.iter().find(|i| i.due_date == date);
+
+                if let Some(instance) = instance {
+                    // If there's an instance, include it on its due date
+                    trace!(
+                        "Adding past occurrence with instance on {} for recurring income id={}",
+                        date, income.id
+                    );
+                    result.push((date, income.clone()));
+                } else {
+                    // If no instance, ignore it
+                    trace!(
+                        "Ignoring past occurrence without instance on {} for recurring income id={}",
+                        date, income.id
+                    );
+                }
+            }
         }
     }
 

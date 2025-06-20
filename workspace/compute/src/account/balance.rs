@@ -18,18 +18,32 @@ use crate::error::{ComputeError, Result};
 pub struct BalanceCalculator {
     /// The merge method to use when combining results from multiple calculators.
     merge_method: MergeMethod,
+    /// The date to use as "today" for determining which recurring transactions to include.
+    today: Option<NaiveDate>,
 }
 
 impl BalanceCalculator {
     /// Creates a new balance calculator with the specified merge method.
     pub fn new(merge_method: MergeMethod) -> Self {
-        Self { merge_method }
+        Self { 
+            merge_method,
+            today: None,
+        }
+    }
+
+    /// Creates a new balance calculator with the specified merge method and today date.
+    pub fn new_with_today(merge_method: MergeMethod, today: NaiveDate) -> Self {
+        Self { 
+            merge_method,
+            today: Some(today),
+        }
     }
 
     /// Creates a new balance calculator with the default merge method (FirstWins).
     pub fn default() -> Self {
         Self {
             merge_method: MergeMethod::FirstWins,
+            today: None,
         }
     }
 }
@@ -43,7 +57,9 @@ impl AccountStateCalculator for BalanceCalculator {
         start_date: NaiveDate,
         end_date: NaiveDate,
     ) -> Result<DataFrame> {
-        compute_balance(db, accounts, start_date, end_date).await
+        // Use the provided today date or default to the current date
+        let today = self.today.unwrap_or_else(|| chrono::Local::now().date_naive());
+        compute_balance(db, accounts, start_date, end_date, today).await
     }
 
     fn merge_method(&self) -> MergeMethod {
@@ -70,12 +86,13 @@ use self::{
 /// If no manual account state is available, it returns an error.
 /// If manual account states are available, it starts computing balance from the earliest one,
 /// ignoring all transactions before that point.
-#[instrument(skip(db, accounts), fields(num_accounts = accounts.len(), start_date = %start_date, end_date = %end_date))]
+#[instrument(skip(db, accounts), fields(num_accounts = accounts.len(), start_date = %start_date, end_date = %end_date, today = %today))]
 async fn compute_balance(
     db: &DatabaseConnection,
     accounts: &[account::Model],
     start_date: NaiveDate,
     end_date: NaiveDate,
+    today: NaiveDate,
 ) -> crate::error::Result<DataFrame> {
     info!(
         "Computing balance for {} accounts from {} to {}",
@@ -161,11 +178,11 @@ async fn compute_balance(
 
         // Get all recurring transactions for this account from the earliest manual state date to the end date
         trace!(
-            "Getting recurring transactions for account {} from {} to {}",
-            account.id, earliest_state.date, end_date
+            "Getting recurring transactions for account {} from {} to {} (today={})",
+            account.id, earliest_state.date, end_date, today
         );
         let recurring_transactions =
-            get_recurring_transactions(db, account.id, earliest_state.date, end_date).await?;
+            get_recurring_transactions(db, account.id, earliest_state.date, end_date, today).await?;
         debug!(
             "Found {} recurring transactions for account {}",
             recurring_transactions.len(),
@@ -174,10 +191,10 @@ async fn compute_balance(
 
         // Get all recurring income for this account from the earliest manual state date to the end date
         trace!(
-            "Getting recurring income for account {} from {} to {}",
-            account.id, earliest_state.date, end_date
+            "Getting recurring income for account {} from {} to {} (today={})",
+            account.id, earliest_state.date, end_date, today
         );
-        let recurring_income = get_recurring_income(db, account.id, earliest_state.date, end_date).await?;
+        let recurring_income = get_recurring_income(db, account.id, earliest_state.date, end_date, today).await?;
         debug!(
             "Found {} recurring income entries for account {}",
             recurring_income.len(),

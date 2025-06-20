@@ -5,7 +5,7 @@ use sea_orm::{ActiveModelTrait, DbErr, Set};
 
 use super::setup_db;
 use crate::account::testing::{AssertResult, TestScenario, TestScenarioBuilder};
-use model::entities::{account, recurring_transaction};
+use model::entities::{account, recurring_transaction, recurring_transaction_instance};
 
 pub struct ScenarioForecast {}
 
@@ -59,6 +59,63 @@ impl TestScenarioBuilder for ScenarioForecast {
             target_account_id: Set(account.id),
             source_account_id: Set(None),
             ledger_name: Set(None),
+            ..Default::default()
+        }
+        .insert(&db)
+        .await?;
+
+        // Create recurring transaction instances for January, February, and March
+        // January instance - paid
+        let _jan_instance = recurring_transaction_instance::ActiveModel {
+            recurring_transaction_id: Set(recurring_tx.id),
+            status: Set(recurring_transaction_instance::InstanceStatus::Paid),
+            due_date: Set(NaiveDate::from_ymd_opt(2023, 1, 1).unwrap()),
+            expected_amount: Set(Decimal::new(-50000, 2)), // -$500.00
+            paid_date: Set(Some(NaiveDate::from_ymd_opt(2023, 1, 1).unwrap())),
+            paid_amount: Set(Some(Decimal::new(-50000, 2))), // -$500.00
+            reconciled_imported_transaction_id: Set(None),
+            ..Default::default()
+        }
+        .insert(&db)
+        .await?;
+
+        // February instance - paid
+        let _feb_instance = recurring_transaction_instance::ActiveModel {
+            recurring_transaction_id: Set(recurring_tx.id),
+            status: Set(recurring_transaction_instance::InstanceStatus::Paid),
+            due_date: Set(NaiveDate::from_ymd_opt(2023, 2, 1).unwrap()),
+            expected_amount: Set(Decimal::new(-50000, 2)), // -$500.00
+            paid_date: Set(Some(NaiveDate::from_ymd_opt(2023, 2, 1).unwrap())),
+            paid_amount: Set(Some(Decimal::new(-50000, 2))), // -$500.00
+            reconciled_imported_transaction_id: Set(None),
+            ..Default::default()
+        }
+        .insert(&db)
+        .await?;
+
+        // March instance - paid
+        let _mar_instance = recurring_transaction_instance::ActiveModel {
+            recurring_transaction_id: Set(recurring_tx.id),
+            status: Set(recurring_transaction_instance::InstanceStatus::Paid),
+            due_date: Set(NaiveDate::from_ymd_opt(2023, 3, 1).unwrap()),
+            expected_amount: Set(Decimal::new(-50000, 2)), // -$500.00
+            paid_date: Set(Some(NaiveDate::from_ymd_opt(2023, 3, 1).unwrap())),
+            paid_amount: Set(Some(Decimal::new(-50000, 2))), // -$500.00
+            reconciled_imported_transaction_id: Set(None),
+            ..Default::default()
+        }
+        .insert(&db)
+        .await?;
+
+        // April instance - pending (future)
+        let _apr_instance = recurring_transaction_instance::ActiveModel {
+            recurring_transaction_id: Set(recurring_tx.id),
+            status: Set(recurring_transaction_instance::InstanceStatus::Pending),
+            due_date: Set(NaiveDate::from_ymd_opt(2023, 4, 1).unwrap()),
+            expected_amount: Set(Decimal::new(-50000, 2)), // -$500.00
+            paid_date: Set(None),
+            paid_amount: Set(None),
+            reconciled_imported_transaction_id: Set(None),
             ..Default::default()
         }
         .insert(&db)

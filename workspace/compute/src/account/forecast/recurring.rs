@@ -1,7 +1,8 @@
-use chrono::NaiveDate;
-use model::entities::{recurring_income, recurring_transaction};
+use chrono::{Duration, NaiveDate};
+use model::entities::{recurring_income, recurring_transaction, recurring_transaction_instance};
 use sea_orm::{
     ColumnTrait, Condition, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, QuerySelect,
+    RelationTrait,
 };
 use tracing::{debug, instrument, trace};
 
@@ -10,17 +11,24 @@ use crate::error::Result;
 
 /// Gets all recurring transactions for the account within the given date range.
 /// Returns a vector of (date, transaction) pairs for all occurrences within the range.
-#[instrument(skip(db), fields(account_id = account_id, start_date = %start_date, end_date = %end_date
+/// 
+/// For forecast calculator:
+/// - Future recurring transactions (date >= today) are treated as if they were accounted on their date
+/// - Past recurring transactions (date < today) with instances are accounted according to those instances
+/// - Past recurring transactions (date < today) without instances are moved to today + future_offset
+#[instrument(skip(db), fields(account_id = account_id, start_date = %start_date, end_date = %end_date, today = %today, future_offset = %future_offset.num_days()
 ))]
 pub async fn get_recurring_transactions(
     db: &DatabaseConnection,
     account_id: i32,
     start_date: NaiveDate,
     end_date: NaiveDate,
+    today: NaiveDate,
+    future_offset: Duration,
 ) -> Result<Vec<(NaiveDate, recurring_transaction::Model)>> {
     trace!(
-        "Getting recurring transactions for account_id={} from {} to {}",
-        account_id, start_date, end_date
+        "Getting recurring transactions for account_id={} from {} to {} (today={}, future_offset={}d)",
+        account_id, start_date, end_date, today, future_offset.num_days()
     );
 
     let transactions = recurring_transaction::Entity::find()
@@ -52,6 +60,18 @@ pub async fn get_recurring_transactions(
             tx.id, tx.description, tx.amount, tx.period
         );
 
+        // Get instances for this recurring transaction
+        let instances = recurring_transaction_instance::Entity::find()
+            .filter(recurring_transaction_instance::Column::RecurringTransactionId.eq(tx.id))
+            .all(db)
+            .await?;
+
+        debug!(
+            "Found {} instances for recurring transaction id={}",
+            instances.len(),
+            tx.id
+        );
+
         let occurrences =
             generate_occurrences(tx.start_date, tx.end_date, &tx.period, start_date, end_date);
 
@@ -62,11 +82,68 @@ pub async fn get_recurring_transactions(
         );
 
         for date in occurrences {
-            trace!(
-                "Adding occurrence on {} for recurring transaction id={}",
-                date, tx.id
-            );
-            result.push((date, tx.clone()));
+            if date >= today {
+                // Future recurring transactions are treated as if they were accounted on their date
+                trace!(
+                    "Adding future occurrence on {} for recurring transaction id={}",
+                    date, tx.id
+                );
+                result.push((date, tx.clone()));
+            } else {
+                // Past recurring transactions
+                // Check if there's an instance for this date
+                let instance = instances.iter().find(|i| i.due_date == date);
+
+                if let Some(instance) = instance {
+                    // If there's an instance, use its status to determine how to handle it
+                    match instance.status {
+                        recurring_transaction_instance::InstanceStatus::Paid => {
+                            // If paid, use the paid date and amount if available
+                            if let Some(paid_date) = instance.paid_date {
+                                let amount = instance.paid_amount.unwrap_or(tx.amount);
+                                trace!(
+                                    "Adding paid instance on {} (paid on {}) for recurring transaction id={}",
+                                    date, paid_date, tx.id
+                                );
+                                // Use the original transaction but with the paid amount
+                                let mut paid_tx = tx.clone();
+                                paid_tx.amount = amount;
+                                result.push((paid_date, paid_tx));
+                            } else {
+                                // If no paid date, use the due date
+                                trace!(
+                                    "Adding paid instance on {} for recurring transaction id={}",
+                                    date, tx.id
+                                );
+                                result.push((date, tx.clone()));
+                            }
+                        },
+                        recurring_transaction_instance::InstanceStatus::Skipped => {
+                            // If skipped, ignore it
+                            trace!(
+                                "Ignoring skipped instance on {} for recurring transaction id={}",
+                                date, tx.id
+                            );
+                        },
+                        recurring_transaction_instance::InstanceStatus::Pending => {
+                            // If pending, keep it on its original due date
+                            trace!(
+                                "Adding pending instance on {} for recurring transaction id={}",
+                                date, tx.id
+                            );
+                            result.push((date, tx.clone()));
+                        },
+                    }
+                } else {
+                    // If no instance, move it to today + future_offset
+                    let new_date = today + future_offset;
+                    trace!(
+                        "Moving past occurrence without instance from {} to {} for recurring transaction id={}",
+                        date, new_date, tx.id
+                    );
+                    result.push((new_date, tx.clone()));
+                }
+            }
         }
     }
 
@@ -80,17 +157,23 @@ pub async fn get_recurring_transactions(
 
 /// Gets all recurring income for the account within the given date range.
 /// Returns a vector of (date, income) pairs for all occurrences within the range.
-#[instrument(skip(db), fields(account_id = account_id, start_date = %start_date, end_date = %end_date
+/// 
+/// For forecast calculator:
+/// - Future recurring income (date >= today) is treated as if it were accounted on its date
+/// - Past recurring income (date < today) is moved to today + future_offset
+#[instrument(skip(db), fields(account_id = account_id, start_date = %start_date, end_date = %end_date, today = %today, future_offset = %future_offset.num_days()
 ))]
 pub async fn get_recurring_income(
     db: &DatabaseConnection,
     account_id: i32,
     start_date: NaiveDate,
     end_date: NaiveDate,
+    today: NaiveDate,
+    future_offset: Duration,
 ) -> Result<Vec<(NaiveDate, recurring_income::Model)>> {
     trace!(
-        "Getting recurring income for account_id={} from {} to {}",
-        account_id, start_date, end_date
+        "Getting recurring income for account_id={} from {} to {} (today={}, future_offset={}d)",
+        account_id, start_date, end_date, today, future_offset.num_days()
     );
 
     let incomes = recurring_income::Entity::find()
@@ -133,11 +216,22 @@ pub async fn get_recurring_income(
         );
 
         for date in occurrences {
-            trace!(
-                "Adding occurrence on {} for recurring income id={}",
-                date, income.id
-            );
-            result.push((date, income.clone()));
+            if date >= today {
+                // Future recurring income is treated as if it were accounted on its date
+                trace!(
+                    "Adding future occurrence on {} for recurring income id={}",
+                    date, income.id
+                );
+                result.push((date, income.clone()));
+            } else {
+                // Past recurring income is moved to today + future_offset
+                let new_date = today + future_offset;
+                trace!(
+                    "Moving past occurrence from {} to {} for recurring income id={}",
+                    date, new_date, income.id
+                );
+                result.push((new_date, income.clone()));
+            }
         }
     }
 
