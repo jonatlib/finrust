@@ -86,3 +86,39 @@ pub async fn get_manual_states_in_range(
 
     Ok(states)
 }
+
+/// Gets all manual account states for the given account, regardless of date.
+#[instrument(skip(db), fields(account_id = account_id))]
+pub async fn get_all_manual_states(
+    db: &DatabaseConnection,
+    account_id: i32,
+) -> Result<Vec<manual_account_state::Model>> {
+    trace!(
+        "Getting all manual account states for account_id={}",
+        account_id
+    );
+
+    let states = manual_account_state::Entity::find()
+        .filter(
+            Condition::all()
+                .add(manual_account_state::Column::AccountId.eq(account_id))
+        )
+        .order_by_asc(manual_account_state::Column::Date)
+        .all(db)
+        .await?;
+
+    debug!(
+        "Found {} manual states for account_id={}",
+        states.len(),
+        account_id
+    );
+
+    for state in &states {
+        trace!(
+            "Manual state: account_id={}, date={}, amount={}",
+            account_id, state.date, state.amount
+        );
+    }
+
+    Ok(states)
+}

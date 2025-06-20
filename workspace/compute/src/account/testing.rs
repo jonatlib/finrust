@@ -46,13 +46,24 @@ pub trait TestScenarioBuilder {
 pub async fn run_and_assert_scenario(
     builder: &dyn TestScenarioBuilder,
     computer: &dyn AccountStateCalculator,
+    use_scenario_date_range: bool,
 ) -> ComputeResult<()> {
     let (db, accounts, assert_result) = builder.get_scenario().await?;
 
-    let min_date =
-        assert_result.iter().map(|v| v.1.to_owned()).min().unwrap() - chrono::Duration::days(55);
-    let max_date =
-        assert_result.iter().map(|v| v.1.to_owned()).max().unwrap() + chrono::Duration::days(55);
+    let min_date;
+    let max_date;
+
+    if use_scenario_date_range {
+        min_date =
+            assert_result.iter().map(|v| v.1.to_owned()).min().unwrap() - chrono::Duration::days(55);
+        max_date =
+            assert_result.iter().map(|v| v.1.to_owned()).max().unwrap() + chrono::Duration::days(55);
+    } else {
+        min_date =
+            assert_result.iter().map(|v| v.1.to_owned()).min().unwrap() + chrono::Duration::days(20);
+        max_date =
+            assert_result.iter().map(|v| v.1.to_owned()).max().unwrap() - chrono::Duration::days(20);
+    }
 
     let mut computer_result = computer
         .compute_account_state(&db, &accounts, min_date, max_date)
@@ -62,7 +73,19 @@ pub async fn run_and_assert_scenario(
         .expect("Failed to sort result.");
 
     println!("{:#?}", computer_result);
-    assert_results(db, assert_result, computer_result).await?;
+
+    // Filter assertion results to only include dates within the requested date range
+    // when use_scenario_date_range is false
+    let filtered_assert_result = if use_scenario_date_range {
+        assert_result
+    } else {
+        assert_result
+            .into_iter()
+            .filter(|(_, date, _)| *date >= min_date && *date <= max_date)
+            .collect()
+    };
+
+    assert_results(db, filtered_assert_result, computer_result).await?;
 
     Ok(())
 }
@@ -98,7 +121,7 @@ async fn assert_results(
                 date,
                 filtered_df.height()
             ))
-            .into());
+                .into());
         }
 
         // Extract the balance value from the filtered DataFrame
@@ -113,7 +136,7 @@ async fn assert_results(
                 "Balance mismatch for account_id={}, date={}: expected {}, got {}",
                 account_id, date, expected_balance, actual_balance
             ))
-            .into());
+                .into());
         }
 
         println!(

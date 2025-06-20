@@ -83,7 +83,17 @@ mod tests {
         let scenario = ScenarioBalance::new();
         let computer = balance::BalanceCalculator::new(MergeMethod::FirstWins);
 
-        run_and_assert_scenario(&scenario, &computer)
+        run_and_assert_scenario(&scenario, &computer, true)
+            .await
+            .expect("Failed to run scenario");
+    }
+
+    #[tokio::test]
+    async fn test_scenario_balance_outside_range() {
+        let scenario = ScenarioBalance::new();
+        let computer = balance::BalanceCalculator::new(MergeMethod::FirstWins);
+
+        run_and_assert_scenario(&scenario, &computer, false)
             .await
             .expect("Failed to run scenario");
     }
@@ -93,9 +103,10 @@ mod tests {
         let scenario = ScenarioForecast::new();
         let computer = balance::BalanceCalculator::new(MergeMethod::FirstWins);
 
-        run_and_assert_scenario(&scenario, &computer)
-            .await
-            .expect("Failed to run scenario");
+        let result = run_and_assert_scenario(&scenario, &computer, true)
+            .await;
+
+        assert!(result.is_err(), "This shuold fail because no manual state for balance");
     }
 
     #[tokio::test]
@@ -103,7 +114,7 @@ mod tests {
         let scenario = ScenarioForecast::new();
         let computer = forecast::ForecastCalculator::new(MergeMethod::FirstWins);
 
-        run_and_assert_scenario(&scenario, &computer)
+        run_and_assert_scenario(&scenario, &computer, true)
             .await
             .expect("Failed to run scenario");
     }
@@ -117,7 +128,7 @@ mod tests {
         let computer =
             merge::MergeCalculator::new(vec![computer1, computer2], MergeMethod::FirstWins);
 
-        run_and_assert_scenario(&scenario, &computer)
+        run_and_assert_scenario(&scenario, &computer, true)
             .await
             .expect("Failed to run scenario");
     }
@@ -127,7 +138,7 @@ mod tests {
         let scenario = ScenarioMultipleAccounts::new();
         let computer = balance::BalanceCalculator::new(MergeMethod::FirstWins);
 
-        run_and_assert_scenario(&scenario, &computer)
+        run_and_assert_scenario(&scenario, &computer, true)
             .await
             .expect("Failed to run scenario");
     }
@@ -141,7 +152,7 @@ mod tests {
         let computer =
             merge::MergeCalculator::new(vec![computer1, computer2], MergeMethod::FirstWins);
 
-        run_and_assert_scenario(&scenario, &computer)
+        run_and_assert_scenario(&scenario, &computer, true)
             .await
             .expect("Failed to run scenario");
     }
