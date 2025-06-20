@@ -53,12 +53,18 @@ pub enum MergeMethod {
 #[async_trait]
 pub trait AccountStateCalculator {
     /// Computes the account state for the given accounts within the specified date range.
+    /// 
+    /// The `today` parameter is used to determine what is "past" or "future" for recurring transactions.
+    /// For the balance model, recurring transactions without a linked one-off transaction are ignored.
+    /// For the forecast model, past recurring transactions without a linked one-off transaction
+    /// are moved forward in time, as they are considered "not paid yet".
     async fn compute_account_state(
         &self,
         db: &DatabaseConnection,
         accounts: &[account::Model],
         start_date: NaiveDate,
         end_date: NaiveDate,
+        today: Option<NaiveDate>,
     ) -> Result<DataFrame>;
 
     /// Returns the merge method to use when combining results from multiple calculators.
@@ -189,6 +195,50 @@ mod tests {
 
         let computer =
             merge::MergeCalculator::new(vec![computer1, computer2], MergeMethod::FirstWins);
+
+        run_and_assert_scenario(&scenario, &computer, true)
+            .await
+            .expect("Failed to run scenario");
+    }
+
+    #[tokio::test]
+    async fn test_scenario_reconciliation() {
+        let scenario = ScenarioReconciliation::new();
+        let computer = forecast::ForecastCalculator::new(MergeMethod::FirstWins);
+
+        run_and_assert_scenario(&scenario, &computer, true)
+            .await
+            .expect("Failed to run scenario");
+    }
+
+    #[tokio::test]
+    async fn test_scenario_reconciliation_outside_range() {
+        let scenario = ScenarioReconciliationOutsideRange::new();
+        // Use initial balance of -$1000 (the balance on Feb 28) when testing outside the range
+        let computer = forecast::ForecastCalculator::new_with_initial_balance(
+            MergeMethod::FirstWins,
+            rust_decimal::Decimal::new(-100000, 2), // -$1000.00
+        );
+
+        run_and_assert_scenario(&scenario, &computer, false)
+            .await
+            .expect("Failed to run scenario");
+    }
+
+    #[tokio::test]
+    async fn test_scenario_unreconciled_balance() {
+        let scenario = ScenarioUnreconciled::new();
+        let computer = balance::BalanceCalculator::new(MergeMethod::FirstWins);
+
+        run_and_assert_scenario(&scenario, &computer, true)
+            .await
+            .expect("Failed to run scenario");
+    }
+
+    #[tokio::test]
+    async fn test_scenario_unreconciled_forecast() {
+        let scenario = ScenarioUnreconciledForecast::new();
+        let computer = forecast::ForecastCalculator::new(MergeMethod::FirstWins);
 
         run_and_assert_scenario(&scenario, &computer, true)
             .await

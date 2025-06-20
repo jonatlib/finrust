@@ -7,21 +7,21 @@ use super::setup_db;
 use crate::account::testing::{AssertResult, TestScenario, TestScenarioBuilder};
 use model::entities::{account, manual_account_state, one_off_transaction, recurring_transaction};
 
-pub struct ScenarioBalance {}
+pub struct ScenarioUnreconciledForecast {}
 
-impl ScenarioBalance {
+impl ScenarioUnreconciledForecast {
     pub fn new() -> Self {
         Self {}
     }
 }
 
 #[async_trait]
-impl TestScenarioBuilder for ScenarioBalance {
+impl TestScenarioBuilder for ScenarioUnreconciledForecast {
     async fn get_scenario(&self) -> Result<TestScenario, DbErr> {
         let db = setup_db().await?;
 
         // Create a test user first
-        let user = model::entities::user::ActiveModel {
+        let _user = model::entities::user::ActiveModel {
             id: Set(1),
             username: Set("test_user".to_string()),
             ..Default::default()
@@ -32,7 +32,7 @@ impl TestScenarioBuilder for ScenarioBalance {
         // Create a test account
         let account = account::ActiveModel {
             name: Set("Test Account".to_string()),
-            description: Set(Some("Account for balance testing".to_string())),
+            description: Set(Some("Account for unreconciled forecast testing".to_string())),
             currency_code: Set("USD".to_string()),
             owner_id: Set(1), // Assuming user ID 1 exists
             include_in_statistics: Set(true),
@@ -55,10 +55,10 @@ impl TestScenarioBuilder for ScenarioBalance {
         .insert(&db)
         .await?;
 
-        // Create a recurring (monthly) transaction - e.g., rent payment
-        let recurring_tx = recurring_transaction::ActiveModel {
-            name: Set("Monthly Rent".to_string()),
-            description: Set(Some("Monthly rent payment".to_string())),
+        // Create a recurring transaction with linked one-off transactions
+        let reconciled_tx = recurring_transaction::ActiveModel {
+            name: Set("Monthly Rent (Reconciled)".to_string()),
+            description: Set(Some("Monthly rent payment with reconciliation".to_string())),
             amount: Set(Decimal::new(-50000, 2)), // -$500.00
             start_date: Set(initial_date),
             end_date: Set(None), // Indefinite
@@ -72,7 +72,24 @@ impl TestScenarioBuilder for ScenarioBalance {
         .insert(&db)
         .await?;
 
-        // Create one-off transactions for each month of the recurring transaction
+        // Create a recurring transaction without linked one-off transactions
+        let _unreconciled_tx = recurring_transaction::ActiveModel {
+            name: Set("Monthly Subscription (Unreconciled)".to_string()),
+            description: Set(Some("Monthly subscription without reconciliation".to_string())),
+            amount: Set(Decimal::new(-10000, 2)), // -$100.00
+            start_date: Set(initial_date),
+            end_date: Set(None), // Indefinite
+            period: Set(recurring_transaction::RecurrencePeriod::Monthly),
+            include_in_statistics: Set(true),
+            target_account_id: Set(account.id),
+            source_account_id: Set(None),
+            ledger_name: Set(None),
+            ..Default::default()
+        }
+        .insert(&db)
+        .await?;
+
+        // Create one-off transactions linked to the reconciled recurring transaction
         // January rent
         let _jan_rent = one_off_transaction::ActiveModel {
             name: Set("January Rent".to_string()),
@@ -84,7 +101,7 @@ impl TestScenarioBuilder for ScenarioBalance {
             source_account_id: Set(None),
             ledger_name: Set(None),
             linked_import_id: Set(None),
-            reconciled_recurring_transaction_id: Set(Some(recurring_tx.id)),
+            reconciled_recurring_transaction_id: Set(Some(reconciled_tx.id)),
             ..Default::default()
         }
         .insert(&db)
@@ -101,41 +118,7 @@ impl TestScenarioBuilder for ScenarioBalance {
             source_account_id: Set(None),
             ledger_name: Set(None),
             linked_import_id: Set(None),
-            reconciled_recurring_transaction_id: Set(Some(recurring_tx.id)),
-            ..Default::default()
-        }
-        .insert(&db)
-        .await?;
-
-        // March rent
-        let _mar_rent = one_off_transaction::ActiveModel {
-            name: Set("March Rent".to_string()),
-            description: Set(Some("March rent payment".to_string())),
-            amount: Set(Decimal::new(-50000, 2)), // -$500.00
-            date: Set(NaiveDate::from_ymd_opt(2023, 3, 1).unwrap()),
-            include_in_statistics: Set(true),
-            target_account_id: Set(account.id),
-            source_account_id: Set(None),
-            ledger_name: Set(None),
-            linked_import_id: Set(None),
-            reconciled_recurring_transaction_id: Set(Some(recurring_tx.id)),
-            ..Default::default()
-        }
-        .insert(&db)
-        .await?;
-
-        // April rent
-        let _apr_rent = one_off_transaction::ActiveModel {
-            name: Set("April Rent".to_string()),
-            description: Set(Some("April rent payment".to_string())),
-            amount: Set(Decimal::new(-50000, 2)), // -$500.00
-            date: Set(NaiveDate::from_ymd_opt(2023, 4, 1).unwrap()),
-            include_in_statistics: Set(true),
-            target_account_id: Set(account.id),
-            source_account_id: Set(None),
-            ledger_name: Set(None),
-            linked_import_id: Set(None),
-            reconciled_recurring_transaction_id: Set(Some(recurring_tx.id)),
+            reconciled_recurring_transaction_id: Set(Some(reconciled_tx.id)),
             ..Default::default()
         }
         .insert(&db)
@@ -152,70 +135,40 @@ impl TestScenarioBuilder for ScenarioBalance {
             source_account_id: Set(None),
             ledger_name: Set(None),
             linked_import_id: Set(None),
+            reconciled_recurring_transaction_id: Set(None),
             ..Default::default()
         }
         .insert(&db)
         .await?;
 
-        // Create another one-off transaction - e.g., a bonus
-        let _bonus_tx = one_off_transaction::ActiveModel {
-            name: Set("Work Bonus".to_string()),
-            description: Set(Some("Annual bonus".to_string())),
-            amount: Set(Decimal::new(30000, 2)), // $300.00
-            date: Set(NaiveDate::from_ymd_opt(2023, 3, 10).unwrap()),
-            include_in_statistics: Set(true),
-            target_account_id: Set(account.id),
-            source_account_id: Set(None),
-            ledger_name: Set(None),
-            linked_import_id: Set(None),
-            ..Default::default()
-        }
-        .insert(&db)
-        .await?;
-
-        // Create assertions for 3 different months
-        // January 31: Initial $1000 - $500 (rent) = $1000, the rent is overridden by the init state
-        // February 28: $1000 - $500 (rent) - $150 (groceries) = $350
-        // March 31: $350 - $500 (rent) + $300 (bonus) = $150
-        let assert_results: AssertResult = vec![
+        // Create assertions for the forecast model
+        // For the forecast model, past unreconciled transactions are NOT moved forward to today
+        // because they are not in the past relative to today (2022-12-31)
+        // January 1: Initial $1000 - $500 (reconciled rent) - $100 (unreconciled subscription) = $400
+        // January 31: $400 - $0 (no transactions on this day) = $400
+        // February 1: $400 - $500 (reconciled rent) - $100 (unreconciled subscription) = -$200
+        // February 28: -$200 - $150 (groceries) = -$350
+        // March 1: -$350 - $500 (unreconciled rent) - $100 (unreconciled subscription) = -$950
+        // March 31: -$950 - $0 (no transactions on this day) = -$950
+        let forecast_assert_results: AssertResult = vec![
             (
                 account.id,
                 NaiveDate::from_ymd_opt(2023, 1, 31).unwrap(),
-                Decimal::new(100000, 2),
-            ),
-            (
-                account.id,
-                NaiveDate::from_ymd_opt(2023, 2, 01).unwrap(),
-                Decimal::new(50000, 2),
-            ),
-            (
-                account.id,
-                NaiveDate::from_ymd_opt(2023, 2, 02).unwrap(),
-                Decimal::new(50000, 2),
+                Decimal::new(-60000, 2), // -$600.00
             ),
             (
                 account.id,
                 NaiveDate::from_ymd_opt(2023, 2, 28).unwrap(),
-                Decimal::new(35000, 2), // $350.00 = $1000 - $500 (rent) - $150 (groceries)
+                Decimal::new(-120000, 2), // -$1200.00
             ),
             (
                 account.id,
                 NaiveDate::from_ymd_opt(2023, 3, 31).unwrap(),
-                Decimal::new(15000, 2),
-            ),
-            (
-                account.id,
-                NaiveDate::from_ymd_opt(2023, 4, 01).unwrap(),
-                Decimal::new(-35000, 2),
-            ),
-            (
-                account.id,
-                NaiveDate::from_ymd_opt(2023, 4, 15).unwrap(),
-                Decimal::new(-35000, 2),
+                Decimal::new(-180000, 2), // -$1800.00
             ),
         ];
 
-        // Return the test scenario
-        Ok((db, vec![account], assert_results))
+        // Return the test scenario with forecast assertions
+        Ok((db, vec![account], forecast_assert_results))
     }
 }

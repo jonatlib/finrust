@@ -56,8 +56,11 @@ impl AccountStateCalculator for ForecastCalculator {
         accounts: &[account::Model],
         start_date: NaiveDate,
         end_date: NaiveDate,
+        today: Option<NaiveDate>,
     ) -> Result<DataFrame> {
-        compute_forecast(db, accounts, start_date, end_date, self.initial_balance).await
+        // Use the provided today parameter or default to the current date
+        let today = today.unwrap_or_else(|| chrono::Local::now().date_naive());
+        compute_forecast(db, accounts, start_date, end_date, self.initial_balance, today).await
     }
 
     fn merge_method(&self) -> MergeMethod {
@@ -74,13 +77,18 @@ impl AccountStateCalculator for ForecastCalculator {
 /// 
 /// The initial_balance parameter allows setting a starting balance for the forecast,
 /// which is useful when computing forecasts for dates outside the range of available transaction data.
-#[instrument(skip(db, accounts), fields(num_accounts = accounts.len(), start_date = %start_date, end_date = %end_date))]
+/// 
+/// The `today` parameter is used to determine what is "past" or "future" for recurring transactions.
+/// Past recurring transactions without a linked one-off transaction are moved forward in time,
+/// as they are considered "not paid yet".
+#[instrument(skip(db, accounts), fields(num_accounts = accounts.len(), start_date = %start_date, end_date = %end_date, today = ?today))]
 async fn compute_forecast(
     db: &DatabaseConnection,
     accounts: &[account::Model],
     start_date: NaiveDate,
     end_date: NaiveDate,
     initial_balance: Decimal,
+    today: NaiveDate,
 ) -> Result<DataFrame> {
     info!(
         "Computing forecast for {} accounts from {} to {}",
@@ -107,12 +115,15 @@ async fn compute_forecast(
         );
 
         // Get all recurring transactions for this account within the date range
+        // We need to include transactions from the minimum of start_date and today
+        // to ensure we catch any past transactions that might be moved to today
+        let effective_start_date = std::cmp::min(current_date, today);
         trace!(
             "Getting recurring transactions for account {} from {} to {}",
-            account.id, current_date, end_date
+            account.id, effective_start_date, end_date
         );
         let recurring_transactions =
-            get_recurring_transactions(db, account.id, current_date, end_date).await?;
+            get_recurring_transactions(db, account.id, effective_start_date, end_date, today).await?;
         debug!(
             "Found {} recurring transactions for account {}",
             recurring_transactions.len(),

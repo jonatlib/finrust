@@ -1,10 +1,18 @@
 pub mod scenario_balance;
 pub mod scenario_forecast;
 pub mod scenario_multiple_accounts;
+pub mod scenario_reconciliation;
+pub mod scenario_reconciliation_outside_range;
+pub mod scenario_unreconciled;
+pub mod scenario_unreconciled_forecast;
 
 pub use scenario_balance::ScenarioBalance;
 pub use scenario_forecast::ScenarioForecast;
 pub use scenario_multiple_accounts::ScenarioMultipleAccounts;
+pub use scenario_reconciliation::ScenarioReconciliation;
+pub use scenario_reconciliation_outside_range::ScenarioReconciliationOutsideRange;
+pub use scenario_unreconciled::ScenarioUnreconciled;
+pub use scenario_unreconciled_forecast::ScenarioUnreconciledForecast;
 
 use async_trait::async_trait;
 use chrono::NaiveDate;
@@ -65,8 +73,15 @@ pub async fn run_and_assert_scenario(
             assert_result.iter().map(|v| v.1.to_owned()).max().unwrap() - chrono::Duration::days(20);
     }
 
+    // Use a fixed date as the "today" parameter that is before all test dates
+    // This ensures consistent behavior across all test scenarios
+    let today = NaiveDate::from_ymd_opt(2022, 12, 31).unwrap();
+
+    // Debug: Print the date range and today parameter
+    println!("Date range: {} to {}, today: {}", min_date, max_date, today);
+
     let mut computer_result = computer
-        .compute_account_state(&db, &accounts, min_date, max_date)
+        .compute_account_state(&db, &accounts, min_date, max_date, Some(today))
         .await?;
     computer_result
         .sort_in_place(vec!["date"], SortMultipleOptions::new())

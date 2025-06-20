@@ -102,7 +102,7 @@ impl TestScenarioBuilder for ScenarioMultipleAccounts {
         // Create recurring transactions for each account
 
         // Checking account: Monthly salary deposit on the 15th
-        let _salary = recurring_transaction::ActiveModel {
+        let salary = recurring_transaction::ActiveModel {
             name: Set("Monthly Salary".to_string()),
             description: Set(Some("Monthly salary deposit".to_string())),
             amount: Set(Decimal::new(350000, 2)), // $3,500.00
@@ -118,8 +118,43 @@ impl TestScenarioBuilder for ScenarioMultipleAccounts {
         .insert(&db)
         .await?;
 
+        // Create one-off transactions for each month of the salary deposit
+        // January salary
+        let _jan_salary = one_off_transaction::ActiveModel {
+            name: Set("January Salary".to_string()),
+            description: Set(Some("January salary deposit".to_string())),
+            amount: Set(Decimal::new(350000, 2)), // $3,500.00
+            date: Set(NaiveDate::from_ymd_opt(2023, 1, 15).unwrap()),
+            include_in_statistics: Set(true),
+            target_account_id: Set(checking_account.id),
+            source_account_id: Set(None),
+            ledger_name: Set(None),
+            linked_import_id: Set(None),
+            reconciled_recurring_transaction_id: Set(Some(salary.id)),
+            ..Default::default()
+        }
+        .insert(&db)
+        .await?;
+
+        // February salary
+        let _feb_salary = one_off_transaction::ActiveModel {
+            name: Set("February Salary".to_string()),
+            description: Set(Some("February salary deposit".to_string())),
+            amount: Set(Decimal::new(350000, 2)), // $3,500.00
+            date: Set(NaiveDate::from_ymd_opt(2023, 2, 15).unwrap()),
+            include_in_statistics: Set(true),
+            target_account_id: Set(checking_account.id),
+            source_account_id: Set(None),
+            ledger_name: Set(None),
+            linked_import_id: Set(None),
+            reconciled_recurring_transaction_id: Set(Some(salary.id)),
+            ..Default::default()
+        }
+        .insert(&db)
+        .await?;
+
         // Checking account: Monthly rent payment on the 1st
-        let _rent = recurring_transaction::ActiveModel {
+        let rent = recurring_transaction::ActiveModel {
             name: Set("Rent Payment".to_string()),
             description: Set(Some("Monthly rent".to_string())),
             amount: Set(Decimal::new(-120000, 2)), // -$1,200.00
@@ -135,8 +170,43 @@ impl TestScenarioBuilder for ScenarioMultipleAccounts {
         .insert(&db)
         .await?;
 
+        // Create one-off transactions for each month of the rent payment
+        // February rent
+        let _feb_rent = one_off_transaction::ActiveModel {
+            name: Set("February Rent".to_string()),
+            description: Set(Some("February rent payment".to_string())),
+            amount: Set(Decimal::new(-120000, 2)), // -$1,200.00
+            date: Set(NaiveDate::from_ymd_opt(2023, 2, 1).unwrap()),
+            include_in_statistics: Set(true),
+            target_account_id: Set(checking_account.id),
+            source_account_id: Set(None),
+            ledger_name: Set(None),
+            linked_import_id: Set(None),
+            reconciled_recurring_transaction_id: Set(Some(rent.id)),
+            ..Default::default()
+        }
+        .insert(&db)
+        .await?;
+
+        // March rent
+        let _mar_rent = one_off_transaction::ActiveModel {
+            name: Set("March Rent".to_string()),
+            description: Set(Some("March rent payment".to_string())),
+            amount: Set(Decimal::new(-120000, 2)), // -$1,200.00
+            date: Set(NaiveDate::from_ymd_opt(2023, 3, 1).unwrap()),
+            include_in_statistics: Set(true),
+            target_account_id: Set(checking_account.id),
+            source_account_id: Set(None),
+            ledger_name: Set(None),
+            linked_import_id: Set(None),
+            reconciled_recurring_transaction_id: Set(Some(rent.id)),
+            ..Default::default()
+        }
+        .insert(&db)
+        .await?;
+
         // Savings account: Monthly transfer from checking on the 20th
-        let _savings_transfer = recurring_transaction::ActiveModel {
+        let savings_transfer = recurring_transaction::ActiveModel {
             name: Set("Savings Transfer".to_string()),
             description: Set(Some("Monthly savings".to_string())),
             amount: Set(Decimal::new(50000, 2)), // $500.00
@@ -152,8 +222,60 @@ impl TestScenarioBuilder for ScenarioMultipleAccounts {
         .insert(&db)
         .await?;
 
+        // Create one-off transactions for each month of the savings transfer
+        // January savings transfer
+        let _jan_savings = one_off_transaction::ActiveModel {
+            name: Set("January Savings".to_string()),
+            description: Set(Some("January savings transfer".to_string())),
+            amount: Set(Decimal::new(50000, 2)), // $500.00
+            date: Set(NaiveDate::from_ymd_opt(2023, 1, 20).unwrap()),
+            include_in_statistics: Set(true),
+            target_account_id: Set(savings_account.id),
+            source_account_id: Set(Some(checking_account.id)),
+            ledger_name: Set(None),
+            linked_import_id: Set(None),
+            reconciled_recurring_transaction_id: Set(Some(savings_transfer.id)),
+            ..Default::default()
+        }
+        .insert(&db)
+        .await?;
+
+        // February savings transfer
+        let _feb_savings = one_off_transaction::ActiveModel {
+            name: Set("February Savings".to_string()),
+            description: Set(Some("February savings transfer".to_string())),
+            amount: Set(Decimal::new(50000, 2)), // $500.00
+            date: Set(NaiveDate::from_ymd_opt(2023, 2, 20).unwrap()),
+            include_in_statistics: Set(true),
+            target_account_id: Set(savings_account.id),
+            source_account_id: Set(Some(checking_account.id)),
+            ledger_name: Set(None),
+            linked_import_id: Set(None),
+            reconciled_recurring_transaction_id: Set(Some(savings_transfer.id)),
+            ..Default::default()
+        }
+        .insert(&db)
+        .await?;
+
+        // March savings transfer
+        let _mar_savings = one_off_transaction::ActiveModel {
+            name: Set("March Savings".to_string()),
+            description: Set(Some("March savings transfer".to_string())),
+            amount: Set(Decimal::new(50000, 2)), // $500.00
+            date: Set(NaiveDate::from_ymd_opt(2023, 3, 20).unwrap()),
+            include_in_statistics: Set(true),
+            target_account_id: Set(savings_account.id),
+            source_account_id: Set(Some(checking_account.id)),
+            ledger_name: Set(None),
+            linked_import_id: Set(None),
+            reconciled_recurring_transaction_id: Set(Some(savings_transfer.id)),
+            ..Default::default()
+        }
+        .insert(&db)
+        .await?;
+
         // Investment account: Quarterly dividend on the 10th
-        let _dividend = recurring_transaction::ActiveModel {
+        let dividend = recurring_transaction::ActiveModel {
             name: Set("Quarterly Dividend".to_string()),
             description: Set(Some("Stock dividends".to_string())),
             amount: Set(Decimal::new(25000, 2)), // $250.00
@@ -164,6 +286,24 @@ impl TestScenarioBuilder for ScenarioMultipleAccounts {
             target_account_id: Set(investment_account.id),
             source_account_id: Set(None),
             ledger_name: Set(None),
+            ..Default::default()
+        }
+        .insert(&db)
+        .await?;
+
+        // Create one-off transactions for each quarter of the dividend
+        // January dividend (Q1)
+        let _jan_dividend = one_off_transaction::ActiveModel {
+            name: Set("January Dividend".to_string()),
+            description: Set(Some("Q1 dividend payment".to_string())),
+            amount: Set(Decimal::new(25000, 2)), // $250.00
+            date: Set(NaiveDate::from_ymd_opt(2023, 1, 10).unwrap()),
+            include_in_statistics: Set(true),
+            target_account_id: Set(investment_account.id),
+            source_account_id: Set(None),
+            ledger_name: Set(None),
+            linked_import_id: Set(None),
+            reconciled_recurring_transaction_id: Set(Some(dividend.id)),
             ..Default::default()
         }
         .insert(&db)
@@ -332,7 +472,7 @@ impl TestScenarioBuilder for ScenarioMultipleAccounts {
             (
                 investment_account.id,
                 NaiveDate::from_ymd_opt(2023, 4, 10).unwrap(),
-                Decimal::new(450000, 2), // After quarterly dividend
+                Decimal::new(425000, 2), // No quarterly dividend applied in balance model
             ),
         ];
 

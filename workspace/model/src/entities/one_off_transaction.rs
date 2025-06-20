@@ -2,7 +2,7 @@ use chrono::NaiveDate;
 use rust_decimal::Decimal;
 use sea_orm::entity::prelude::*;
 
-use super::{account, tag};
+use super::{account, tag, recurring_transaction};
 
 /// A single, non-repeating transaction.
 /// Corresponds to `ExtraTransactionModel`.
@@ -29,6 +29,9 @@ pub struct Model {
     pub ledger_name: Option<String>,
     // An optional field to link to an imported transaction to prevent duplication.
     pub linked_import_id: Option<String>,
+    /// If this transaction satisfies a recurring rule for a specific period,
+    /// this field links back to that rule.
+    pub reconciled_recurring_transaction_id: Option<i32>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -47,6 +50,13 @@ pub enum Relation {
         on_delete = "SetNull"
     )]
     SourceAccount,
+    #[sea_orm(
+        belongs_to = "recurring_transaction::Entity",
+        from = "Column::ReconciledRecurringTransactionId",
+        to = "recurring_transaction::Column::Id",
+        on_delete = "SetNull"
+    )]
+    RecurringRule,
 }
 
 impl Related<tag::Entity> for Entity {

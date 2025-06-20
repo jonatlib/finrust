@@ -5,7 +5,7 @@ use sea_orm::{ActiveModelTrait, DbErr, Set};
 
 use super::setup_db;
 use crate::account::testing::{AssertResult, TestScenario, TestScenarioBuilder};
-use model::entities::{account, recurring_transaction};
+use model::entities::{account, one_off_transaction, recurring_transaction};
 
 pub struct ScenarioForecast {}
 
@@ -64,9 +64,74 @@ impl TestScenarioBuilder for ScenarioForecast {
         .insert(&db)
         .await?;
 
-        // Note: No one-off transactions are created for this scenario
-        // This ensures that both balance calculator and forecast calculator
-        // will return the same results
+        // Create one-off transactions for each month of the recurring transaction
+        // January rent
+        let _jan_rent = one_off_transaction::ActiveModel {
+            name: Set("January Rent".to_string()),
+            description: Set(Some("January rent payment".to_string())),
+            amount: Set(Decimal::new(-50000, 2)), // -$500.00
+            date: Set(NaiveDate::from_ymd_opt(2023, 1, 1).unwrap()),
+            include_in_statistics: Set(true),
+            target_account_id: Set(account.id),
+            source_account_id: Set(None),
+            ledger_name: Set(None),
+            linked_import_id: Set(None),
+            reconciled_recurring_transaction_id: Set(Some(recurring_tx.id)),
+            ..Default::default()
+        }
+        .insert(&db)
+        .await?;
+
+        // February rent
+        let _feb_rent = one_off_transaction::ActiveModel {
+            name: Set("February Rent".to_string()),
+            description: Set(Some("February rent payment".to_string())),
+            amount: Set(Decimal::new(-50000, 2)), // -$500.00
+            date: Set(NaiveDate::from_ymd_opt(2023, 2, 1).unwrap()),
+            include_in_statistics: Set(true),
+            target_account_id: Set(account.id),
+            source_account_id: Set(None),
+            ledger_name: Set(None),
+            linked_import_id: Set(None),
+            reconciled_recurring_transaction_id: Set(Some(recurring_tx.id)),
+            ..Default::default()
+        }
+        .insert(&db)
+        .await?;
+
+        // March rent
+        let _mar_rent = one_off_transaction::ActiveModel {
+            name: Set("March Rent".to_string()),
+            description: Set(Some("March rent payment".to_string())),
+            amount: Set(Decimal::new(-50000, 2)), // -$500.00
+            date: Set(NaiveDate::from_ymd_opt(2023, 3, 1).unwrap()),
+            include_in_statistics: Set(true),
+            target_account_id: Set(account.id),
+            source_account_id: Set(None),
+            ledger_name: Set(None),
+            linked_import_id: Set(None),
+            reconciled_recurring_transaction_id: Set(Some(recurring_tx.id)),
+            ..Default::default()
+        }
+        .insert(&db)
+        .await?;
+
+        // April rent
+        let _apr_rent = one_off_transaction::ActiveModel {
+            name: Set("April Rent".to_string()),
+            description: Set(Some("April rent payment".to_string())),
+            amount: Set(Decimal::new(-50000, 2)), // -$500.00
+            date: Set(NaiveDate::from_ymd_opt(2023, 4, 1).unwrap()),
+            include_in_statistics: Set(true),
+            target_account_id: Set(account.id),
+            source_account_id: Set(None),
+            ledger_name: Set(None),
+            linked_import_id: Set(None),
+            reconciled_recurring_transaction_id: Set(Some(recurring_tx.id)),
+            ..Default::default()
+        }
+        .insert(&db)
+        .await?;
 
         // Create assertions for 3 different months
         // For forecast, we start with 0 balance and accumulate transactions

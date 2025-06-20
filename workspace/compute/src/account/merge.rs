@@ -198,6 +198,7 @@ impl AccountStateCalculator for MergeCalculator {
         accounts: &[account::Model],
         start_date: NaiveDate,
         end_date: NaiveDate,
+        today: Option<NaiveDate>,
     ) -> Result<DataFrame> {
         debug!(
             "Computing merged account state for {} accounts from {} to {}",
@@ -212,7 +213,7 @@ impl AccountStateCalculator for MergeCalculator {
         for (i, calculator) in self.calculators.iter().enumerate() {
             debug!("Computing account state using calculator {}", i);
             let df = calculator
-                .compute_account_state(db, accounts, start_date, end_date)
+                .compute_account_state(db, accounts, start_date, end_date, today)
                 .await?;
             debug!(
                 "Calculator {} returned DataFrame with {} rows",
@@ -235,12 +236,18 @@ impl AccountStateCalculator for MergeCalculator {
 ///
 /// This function computes the balance up to today and the forecast for future dates,
 /// then merges them together into a single DataFrame.
-#[instrument(skip(db, accounts), fields(num_accounts = accounts.len(), start_date = %start_date, end_date = %end_date))]
+/// 
+/// The `today` parameter is used to determine what is "past" or "future" for recurring transactions.
+/// For the balance model, recurring transactions without a linked one-off transaction are ignored.
+/// For the forecast model, past recurring transactions without a linked one-off transaction
+/// are moved forward in time, as they are considered "not paid yet".
+#[instrument(skip(db, accounts), fields(num_accounts = accounts.len(), start_date = %start_date, end_date = %end_date, today = ?today))]
 async fn compute_merged(
     db: &DatabaseConnection,
     accounts: &[account::Model],
     start_date: NaiveDate,
     end_date: NaiveDate,
+    today: Option<NaiveDate>,
 ) -> Result<DataFrame> {
     info!(
         "Computing merged balance and forecast for {} accounts from {} to {}",
@@ -254,7 +261,7 @@ async fn compute_merged(
 
     // Use the merge calculator to compute the account state
     let result = merge_calculator
-        .compute_account_state(db, accounts, start_date, end_date)
+        .compute_account_state(db, accounts, start_date, end_date, today)
         .await?;
 
     info!(
