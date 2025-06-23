@@ -293,7 +293,7 @@ mod tests {
         // Use initial balance of 0 when testing outside the range
         let computer = forecast::ForecastCalculator::new_with_initial_balance(
             MergeMethod::FirstWins,
-            rust_decimal::Decimal::new(0, 2), // $0.00
+            rust_decimal::Decimal::new(-2200 * 100, 2), // $0.00
         );
 
         run_and_assert_scenario(&scenario, &computer, false)

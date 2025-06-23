@@ -95,9 +95,9 @@ pub async fn run_and_assert_scenario(
             + chrono::Duration::days(55);
     } else {
         min_date = assert_result.iter().map(|v| v.1.to_owned()).min().unwrap()
-            + chrono::Duration::days(20);
+            + chrono::Duration::days(10);
         max_date = assert_result.iter().map(|v| v.1.to_owned()).max().unwrap()
-            - chrono::Duration::days(20);
+            - chrono::Duration::days(10);
     }
 
     if min_date >= max_date {
