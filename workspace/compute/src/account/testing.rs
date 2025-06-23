@@ -3,11 +3,16 @@ pub mod scenario_balance_no_instances;
 pub mod scenario_forecast;
 pub mod scenario_forecast_no_instances;
 pub mod scenario_multiple_accounts;
+pub mod scenario_merge_real;
+pub mod helpers;
+pub mod scenario_merge_real_failing;
 
 pub use scenario_balance::ScenarioBalance;
 pub use scenario_balance_no_instances::ScenarioBalanceNoInstances;
 pub use scenario_forecast::ScenarioForecast;
 pub use scenario_forecast_no_instances::ScenarioForecastNoInstances;
+pub use scenario_merge_real::ScenarioMergeReal;
+pub use scenario_merge_real_failing::ScenarioMergeRealFailing;
 pub use scenario_multiple_accounts::ScenarioMultipleAccounts;
 
 use async_trait::async_trait;
@@ -16,7 +21,7 @@ use polars::prelude::*;
 use polars::prelude::{col, lit};
 use rust_decimal::Decimal;
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbErr};
-use tracing::{debug, info, trace};
+use tracing::{debug, error, info, trace};
 
 use crate::account::AccountStateCalculator;
 use crate::error::{ComputeError, Result as ComputeResult};
@@ -115,6 +120,10 @@ pub async fn run_and_assert_scenario(
             .collect()
     };
 
+    if filtered_assert_result.is_empty() {
+        error!("No results to assert.");
+        return Err(ComputeError::DataFrame("No data returned for assertation".to_owned()));
+    }
     assert_results(db, filtered_assert_result, computer_result).await?;
 
     Ok(())
@@ -166,7 +175,7 @@ async fn assert_results(
                 date,
                 filtered_df.height()
             ))
-            .into());
+                .into());
         }
 
         // Extract the balance value from the filtered DataFrame
@@ -181,7 +190,7 @@ async fn assert_results(
                 "Balance mismatch for account_id={}, date={}: expected {}, got {}",
                 account_id, date, expected_balance, actual_balance
             ))
-            .into());
+                .into());
         }
 
         info!(

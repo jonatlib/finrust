@@ -299,4 +299,48 @@ mod tests {
             .await
             .expect("Failed to run scenario");
     }
+
+    #[tokio::test]
+    async fn test_scenario_merge_real_failing_outside_range() {
+        let scenario = ScenarioMergeRealFailing::new();
+        let computer = balance::BalanceCalculator::new(MergeMethod::FirstWins);
+
+        let result = run_and_assert_scenario(&scenario, &computer, false).await;
+        assert!(
+            result.is_err(),
+            "This should fail because no manual state for balance"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_scenario_merge_real_outside_range() {
+        let scenario = ScenarioMergeReal::new();
+        // TODO we need a new type of merger which will take a date
+        // and from that day will use a different computer
+        let computer = balance::BalanceCalculator::new(MergeMethod::FirstWins);
+
+        run_and_assert_scenario(&scenario, &computer, false).await.expect("Failed to run scenario");
+    }
+
+    #[tokio::test]
+    async fn test_scenario_merge_real_failing() {
+        let scenario = ScenarioMergeRealFailing::new();
+        let computer = balance::BalanceCalculator::new(MergeMethod::FirstWins);
+
+        let result = run_and_assert_scenario(&scenario, &computer, true).await;
+        assert!(
+            result.is_err(),
+            "This should fail because no manual state for balance"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_scenario_merge_real() {
+        let scenario = ScenarioMergeReal::new();
+        // TODO we need a new type of merger which will take a date
+        // and from that day will use a different computer
+        let computer = balance::BalanceCalculator::new(MergeMethod::FirstWins);
+
+        run_and_assert_scenario(&scenario, &computer, true).await.expect("Failed to run scenario");
+    }
 }
