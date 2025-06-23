@@ -100,6 +100,11 @@ pub async fn run_and_assert_scenario(
             - chrono::Duration::days(20);
     }
 
+    if min_date >= max_date {
+        error!("No date range selected, falling back to default");
+        return Err(ComputeError::Date("Date range outside datapoints".to_owned()));
+    }
+
     let mut computer_result = computer
         .compute_account_state(&db, &accounts, min_date, max_date)
         .await?;

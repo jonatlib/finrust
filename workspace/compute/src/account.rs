@@ -118,6 +118,7 @@ pub mod testing;
 mod tests {
     use super::testing::*;
     use super::*;
+    use crate::error::ComputeError;
 
     #[tokio::test]
     async fn test_scenario_balance() {
@@ -310,6 +311,14 @@ mod tests {
             result.is_err(),
             "This should fail because no manual state for balance"
         );
+
+        if let Err(ComputeError::DataFrame(ref s)) = result {
+            if s.contains("Balance mismatch") {
+                return;
+            }
+        }
+
+        assert!(false, "This should fail because balance mismatch instead = {:?}", result);
     }
 
     #[tokio::test]
@@ -334,6 +343,14 @@ mod tests {
             result.is_err(),
             "This should fail because no manual state for balance"
         );
+
+        if let Err(ComputeError::DataFrame(ref s)) = result {
+            if s.contains("Balance mismatch") {
+                return;
+            }
+        }
+
+        assert!(false, "This should fail because balance mismatch instead = {:?}", result);
     }
 
     #[tokio::test]

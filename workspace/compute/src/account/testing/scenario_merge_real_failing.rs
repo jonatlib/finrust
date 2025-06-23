@@ -49,10 +49,13 @@ impl TestScenarioBuilder for ScenarioMergeRealFailing {
         new_manual_account_state(&db, &account2, date!(2025, 01, 01), 100_000).await?;
 
         expect!(assert_results, account1, 2025, 01, 01, 100_000);
-        expect!(assert_results, account2, 2025, 01, 01, 100_000);
+        expect!(assert_results, account2, 2025, 01, 01, 100_001);
 
-        expect!(assert_results, account1, 2025, 01, 10, 100_000);
-        expect!(assert_results, account2, 2025, 01, 10, 100_001);
+        expect!(assert_results, account1, 2025, 06, 01, 100_000);
+        expect!(assert_results, account2, 2025, 06, 01, 100_001);
+
+        expect!(assert_results, account1, 2025, 10, 10, 100_000);
+        expect!(assert_results, account2, 2025, 10, 10, 100_001);
 
         // Return the test scenario
         Ok((db, vec![account1, account2], assert_results))

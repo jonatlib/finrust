@@ -51,8 +51,11 @@ impl TestScenarioBuilder for ScenarioMergeReal {
         expect!(assert_results, account1, 2025, 01, 01, 100_000);
         expect!(assert_results, account2, 2025, 01, 01, 100_000);
 
-        expect!(assert_results, account1, 2025, 01, 10, 100_000);
-        expect!(assert_results, account2, 2025, 01, 10, 100_000);
+        expect!(assert_results, account1, 2025, 06, 10, 100_000);
+        expect!(assert_results, account2, 2025, 06, 10, 100_000);
+
+        expect!(assert_results, account1, 2025, 10, 10, 100_000);
+        expect!(assert_results, account2, 2025, 10, 10, 100_000);
 
         // Return the test scenario
         Ok((db, vec![account1, account2], assert_results))
