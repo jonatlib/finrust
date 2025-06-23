@@ -12,6 +12,12 @@ use model::entities::{
 
 pub struct ScenarioBalance {}
 
+impl Default for ScenarioBalance {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ScenarioBalance {
     pub fn new() -> Self {
         Self {}

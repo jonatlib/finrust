@@ -8,6 +8,12 @@ use crate::account::testing::{AssertResult, TestScenario, TestScenarioBuilder};
 
 pub struct ScenarioMergeRealFailing {}
 
+impl Default for ScenarioMergeRealFailing {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ScenarioMergeRealFailing {
     pub fn new() -> Self {
         Self {}

@@ -1,5 +1,5 @@
 use chrono::NaiveDate;
-use tracing::{debug, trace};
+use tracing::trace;
 
 /// Processes occurrences for a recurring item, handling past and future occurrences differently.
 ///

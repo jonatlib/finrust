@@ -9,6 +9,12 @@ use model::entities::{account, manual_account_state, recurring_transaction};
 
 pub struct ScenarioBalanceNoInstances {}
 
+impl Default for ScenarioBalanceNoInstances {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ScenarioBalanceNoInstances {
     pub fn new() -> Self {
         Self {}

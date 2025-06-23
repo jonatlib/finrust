@@ -1,7 +1,7 @@
 use chrono::NaiveDate;
 use model::entities::{recurring_transaction, recurring_transaction_instance};
 use sea_orm::{
-    ColumnTrait, Condition, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, QuerySelect,
+    ColumnTrait, Condition, DatabaseConnection, EntityTrait, QueryFilter,
 };
 use tracing::{debug, instrument, trace};
 

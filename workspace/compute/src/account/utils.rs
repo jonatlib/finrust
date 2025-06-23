@@ -53,7 +53,7 @@ pub fn generate_occurrences(
                 trace!("Daily: next date is {}", current_date);
             }
             recurring_transaction::RecurrencePeriod::Weekly => {
-                current_date = current_date + Duration::days(7);
+                current_date += Duration::days(7);
                 trace!("Weekly: next date is {}", current_date);
             }
             recurring_transaction::RecurrencePeriod::WorkDay => {

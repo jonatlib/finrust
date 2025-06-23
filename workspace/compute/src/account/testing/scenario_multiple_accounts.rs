@@ -12,6 +12,12 @@ use model::entities::{
 
 pub struct ScenarioMultipleAccounts {}
 
+impl Default for ScenarioMultipleAccounts {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ScenarioMultipleAccounts {
     pub fn new() -> Self {
         Self {}

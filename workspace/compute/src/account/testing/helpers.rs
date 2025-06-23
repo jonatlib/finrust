@@ -87,9 +87,9 @@ pub async fn new_recurring_instance(
         recurring_transaction_id: Set(transaction.id),
         status: Set(recurring_transaction_instance::InstanceStatus::Paid),
         due_date: Set(transaction.start_date.with_month(date.month()).unwrap()),
-        expected_amount: Set(transaction.amount.clone()),
+        expected_amount: Set(transaction.amount),
         paid_date: Set(Some(date)),
-        paid_amount: Set(Some(transaction.amount.clone())),
+        paid_amount: Set(Some(transaction.amount)),
         reconciled_imported_transaction_id: Set(None),
         ..Default::default()
     }

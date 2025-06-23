@@ -70,7 +70,7 @@ impl AccountStateCalculator for BalanceCalculator {
 }
 
 use self::{
-    account_state::{get_all_manual_states, get_latest_manual_state, get_manual_states_in_range},
+    account_state::{get_all_manual_states, get_manual_states_in_range},
     recurring::{get_recurring_income, get_recurring_transactions},
     transactions::{get_imported_transactions, get_transactions_for_account},
 };

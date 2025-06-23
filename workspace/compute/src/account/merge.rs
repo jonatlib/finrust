@@ -4,10 +4,10 @@ use model::entities::account;
 use polars::prelude::*;
 use sea_orm::DatabaseConnection;
 use std::collections::HashMap;
-use tracing::{debug, info, instrument, trace, warn};
+use tracing::{debug, info, instrument, warn};
 
 use super::{AccountStateCalculator, MergeMethod, balance, forecast};
-use crate::error::{ComputeError, Result};
+use crate::error::Result;
 
 /// A calculator that merges the results of multiple account state calculators.
 pub struct MergeCalculator {

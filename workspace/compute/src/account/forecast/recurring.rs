@@ -1,9 +1,7 @@
 use chrono::{Duration, NaiveDate};
 use model::entities::{recurring_income, recurring_transaction, recurring_transaction_instance};
-use rust_decimal::Decimal;
 use sea_orm::{
-    ColumnTrait, Condition, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, QuerySelect,
-    RelationTrait,
+    ColumnTrait, Condition, DatabaseConnection, EntityTrait, QueryFilter,
 };
 use tracing::{debug, instrument, trace};
 

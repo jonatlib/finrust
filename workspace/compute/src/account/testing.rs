@@ -21,7 +21,7 @@ use polars::prelude::*;
 use polars::prelude::{col, lit};
 use rust_decimal::Decimal;
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbErr};
-use tracing::{debug, error, info, trace};
+use tracing::{debug, error, info};
 
 use crate::account::AccountStateCalculator;
 use crate::error::{ComputeError, Result as ComputeResult};
@@ -176,8 +176,7 @@ async fn assert_results(
                 account_id,
                 date,
                 filtered_df.height()
-            ))
-            .into());
+            )));
         }
 
         // Extract the balance value from the filtered DataFrame
@@ -191,8 +190,7 @@ async fn assert_results(
             return Err(ComputeError::DataFrame(format!(
                 "Balance mismatch for account_id={}, date={}: expected {}, got {}",
                 account_id, date, expected_balance, actual_balance
-            ))
-            .into());
+            )));
         }
 
         info!(

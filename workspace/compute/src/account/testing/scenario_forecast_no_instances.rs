@@ -9,6 +9,12 @@ use model::entities::{account, recurring_transaction};
 
 pub struct ScenarioForecastNoInstances {}
 
+impl Default for ScenarioForecastNoInstances {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ScenarioForecastNoInstances {
     pub fn new() -> Self {
         Self {}
