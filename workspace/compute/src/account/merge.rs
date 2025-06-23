@@ -6,7 +6,7 @@ use sea_orm::DatabaseConnection;
 use std::collections::HashMap;
 use tracing::{debug, info, instrument, warn};
 
-use super::{AccountStateCalculator, MergeMethod, balance, forecast};
+use super::{balance, forecast, AccountStateCalculator, MergeMethod};
 use crate::error::Result;
 
 /// A calculator that merges the results of multiple account state calculators.
@@ -148,6 +148,9 @@ impl MergeCalculator {
                         // Insert only if this (account_id, date) pair doesn't exist yet
                         first_wins_map.entry(key).or_insert(balance_str);
                     }
+                    MergeMethod::DateSplit => {
+                        return Err(crate::error::ComputeError::Runtime("Not implemented DateSplit for regular merge".to_owned()))
+                    }
                 }
             }
         }
@@ -235,7 +238,8 @@ impl AccountStateCalculator for MergeCalculator {
 ///
 /// This function computes the balance up to today and the forecast for future dates,
 /// then merges them together into a single DataFrame.
-#[instrument(skip(db, accounts), fields(num_accounts = accounts.len(), start_date = %start_date, end_date = %end_date))]
+#[instrument(skip(db, accounts), fields(num_accounts = accounts.len(), start_date = %start_date, end_date = %end_date
+))]
 async fn compute_merged(
     db: &DatabaseConnection,
     accounts: &[account::Model],
