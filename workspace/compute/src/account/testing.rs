@@ -1,11 +1,11 @@
+pub mod helpers;
 pub mod scenario_balance;
 pub mod scenario_balance_no_instances;
 pub mod scenario_forecast;
 pub mod scenario_forecast_no_instances;
-pub mod scenario_multiple_accounts;
 pub mod scenario_merge_real;
-pub mod helpers;
 pub mod scenario_merge_real_failing;
+pub mod scenario_multiple_accounts;
 
 pub use scenario_balance::ScenarioBalance;
 pub use scenario_balance_no_instances::ScenarioBalanceNoInstances;
@@ -122,7 +122,9 @@ pub async fn run_and_assert_scenario(
 
     if filtered_assert_result.is_empty() {
         error!("No results to assert.");
-        return Err(ComputeError::DataFrame("No data returned for assertation".to_owned()));
+        return Err(ComputeError::DataFrame(
+            "No data returned for assertation".to_owned(),
+        ));
     }
     assert_results(db, filtered_assert_result, computer_result).await?;
 
@@ -175,7 +177,7 @@ async fn assert_results(
                 date,
                 filtered_df.height()
             ))
-                .into());
+            .into());
         }
 
         // Extract the balance value from the filtered DataFrame
@@ -190,7 +192,7 @@ async fn assert_results(
                 "Balance mismatch for account_id={}, date={}: expected {}, got {}",
                 account_id, date, expected_balance, actual_balance
             ))
-                .into());
+            .into());
         }
 
         info!(

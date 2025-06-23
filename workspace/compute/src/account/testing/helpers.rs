@@ -4,7 +4,10 @@ use chrono::{Datelike, NaiveDate};
 use rust_decimal::Decimal;
 use sea_orm::{ActiveModelTrait, DatabaseConnection, DbErr, Set};
 
-use model::entities::{account, manual_account_state, one_off_transaction, recurring_transaction, recurring_transaction_instance};
+use model::entities::{
+    account, manual_account_state, one_off_transaction, recurring_transaction,
+    recurring_transaction_instance,
+};
 
 pub type Result<T> = std::result::Result<T, DbErr>;
 
@@ -17,8 +20,8 @@ pub async fn new_account(db: &DatabaseConnection) -> Result<account::Model> {
         username: Set(format!("user_{}", current_id)),
         ..Default::default()
     }
-        .insert(db)
-        .await?;
+    .insert(db)
+    .await?;
 
     // Create a test account
     let account = account::ActiveModel {
@@ -30,24 +33,34 @@ pub async fn new_account(db: &DatabaseConnection) -> Result<account::Model> {
         ledger_name: Set(None),
         ..Default::default()
     }
-        .insert(db)
-        .await?;
+    .insert(db)
+    .await?;
 
     Ok(account)
 }
 
-pub async fn new_manual_account_state(db: &DatabaseConnection, account: &account::Model, date: NaiveDate, amount: i64) -> Result<manual_account_state::Model> {
+pub async fn new_manual_account_state(
+    db: &DatabaseConnection,
+    account: &account::Model,
+    date: NaiveDate,
+    amount: i64,
+) -> Result<manual_account_state::Model> {
     manual_account_state::ActiveModel {
         account_id: Set(account.id),
         date: Set(date),
         amount: Set(Decimal::new(amount * 100, 2)),
         ..Default::default()
     }
-        .insert(db)
-        .await
+    .insert(db)
+    .await
 }
 
-pub async fn new_recurring_transaction(db: &DatabaseConnection, account: &account::Model, date: NaiveDate, amount: i64) -> Result<recurring_transaction::Model> {
+pub async fn new_recurring_transaction(
+    db: &DatabaseConnection,
+    account: &account::Model,
+    date: NaiveDate,
+    amount: i64,
+) -> Result<recurring_transaction::Model> {
     recurring_transaction::ActiveModel {
         name: Set("Monthly".to_string()),
         description: Set(Some("Monthly payment".to_string())),
@@ -61,11 +74,15 @@ pub async fn new_recurring_transaction(db: &DatabaseConnection, account: &accoun
         ledger_name: Set(None),
         ..Default::default()
     }
-        .insert(db)
-        .await
+    .insert(db)
+    .await
 }
 
-pub async fn new_recurring_instance(db: &DatabaseConnection, transaction: &recurring_transaction::Model, date: NaiveDate) -> Result<recurring_transaction_instance::Model> {
+pub async fn new_recurring_instance(
+    db: &DatabaseConnection,
+    transaction: &recurring_transaction::Model,
+    date: NaiveDate,
+) -> Result<recurring_transaction_instance::Model> {
     recurring_transaction_instance::ActiveModel {
         recurring_transaction_id: Set(transaction.id),
         status: Set(recurring_transaction_instance::InstanceStatus::Paid),
@@ -76,11 +93,16 @@ pub async fn new_recurring_instance(db: &DatabaseConnection, transaction: &recur
         reconciled_imported_transaction_id: Set(None),
         ..Default::default()
     }
-        .insert(db)
-        .await
+    .insert(db)
+    .await
 }
 
-pub async fn new_one_off_trsansaction(db: &DatabaseConnection, account: &account::Model, date: NaiveDate, amount: i64) -> Result<one_off_transaction::Model> {
+pub async fn new_one_off_trsansaction(
+    db: &DatabaseConnection,
+    account: &account::Model,
+    date: NaiveDate,
+    amount: i64,
+) -> Result<one_off_transaction::Model> {
     one_off_transaction::ActiveModel {
         name: Set("One-off".to_string()),
         description: Set(Some("One-off".to_string())),
@@ -93,11 +115,17 @@ pub async fn new_one_off_trsansaction(db: &DatabaseConnection, account: &account
         linked_import_id: Set(None),
         ..Default::default()
     }
-        .insert(db)
-        .await
+    .insert(db)
+    .await
 }
 
-pub async fn new_one_off_account_transfer(db: &DatabaseConnection, source_account: &account::Model, target_account: &account::Model, date: NaiveDate, amount: i64) -> Result<one_off_transaction::Model> {
+pub async fn new_one_off_account_transfer(
+    db: &DatabaseConnection,
+    source_account: &account::Model,
+    target_account: &account::Model,
+    date: NaiveDate,
+    amount: i64,
+) -> Result<one_off_transaction::Model> {
     one_off_transaction::ActiveModel {
         name: Set("One-off transfer".to_string()),
         description: Set(Some("One-off transfer".to_string())),
@@ -110,6 +138,6 @@ pub async fn new_one_off_account_transfer(db: &DatabaseConnection, source_accoun
         linked_import_id: Set(None),
         ..Default::default()
     }
-        .insert(db)
-        .await
+    .insert(db)
+    .await
 }

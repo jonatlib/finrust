@@ -2,12 +2,12 @@ use chrono::NaiveDate;
 use tracing::{debug, trace};
 
 /// Processes occurrences for a recurring item, handling past and future occurrences differently.
-/// 
+///
 /// For balance calculator:
 /// - Future occurrences (date >= today) are treated as if they were accounted on their date
 /// - Past occurrences (date < today) with instances are included on their due date
 /// - Past occurrences (date < today) without instances are ignored
-/// 
+///
 /// Returns a vector of dates that should be included in the result.
 pub fn process_occurrences<T>(
     occurrences: Vec<NaiveDate>,

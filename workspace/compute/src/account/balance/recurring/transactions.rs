@@ -51,8 +51,9 @@ pub async fn get_recurring_transactions(
 
         // Get instances and process occurrences
         let instances = fetch_transaction_instances(db, tx.id).await?;
-        let valid_dates = process_transaction_occurrences(tx, &instances, start_date, end_date, today);
-        
+        let valid_dates =
+            process_transaction_occurrences(tx, &instances, start_date, end_date, today);
+
         // Add valid occurrences to result
         for date in valid_dates {
             result.push((date, tx.clone()));
@@ -98,9 +99,7 @@ async fn fetch_transaction_instances(
     transaction_id: i32,
 ) -> Result<Vec<recurring_transaction_instance::Model>> {
     let instances = recurring_transaction_instance::Entity::find()
-        .filter(
-            recurring_transaction_instance::Column::RecurringTransactionId.eq(transaction_id),
-        )
+        .filter(recurring_transaction_instance::Column::RecurringTransactionId.eq(transaction_id))
         .all(db)
         .await?;
 
@@ -121,7 +120,8 @@ fn process_transaction_occurrences(
     end_date: NaiveDate,
     today: NaiveDate,
 ) -> Vec<NaiveDate> {
-    let occurrences = generate_occurrences(tx.start_date, tx.end_date, &tx.period, start_date, end_date);
+    let occurrences =
+        generate_occurrences(tx.start_date, tx.end_date, &tx.period, start_date, end_date);
 
     debug!(
         "Generated {} occurrences for recurring transaction id={}",
@@ -134,11 +134,7 @@ fn process_transaction_occurrences(
     );
 
     // Process occurrences using the common function
-    process_occurrences(
-        occurrences,
-        instances,
-        today,
-        tx.id,
-        |instance| instance.due_date,
-    )
+    process_occurrences(occurrences, instances, today, tx.id, |instance| {
+        instance.due_date
+    })
 }

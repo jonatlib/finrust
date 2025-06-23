@@ -319,7 +319,9 @@ mod tests {
         // and from that day will use a different computer
         let computer = balance::BalanceCalculator::new(MergeMethod::FirstWins);
 
-        run_and_assert_scenario(&scenario, &computer, false).await.expect("Failed to run scenario");
+        run_and_assert_scenario(&scenario, &computer, false)
+            .await
+            .expect("Failed to run scenario");
     }
 
     #[tokio::test]
@@ -341,6 +343,8 @@ mod tests {
         // and from that day will use a different computer
         let computer = balance::BalanceCalculator::new(MergeMethod::FirstWins);
 
-        run_and_assert_scenario(&scenario, &computer, true).await.expect("Failed to run scenario");
+        run_and_assert_scenario(&scenario, &computer, true)
+            .await
+            .expect("Failed to run scenario");
     }
 }
