@@ -134,7 +134,12 @@ fn process_transaction_occurrences(
     );
 
     // Process occurrences using the common function
-    process_occurrences(occurrences, instances, today, tx.id, |instance| {
-        instance.due_date
-    })
+    process_occurrences(occurrences, instances, today, tx.id, 
+        |instance| {
+            instance.due_date
+        },
+        |instance| {
+            instance.paid_date
+        }
+    )
 }

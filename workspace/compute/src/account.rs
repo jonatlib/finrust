@@ -304,7 +304,10 @@ mod tests {
     #[tokio::test]
     async fn test_scenario_merge_real_failing_outside_range() {
         let scenario = ScenarioMergeRealFailing::new();
-        let computer = balance::BalanceCalculator::new(MergeMethod::FirstWins);
+        let computer = balance::BalanceCalculator::new_with_today(
+            MergeMethod::FirstWins,
+            NaiveDate::from_ymd_opt(2026, 06, 01).unwrap(),
+        );
 
         let result = run_and_assert_scenario(&scenario, &computer, false).await;
         assert!(
@@ -326,7 +329,10 @@ mod tests {
         let scenario = ScenarioMergeReal::new();
         // TODO we need a new type of merger which will take a date
         // and from that day will use a different computer
-        let computer = balance::BalanceCalculator::new(MergeMethod::FirstWins);
+        let computer = balance::BalanceCalculator::new_with_today(
+            MergeMethod::FirstWins,
+            NaiveDate::from_ymd_opt(2026, 06, 01).unwrap(),
+        );
 
         run_and_assert_scenario(&scenario, &computer, false)
             .await
@@ -336,7 +342,10 @@ mod tests {
     #[tokio::test]
     async fn test_scenario_merge_real_failing() {
         let scenario = ScenarioMergeRealFailing::new();
-        let computer = balance::BalanceCalculator::new(MergeMethod::FirstWins);
+        let computer = balance::BalanceCalculator::new_with_today(
+            MergeMethod::FirstWins,
+            NaiveDate::from_ymd_opt(2026, 06, 01).unwrap(),
+        );
 
         let result = run_and_assert_scenario(&scenario, &computer, true).await;
         assert!(
@@ -358,7 +367,10 @@ mod tests {
         let scenario = ScenarioMergeReal::new();
         // TODO we need a new type of merger which will take a date
         // and from that day will use a different computer
-        let computer = balance::BalanceCalculator::new(MergeMethod::FirstWins);
+        let computer = balance::BalanceCalculator::new_with_today(
+            MergeMethod::FirstWins,
+            NaiveDate::from_ymd_opt(2026, 06, 01).unwrap(),
+        );
 
         run_and_assert_scenario(&scenario, &computer, true)
             .await

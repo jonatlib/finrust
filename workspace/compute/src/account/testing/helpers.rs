@@ -20,8 +20,8 @@ pub async fn new_account(db: &DatabaseConnection) -> Result<account::Model> {
         username: Set(format!("user_{}", current_id)),
         ..Default::default()
     }
-    .insert(db)
-    .await?;
+        .insert(db)
+        .await?;
 
     // Create a test account
     let account = account::ActiveModel {
@@ -33,8 +33,8 @@ pub async fn new_account(db: &DatabaseConnection) -> Result<account::Model> {
         ledger_name: Set(None),
         ..Default::default()
     }
-    .insert(db)
-    .await?;
+        .insert(db)
+        .await?;
 
     Ok(account)
 }
@@ -51,8 +51,8 @@ pub async fn new_manual_account_state(
         amount: Set(Decimal::new(amount * 100, 2)),
         ..Default::default()
     }
-    .insert(db)
-    .await
+        .insert(db)
+        .await
 }
 
 pub async fn new_recurring_transaction(
@@ -74,8 +74,8 @@ pub async fn new_recurring_transaction(
         ledger_name: Set(None),
         ..Default::default()
     }
-    .insert(db)
-    .await
+        .insert(db)
+        .await
 }
 
 pub async fn new_recurring_instance(
@@ -86,15 +86,15 @@ pub async fn new_recurring_instance(
     recurring_transaction_instance::ActiveModel {
         recurring_transaction_id: Set(transaction.id),
         status: Set(recurring_transaction_instance::InstanceStatus::Paid),
-        due_date: Set(transaction.start_date.with_month(date.month()).unwrap()),
+        due_date: Set(transaction.start_date.with_month(date.month()).unwrap().with_year(date.year()).unwrap()),
         expected_amount: Set(transaction.amount),
         paid_date: Set(Some(date)),
         paid_amount: Set(Some(transaction.amount)),
         reconciled_imported_transaction_id: Set(None),
         ..Default::default()
     }
-    .insert(db)
-    .await
+        .insert(db)
+        .await
 }
 
 pub async fn new_one_off_trsansaction(
@@ -115,8 +115,8 @@ pub async fn new_one_off_trsansaction(
         linked_import_id: Set(None),
         ..Default::default()
     }
-    .insert(db)
-    .await
+        .insert(db)
+        .await
 }
 
 pub async fn new_one_off_account_transfer(
@@ -138,6 +138,6 @@ pub async fn new_one_off_account_transfer(
         linked_import_id: Set(None),
         ..Default::default()
     }
-    .insert(db)
-    .await
+        .insert(db)
+        .await
 }
