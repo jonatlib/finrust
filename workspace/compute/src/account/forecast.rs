@@ -104,6 +104,11 @@ impl AccountStateCalculator for ForecastCalculator {
     fn merge_method(&self) -> MergeMethod {
         self.merge_method
     }
+
+    fn update_initial_balance(&mut self, balance: rust_decimal::Decimal) -> bool {
+        self.initial_balance = balance;
+        true
+    }
 }
 
 /// Computes the forecast for accounts within a specified date range.

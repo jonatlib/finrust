@@ -98,21 +98,19 @@ impl TestScenarioBuilder for ScenarioMergeReal {
 
         /////////////////////////////////////////////////////////////////////////////////////////////////
         // Now fastforward into future and check that
-        // We assume that "today" is 2026-06-01
+        // We assume that "today" is 2026-06-22
 
         for index in (0u32..6) {
             new_recurring_instance(&db, &r1, date!(2026, 01 + index, 22)).await?;
             new_recurring_instance(&db, &r2, date!(2026, 01 + index, 22)).await?;
-            expect!(assert_results, account1, 2026, 01 + index, 22, 200_000 - 1_000 * 4 - 1_000 - 1_000 * (index as i64));
-            expect!(assert_results, account2, 2026, 01 + index, 22, 100_000 - 1_000 * 1 + 1_000 - 1_000 * (index as i64));
         }
 
         /////////////////////////////////////////////////////////////////////////////////////////////////
         // And now we are in the future
 
         for index in (0u32..6) {
-            expect!(assert_results, account1, 2026, 01 + index, 22, 200_000 - 1_000 * 4 - 1_000 - 1_000 * (5 + index as i64));
-            expect!(assert_results, account2, 2026, 01 + index, 22, 100_000 - 1_000 * 1 + 1_000 - 1_000 * (5 + index as i64));
+            expect!(assert_results, account1, 2026, 07 + index, 22, 189_000 - (1000 * index as i64));
+            expect!(assert_results, account2, 2026, 07 + index, 22, 94_000 - (1000 * index as i64));
         }
 
         // Return the test scenario

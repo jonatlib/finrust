@@ -2,7 +2,10 @@ use async_trait::async_trait;
 use chrono::NaiveDate;
 use model::entities::account;
 use polars::prelude::*;
+use rust_decimal::Decimal;
 use sea_orm::DatabaseConnection;
+use std::cell::RefCell;
+use std::str::FromStr;
 use tracing::{debug, info, instrument};
 
 use super::{AccountStateCalculator, MergeMethod};
@@ -16,10 +19,13 @@ pub struct DateSplitCalculator {
     second_calculator: Box<dyn AccountStateCalculator + Send + Sync>,
     /// The date at which to switch from the first calculator to the second calculator.
     split_date: NaiveDate,
+    /// Flag indicating whether to transfer the balance from the first calculator to the second calculator.
+    transfer_balance: bool,
 }
 
 impl DateSplitCalculator {
     /// Creates a new date split calculator with the specified calculators and split date.
+    /// By default, balance transfer is disabled.
     pub fn new(
         first_calculator: Box<dyn AccountStateCalculator + Send + Sync>,
         second_calculator: Box<dyn AccountStateCalculator + Send + Sync>,
@@ -29,7 +35,109 @@ impl DateSplitCalculator {
             first_calculator,
             second_calculator,
             split_date,
+            transfer_balance: false,
         }
+    }
+
+    /// Creates a new date split calculator with the specified calculators and split date.
+    /// Enables balance transfer from the first calculator to the second calculator.
+    pub fn new_with_balance_transfer(
+        first_calculator: Box<dyn AccountStateCalculator + Send + Sync>,
+        second_calculator: Box<dyn AccountStateCalculator + Send + Sync>,
+        split_date: NaiveDate,
+    ) -> Self {
+        Self {
+            first_calculator,
+            second_calculator,
+            split_date,
+            transfer_balance: true,
+        }
+    }
+
+    /// Creates a new date split calculator with the specified first calculator and a factory function
+    /// for creating the second calculator.
+    ///
+    /// This method computes the balance on the split date using the first calculator and passes it
+    /// to the factory function, which can then use it to create the second calculator with the
+    /// appropriate initial balance.
+    ///
+    /// # Arguments
+    ///
+    /// * `first_calculator` - The calculator to use for dates before the split date
+    /// * `second_calculator_factory` - A function that takes a Decimal balance and returns a boxed calculator
+    /// * `split_date` - The date at which to switch from the first calculator to the second calculator
+    /// * `db` - The database connection for retrieving account data
+    /// * `accounts` - The accounts to calculate state for
+    ///
+    /// # Returns
+    ///
+    /// A new DateSplitCalculator with balance transfer enabled, or an error if the computation fails
+    pub async fn new_with_balance_factory<F>(
+        first_calculator: Box<dyn AccountStateCalculator + Send + Sync>,
+        second_calculator_factory: F,
+        split_date: NaiveDate,
+        db: &DatabaseConnection,
+        accounts: &[account::Model],
+    ) -> Result<Self>
+    where
+        F: FnOnce(Decimal) -> Box<dyn AccountStateCalculator + Send + Sync>,
+    {
+        // Compute the account state on the split date using the first calculator
+        let split_date_df = first_calculator
+            .compute_account_state(db, accounts, split_date, split_date)
+            .await?;
+
+        debug!("First calculator returned DataFrame with {} rows for split date", split_date_df.height());
+
+        // Extract the balance on the split date for each account
+        let mut account_balances = std::collections::HashMap::new();
+        for i in 0..split_date_df.height() {
+            let account_id = split_date_df.column("account_id")?.get(i).unwrap().try_extract::<i32>().unwrap();
+            let date_val = split_date_df.column("date")?.get(i).unwrap();
+            let date_str = date_val.to_string();
+            let date = NaiveDate::parse_from_str(&date_str, "%Y-%m-%d").unwrap();
+
+            // If this is the balance on the split date, store it
+            if date == split_date {
+                let balance_str = split_date_df.column("balance")?.get(i).unwrap().to_string();
+                let balance_str = balance_str.trim_matches('"');
+                if let Ok(balance) = Decimal::from_str(balance_str) {
+                    account_balances.insert(account_id, balance);
+                    debug!("Extracted balance for account {} on split date {}: {}", account_id, split_date, balance);
+                }
+            }
+        }
+
+        // Determine the balance to use for the second calculator
+        let balance = if accounts.len() == 1 && account_balances.len() == 1 {
+            // If there's only one account, use its balance directly
+            let account_id = accounts[0].id;
+            if let Some(balance) = account_balances.get(&account_id) {
+                debug!("Using balance {} for second calculator", balance);
+                *balance
+            } else {
+                debug!("No balance found for account {}, using zero", account_id);
+                Decimal::ZERO
+            }
+        } else if !account_balances.is_empty() {
+            // If there are multiple accounts, use the sum of their balances
+            let total_balance: Decimal = account_balances.values().sum();
+            debug!("Using total balance {} for second calculator (sum of {} accounts)", total_balance, account_balances.len());
+            total_balance
+        } else {
+            debug!("No balances found, using zero");
+            Decimal::ZERO
+        };
+
+        // Create the second calculator using the factory function and the computed balance
+        let second_calculator = second_calculator_factory(balance);
+
+        Ok(Self {
+            first_calculator,
+            second_calculator,
+            split_date,
+            transfer_balance: true,
+        })
     }
 }
 
