@@ -120,9 +120,7 @@ impl TestScenarioBuilder for ScenarioMergeReal {
         // And now we are in the future
 
         for index in (0u32..6) {
-            // FIXME uncomment when fixed
-            // expect!(assert_results, account1, 2026, 07 + index, 22, 189_000 - (1000 * index as i64) - 100_000);
-            expect!(assert_results, account1, 2026, 07 + index, 22, 189_000 - (1000 * index as i64));
+            expect!(assert_results, account1, 2026, 07 + index, 22, 189_000 - (1000 * index as i64) - 100_000);
             expect!(assert_results, account2, 2026, 07 + index, 22, 94_000 - (1000 * index as i64));
         }
 

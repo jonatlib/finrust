@@ -136,6 +136,7 @@ pub mod balance;
 pub mod date_split;
 pub mod forecast;
 pub mod merge;
+pub mod unpaid_recurring;
 pub mod utils;
 
 #[cfg(test)]
@@ -302,14 +303,29 @@ mod tests {
             today,
             future_offset.num_days()
         );
-        let computer = forecast::ForecastCalculator::new_with_params(
+
+        // Create the forecast calculator with initial balance
+        let forecast_calculator = forecast::ForecastCalculator::new_with_initial_balance(
             MergeMethod::FirstWins,
             rust_decimal::Decimal::new(0, 2), // $0.00
+        );
+
+        // Create the unpaid recurring calculator
+        let unpaid_calculator = unpaid_recurring::UnpaidRecurringCalculator::new_with_sum_merge(
             today,
             future_offset,
         );
 
-        run_and_assert_scenario(&scenario, &computer, true)
+        // Create a merge calculator that combines both calculators
+        let merge_calculator = merge::MergeCalculator::new(
+            vec![
+                Box::new(forecast_calculator),
+                Box::new(unpaid_calculator),
+            ],
+            MergeMethod::Sum,
+        );
+
+        run_and_assert_scenario(&scenario, &merge_calculator, true)
             .await
             .expect("Failed to run scenario");
     }
@@ -393,13 +409,32 @@ mod tests {
     async fn test_scenario_merge_real() {
         let scenario = ScenarioMergeReal::new();
 
-        // Create the calculator
-        let first_calculator = balance::BalanceCalculator::new_with_today(
+        // Create the today date
+        let today = NaiveDate::from_ymd_opt(2026, 06, 22).unwrap();
+
+        // Create the balance calculator
+        let balance_calculator = balance::BalanceCalculator::new_with_today(
             MergeMethod::FirstWins,
-            NaiveDate::from_ymd_opt(2026, 06, 22).unwrap(),
+            today,
         );
 
-        run_and_assert_scenario(&scenario, &first_calculator, true)
+        // Create the unpaid recurring calculator
+        let unpaid_calculator = unpaid_recurring::UnpaidRecurringCalculator::new_with_sum_merge(
+            today,
+            chrono::Duration::days(7),
+        );
+
+        // Create a merge calculator that combines both calculators
+        let merge_calculator = merge::MergeCalculator::new(
+            vec![
+                Box::new(balance_calculator),
+                Box::new(unpaid_calculator),
+            ],
+            MergeMethod::Sum,
+        );
+
+        // The test is expected to fail after this change
+        run_and_assert_scenario(&scenario, &merge_calculator, true)
             .await
             .expect("Failed to run scenario");
     }
