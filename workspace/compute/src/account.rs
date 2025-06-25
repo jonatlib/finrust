@@ -176,7 +176,7 @@ mod tests {
 
         assert!(
             result.is_err(),
-            "This shuold fail because no manual state for balance"
+            "This should fail because no manual state for balance"
         );
     }
 
@@ -317,10 +317,10 @@ mod tests {
     #[tokio::test]
     async fn test_scenario_forecast_no_instances_outside_range() {
         let scenario = ScenarioForecastNoInstances::new();
-        // Use initial balance of 0 when testing outside the range
+        // Use initial balance of -$2200 when testing outside the range
         let computer = forecast::ForecastCalculator::new_with_initial_balance(
             MergeMethod::FirstWins,
-            rust_decimal::Decimal::new(-2200 * 100, 2), // $0.00
+            rust_decimal::Decimal::new(-2200 * 100, 2), // -$2200.00
         );
 
         run_and_assert_scenario(&scenario, &computer, false)
@@ -393,32 +393,11 @@ mod tests {
     async fn test_scenario_merge_real() {
         let scenario = ScenarioMergeReal::new();
 
-        // Create the first calculator
+        // Create the calculator
         let first_calculator = balance::BalanceCalculator::new_with_today(
             MergeMethod::FirstWins,
             NaiveDate::from_ymd_opt(2026, 06, 22).unwrap(),
         );
-
-        // // Create a factory function that creates a forecast calculator with the computed balance
-        // let second_calculator_factory = |balance: rust_decimal::Decimal| -> Box<dyn AccountStateCalculator + Send + Sync> {
-        //     Box::new(forecast::ForecastCalculator::new_with_initial_balance(
-        //         MergeMethod::FirstWins,
-        //         balance,
-        //     ))
-        // };
-
-        // Create a date split calculator that computes the balance on the split date
-        // and passes it to the factory function to create the second calculator
-        // let split_date = NaiveDate::from_ymd_opt(2026, 06, 22).unwrap();
-        // let db = &scenario.get_scenario().await.unwrap().0;
-        // let accounts = &scenario.get_scenario().await.unwrap().1;
-        // let computer = date_split::DateSplitCalculator::new_with_balance_factory(
-        //     first_calculator,
-        //     second_calculator_factory,
-        //     split_date,
-        //     db,
-        //     accounts,
-        // ).await.expect("Failed to create date split calculator");
 
         run_and_assert_scenario(&scenario, &first_calculator, true)
             .await
