@@ -20,3 +20,4 @@ async-trait = "0.1"
 [dev-dependencies]
 tokio = { version = "1.36.0", features = ["full"] }
 migration = { path = "../migration" }
+tracing-subscriber = "0.3"

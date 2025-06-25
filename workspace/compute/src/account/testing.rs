@@ -21,12 +21,31 @@ use polars::prelude::*;
 use polars::prelude::{col, lit};
 use rust_decimal::Decimal;
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbErr};
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, Level};
+#[cfg(test)]
+use tracing_subscriber::FmtSubscriber;
 
 use crate::account::AccountStateCalculator;
 use crate::error::{ComputeError, Result as ComputeResult};
 use migration::{Migrator, MigratorTrait};
 use model::entities::account;
+
+/// Initialize tracing for tests with output to STDERR.
+///
+/// This function sets up a tracing subscriber that outputs logs to STDERR,
+/// which is useful for debugging tests.
+///
+/// # Returns
+///
+/// A guard that will clean up the subscriber when dropped.
+#[cfg(test)]
+pub fn init_test_tracing() -> tracing::subscriber::DefaultGuard {
+    let subscriber = FmtSubscriber::builder()
+        .with_max_level(Level::DEBUG)
+        .with_writer(std::io::stderr)
+        .finish();
+    tracing::subscriber::set_default(subscriber)
+}
 
 /// Sets up an in-memory SQLite database for testing.
 ///
@@ -83,6 +102,11 @@ pub async fn run_and_assert_scenario(
     computer: &dyn AccountStateCalculator,
     use_scenario_date_range: bool,
 ) -> ComputeResult<()> {
+    // Initialize tracing for tests
+    #[cfg(test)]
+    let _guard = init_test_tracing();
+
+    info!("Running test scenario");
     let (db, accounts, assert_result) = builder.get_scenario().await?;
 
     let min_date;
