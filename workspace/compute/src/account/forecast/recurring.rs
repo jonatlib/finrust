@@ -95,11 +95,19 @@ pub async fn get_recurring_transactions(
 
                 // Move all past occurrences to today + future_offset
                 let new_date = today + future_offset;
-                for date in past_occurrences {
-                    if date < today {
-                        // Only include dates before today
-                        result.push((new_date, tx.clone()));
-                    }
+
+                // Count the number of past occurrences
+                let past_count = past_occurrences.iter().filter(|&date| *date < today).count();
+
+                if past_count > 0 {
+                    // Only add one entry for all past occurrences, but with the amount multiplied by the count
+                    let mut accumulated_tx = tx.clone();
+                    accumulated_tx.amount = accumulated_tx.amount * rust_decimal::Decimal::from(past_count as i32);
+                    trace!(
+                        "Adding {} accumulated past occurrences on {} for recurring transaction id={}, total amount={}",
+                        past_count, new_date, tx.id, accumulated_tx.amount
+                    );
+                    result.push((new_date, accumulated_tx));
                 }
 
                 // For transactions that start before today, we need to find the next occurrence after today + future_offset

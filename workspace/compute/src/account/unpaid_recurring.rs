@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use chrono::{Duration, NaiveDate};
+use chrono::{Datelike, Duration, NaiveDate};
 use model::entities::account;
 use polars::prelude::*;
 use rust_decimal::Decimal;
@@ -95,7 +95,9 @@ impl AccountStateCalculator for UnpaidRecurringCalculator {
 ///
 /// This function takes into account:
 /// - Past recurring transactions without instances, moving them to today + future_offset
+/// - Future recurring transactions without instances, including them on their original dates
 /// - Past recurring income, moving it to today + future_offset
+/// - Future recurring income, including it on its original date
 #[instrument(skip(db, accounts), fields(num_accounts = accounts.len(), start_date = %start_date, end_date = %end_date, today = %today, future_offset = %future_offset.num_days()))]
 async fn compute_unpaid_recurring(
     db: &DatabaseConnection,
@@ -114,6 +116,15 @@ async fn compute_unpaid_recurring(
     // Create a DataFrame with account_id and date as index, and balance as value
     let mut unpaid_data: HashMap<(i32, NaiveDate), Decimal> = HashMap::new();
 
+    // Add an entry for today with zero balance for each account
+    for account in accounts {
+        unpaid_data.insert((account.id, today), Decimal::ZERO);
+        trace!(
+            "Added zero balance for today: account_id={}, date={}, balance=0",
+            account.id, today
+        );
+    }
+
     // Process each account
     for account in accounts {
         debug!(
@@ -130,7 +141,7 @@ async fn compute_unpaid_recurring(
             today,
             future_offset.num_days()
         );
-        let recurring_transactions = get_recurring_transactions(
+        let mut recurring_transactions = get_recurring_transactions(
             db,
             account.id,
             start_date,
@@ -139,6 +150,62 @@ async fn compute_unpaid_recurring(
             future_offset,
         )
         .await?;
+
+        // Special handling for yearly recurring transactions
+        // Find all yearly recurring transactions and add them to all future months
+        let yearly_transactions: Vec<_> = recurring_transactions.iter()
+            .filter(|(_, tx)| tx.period == model::entities::recurring_transaction::RecurrencePeriod::Yearly)
+            .cloned()
+            .collect();
+
+        for (orig_date, tx) in yearly_transactions {
+            // For each yearly transaction, add it to all future months in the date range
+            // but only if the original date is after today (future transaction)
+            if orig_date >= today {
+                let day = orig_date.day();
+
+                // Add the transaction to all months from today to end_date
+                let start_month = today.month();
+                let start_year = today.year();
+                let end_month = end_date.month();
+                let end_year = end_date.year();
+
+                // Calculate total months to iterate through
+                let total_months = (end_year - start_year) * 12 + (end_month as i32 - start_month as i32 + 1) as i32;
+
+                for month_offset in 0..total_months {
+                    let year = start_year + (start_month as i32 + month_offset - 1) / 12;
+                    let month = ((start_month as i32 + month_offset - 1) % 12 + 1) as u32;
+
+                    // Skip the original date which is already in the list
+                    if year == orig_date.year() && month == orig_date.month() {
+                        continue;
+                    }
+
+                    // Create a date for this month, handling invalid dates (e.g., Feb 30)
+                    let future_date = NaiveDate::from_ymd_opt(year, month, day).unwrap_or_else(|| {
+                        // Get the last day of the month
+                        let last_day = NaiveDate::from_ymd_opt(year, month, 1)
+                            .unwrap()
+                            .checked_add_months(chrono::Months::new(1))
+                            .unwrap()
+                            .pred_opt()
+                            .unwrap()
+                            .day();
+                        NaiveDate::from_ymd_opt(year, month, last_day).unwrap()
+                    });
+
+                    // Only add dates that are within our range and after today
+                    if future_date >= today && future_date <= end_date {
+                        recurring_transactions.push((future_date, tx.clone()));
+                        trace!(
+                            "Added yearly recurring transaction to future date: account={}, date={}, amount={}",
+                            account.id, future_date, tx.amount
+                        );
+                    }
+                }
+            }
+        }
         debug!(
             "Found {} recurring transactions for account {}",
             recurring_transactions.len(),
@@ -172,10 +239,18 @@ async fn compute_unpaid_recurring(
             "Processing recurring transactions for account {}",
             account.id
         );
+
+        // First, find all yearly recurring transactions
+        let yearly_transactions: Vec<_> = recurring_transactions.iter()
+            .filter(|(_, tx)| tx.period == model::entities::recurring_transaction::RecurrencePeriod::Yearly)
+            .cloned()
+            .collect();
+
+        // Process regular transactions
         for (date, tx) in recurring_transactions {
-            // Only include transactions that were moved to today + future_offset
-            // This is the key difference from the forecast calculator
-            if date == today + future_offset {
+            // Include all transactions with dates on or after today
+            // This ensures we account for future recurring transactions
+            if date >= today {
                 let amount = if tx.target_account_id == account.id {
                     tx.amount
                 } else if Some(account.id) == tx.source_account_id {
@@ -192,11 +267,75 @@ async fn compute_unpaid_recurring(
             }
         }
 
+        // Now handle yearly recurring transactions specially
+        for (orig_date, tx) in &yearly_transactions {
+            // Calculate the amount for this account
+            let amount = if tx.target_account_id == account.id {
+                tx.amount
+            } else if Some(account.id) == tx.source_account_id {
+                -tx.amount
+            } else {
+                Decimal::ZERO
+            };
+
+            // Skip transactions with zero amount
+            if amount == Decimal::ZERO {
+                continue;
+            }
+
+            trace!(
+                "Processing yearly recurring transaction: date={}, amount={}, period={:?}",
+                orig_date, amount, tx.period
+            );
+
+            // For yearly recurring transactions, we need to add them to all future months
+            // within the date range, regardless of whether the original date is after today
+            let day = orig_date.day();
+
+            // Add the transaction to all months from today to end_date
+            let start_month = today.month();
+            let start_year = today.year();
+            let end_month = end_date.month();
+            let end_year = end_date.year();
+
+            // Calculate total months to iterate through
+            let total_months = (end_year - start_year) * 12 + (end_month as i32 - start_month as i32 + 1) as i32;
+
+            for month_offset in 0..total_months {
+                let year = start_year + (start_month as i32 + month_offset - 1) / 12;
+                let month = ((start_month as i32 + month_offset - 1) % 12 + 1) as u32;
+
+                // Create a date for this month, handling invalid dates (e.g., Feb 30)
+                let future_date = NaiveDate::from_ymd_opt(year, month, day).unwrap_or_else(|| {
+                    // Get the last day of the month
+                    let last_day = NaiveDate::from_ymd_opt(year, month, 1)
+                        .unwrap()
+                        .checked_add_months(chrono::Months::new(1))
+                        .unwrap()
+                        .pred_opt()
+                        .unwrap()
+                        .day();
+                    NaiveDate::from_ymd_opt(year, month, last_day).unwrap()
+                });
+
+                // Only add dates that are within our range and after today
+                if future_date >= today && future_date <= end_date {
+                    // Always add the yearly recurring transaction to this date
+                    trace!(
+                        "Adding yearly recurring transaction to future date: date={}, amount={}",
+                        future_date, amount
+                    );
+                    all_transactions.push((future_date, amount));
+                }
+            }
+        }
+
         // Add recurring income
         trace!("Processing recurring income for account {}", account.id);
         for (date, income) in recurring_income {
-            // Only include income that was moved to today + future_offset
-            if date == today + future_offset && income.target_account_id == account.id {
+            // Include all income with dates on or after today
+            // This ensures we account for future recurring income
+            if date >= today && income.target_account_id == account.id {
                 trace!(
                     "Adding unpaid recurring income: date={}, amount={}",
                     date, income.amount
@@ -206,16 +345,27 @@ async fn compute_unpaid_recurring(
         }
 
         // Process transactions and update balances
+        // Sort transactions by date
+        all_transactions.sort_by(|a, b| a.0.cmp(&b.0));
+
+        // Keep track of the running balance for this account
+        let mut running_balance = Decimal::ZERO;
+
         for (date, amount) in all_transactions {
+            // Update the running balance
+            running_balance += amount;
+
             let key = (account.id, date);
             let entry = unpaid_data.entry(key).or_insert(Decimal::ZERO);
-            *entry += amount;
+            *entry = running_balance;  // Set the balance to the running total
             trace!(
                 "Updated unpaid balance for account {} on {}: {}",
                 account.id, date, entry
             );
         }
     }
+
+
 
     // Convert the HashMap to a DataFrame
     debug!("Converting unpaid recurring data to DataFrame");

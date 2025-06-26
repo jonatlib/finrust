@@ -304,28 +304,14 @@ mod tests {
             future_offset.num_days()
         );
 
-        // Create the forecast calculator with initial balance
-        let forecast_calculator = forecast::ForecastCalculator::new_with_initial_balance(
+        // Create a single unpaid recurring calculator
+        let calculator = unpaid_recurring::UnpaidRecurringCalculator::new(
             MergeMethod::FirstWins,
-            rust_decimal::Decimal::new(0, 2), // $0.00
-        );
-
-        // Create the unpaid recurring calculator
-        let unpaid_calculator = unpaid_recurring::UnpaidRecurringCalculator::new_with_sum_merge(
             today,
             future_offset,
         );
 
-        // Create a merge calculator that combines both calculators
-        let merge_calculator = merge::MergeCalculator::new(
-            vec![
-                Box::new(forecast_calculator),
-                Box::new(unpaid_calculator),
-            ],
-            MergeMethod::Sum,
-        );
-
-        run_and_assert_scenario(&scenario, &merge_calculator, true)
+        run_and_assert_scenario(&scenario, &calculator, true)
             .await
             .expect("Failed to run scenario");
     }
