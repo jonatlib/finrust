@@ -123,6 +123,14 @@ async fn compute_unpaid_recurring(
             "Added zero balance for today: account_id={}, date={}, balance=0",
             account.id, today
         );
+
+        // Add entries for all dates in the range with zero balance
+        // This ensures we have data points for all dates, even if there are no transactions
+        let mut current_date = start_date;
+        while current_date <= end_date {
+            unpaid_data.entry((account.id, current_date)).or_insert(Decimal::ZERO);
+            current_date = current_date.succ_opt().unwrap_or(current_date);
+        }
     }
 
     // Process each account
@@ -160,8 +168,8 @@ async fn compute_unpaid_recurring(
 
         for (orig_date, tx) in yearly_transactions {
             // For each yearly transaction, add it to all future months in the date range
-            // but only if the original date is after today (future transaction)
-            if orig_date >= today {
+            // regardless of the original date, as long as they are within the date range
+            {
                 let day = orig_date.day();
 
                 // Add the transaction to all months from today to end_date
@@ -248,23 +256,21 @@ async fn compute_unpaid_recurring(
 
         // Process regular transactions
         for (date, tx) in recurring_transactions {
-            // Include all transactions with dates on or after today
-            // This ensures we account for future recurring transactions
-            if date >= today {
-                let amount = if tx.target_account_id == account.id {
-                    tx.amount
-                } else if Some(account.id) == tx.source_account_id {
-                    -tx.amount
-                } else {
-                    Decimal::ZERO
-                };
+            // Include all transactions regardless of date
+            // get_recurring_transactions already handles moving past transactions to today + future_offset
+            let amount = if tx.target_account_id == account.id {
+                tx.amount
+            } else if Some(account.id) == tx.source_account_id {
+                -tx.amount
+            } else {
+                Decimal::ZERO
+            };
 
-                trace!(
-                    "Adding unpaid recurring transaction: date={}, amount={}",
-                    date, amount
-                );
-                all_transactions.push((date, amount));
-            }
+            trace!(
+                "Adding unpaid recurring transaction: date={}, amount={}",
+                date, amount
+            );
+            all_transactions.push((date, amount));
         }
 
         // Now handle yearly recurring transactions specially
@@ -318,8 +324,8 @@ async fn compute_unpaid_recurring(
                     NaiveDate::from_ymd_opt(year, month, last_day).unwrap()
                 });
 
-                // Only add dates that are within our range and after today
-                if future_date >= today && future_date <= end_date {
+                // Only add dates that are within our range
+                if future_date <= end_date {
                     // Always add the yearly recurring transaction to this date
                     trace!(
                         "Adding yearly recurring transaction to future date: date={}, amount={}",
@@ -348,24 +354,61 @@ async fn compute_unpaid_recurring(
         // Sort transactions by date
         all_transactions.sort_by(|a, b| a.0.cmp(&b.0));
 
+        // Group transactions by date
+        let mut transactions_by_date: HashMap<NaiveDate, Vec<Decimal>> = HashMap::new();
+        for (date, amount) in all_transactions {
+            transactions_by_date.entry(date).or_insert_with(Vec::new).push(amount);
+        }
+
+        // Process dates in chronological order
+        let mut dates: Vec<NaiveDate> = transactions_by_date.keys().cloned().collect();
+        dates.sort();
+
         // Keep track of the running balance for this account
         let mut running_balance = Decimal::ZERO;
 
-        for (date, amount) in all_transactions {
+        for date in dates {
+            let amounts = transactions_by_date.get(&date).unwrap();
+            let total_amount_for_date: Decimal = amounts.iter().sum();
+
             // Update the running balance
-            running_balance += amount;
+            running_balance += total_amount_for_date;
 
             let key = (account.id, date);
             let entry = unpaid_data.entry(key).or_insert(Decimal::ZERO);
             *entry = running_balance;  // Set the balance to the running total
             trace!(
-                "Updated unpaid balance for account {} on {}: {}",
-                account.id, date, entry
+                "Updated unpaid balance for account {} on {}: {} (total amount for date: {})",
+                account.id, date, entry, total_amount_for_date
             );
         }
+
+        // Propagate balances to dates without transactions
+        // This ensures that each date has at least the balance from the previous date
+        let mut all_dates: Vec<NaiveDate> = unpaid_data.keys()
+            .filter(|(id, _)| *id == account.id)
+            .map(|(_, date)| *date)
+            .collect();
+        all_dates.sort();
+
+        let mut prev_balance = Decimal::ZERO;
+        for date in all_dates {
+            let key = (account.id, date);
+            let entry = unpaid_data.get_mut(&key).unwrap();
+
+            // If this date has a non-zero balance, update prev_balance
+            if *entry != Decimal::ZERO {
+                prev_balance = *entry;
+            } else {
+                // If this date has a zero balance, use the previous balance
+                *entry = prev_balance;
+                trace!(
+                    "Propagated balance for account {} on {}: {}",
+                    account.id, date, entry
+                );
+            }
+        }
     }
-
-
 
     // Convert the HashMap to a DataFrame
     debug!("Converting unpaid recurring data to DataFrame");

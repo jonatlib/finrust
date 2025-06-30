@@ -357,13 +357,32 @@ mod tests {
     async fn test_scenario_merge_real_outside_range() {
         let scenario = ScenarioMergeReal::new();
 
-        // Create the first calculator
-        let first_calculator = balance::BalanceCalculator::new_with_today(
+        // Create the today date
+        let today = NaiveDate::from_ymd_opt(2026, 06, 22).unwrap();
+
+        // Create the balance calculator
+        let balance_calculator = balance::BalanceCalculator::new_with_today(
             MergeMethod::FirstWins,
-            NaiveDate::from_ymd_opt(2026, 06, 22).unwrap(),
+            today,
         );
 
-        run_and_assert_scenario(&scenario, &first_calculator, false)
+        // Create the unpaid recurring calculator
+        let unpaid_calculator = unpaid_recurring::UnpaidRecurringCalculator::new_with_sum_merge(
+            today,
+            chrono::Duration::days(7),
+        );
+
+        // Create a merge calculator that combines both calculators
+        // Use Sum merge method to sum the balances from both calculators
+        let merge_calculator = merge::MergeCalculator::new(
+            vec![
+                Box::new(balance_calculator),
+                Box::new(unpaid_calculator),
+            ],
+            MergeMethod::Sum,
+        );
+
+        run_and_assert_scenario(&scenario, &merge_calculator, true)
             .await
             .expect("Failed to run scenario");
     }
