@@ -4,6 +4,8 @@ use sea_orm::entity::prelude::*;
 
 use super::{account, tag};
 
+pub mod transaction;
+
 /// A single, non-repeating transaction.
 /// Corresponds to `ExtraTransactionModel`.
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]

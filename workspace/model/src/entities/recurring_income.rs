@@ -1,3 +1,5 @@
+pub mod transaction;
+
 use chrono::NaiveDate;
 use rust_decimal::Decimal;
 use sea_orm::entity::prelude::*;

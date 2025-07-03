@@ -18,6 +18,8 @@ pub mod recurring_transaction_tag;
 pub mod tag;
 pub mod user;
 
+// Implementation modules for the Transaction trait are part of their respective entity modules
+
 // Define join tables for many-to-many relationships.
 // SeaORM uses these to understand how to link entities.
 pub mod prelude {

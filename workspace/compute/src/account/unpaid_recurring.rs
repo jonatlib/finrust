@@ -2,8 +2,8 @@ use async_trait::async_trait;
 use chrono::{Duration, NaiveDate};
 use model::entities::account;
 use polars::prelude::*;
-use rust_decimal::Decimal;
 use rust_decimal::prelude::FromPrimitive;
+use rust_decimal::Decimal;
 use sea_orm::DatabaseConnection;
 use tracing::{debug, info, instrument};
 
@@ -115,35 +115,25 @@ async fn compute_unpaid_recurring(
         end_date
     );
 
-    let mut all_deltas = Vec::new();
+    let mut all_deltas: Vec<(i32, NaiveDate, Decimal)> = Vec::new();
 
-    // Process each account to find ONLY past-due unpaid items.
     for account in accounts {
         debug!("Processing account: id={}, name={}", account.id, account.name);
 
-        // --- FIX: Look ONLY for past-due items (from start_date up to today) ---
-        // The underlying function will find occurrences in this past range that
-        // don't have a paid instance and move their date to `today + future_offset`.
-        let recurring_transactions = get_recurring_transactions(
-            db,
-            account.id,
-            start_date, // Look from the beginning of time...
-            today,      // ...up to (but not including) today.
-            today,
-            future_offset,
-        ).await?;
-
-        let recurring_income = get_recurring_income(
-            db,
-            account.id,
-            start_date, // Look from the beginning of time...
-            today,      // ...up to (but not including) today.
-            today,
-            future_offset,
-        ).await?;
+        let recurring_transactions =
+            get_recurring_transactions(db, account.id, start_date, today, today, future_offset)
+                .await?;
+        let recurring_income =
+            get_recurring_income(db, account.id, start_date, today, today, future_offset).await?;
 
         for (date, tx) in recurring_transactions {
-            let amount = if tx.target_account_id == account.id { tx.amount } else if Some(account.id) == tx.source_account_id { -tx.amount } else { Decimal::ZERO };
+            let amount = if tx.target_account_id == account.id {
+                tx.amount
+            } else if Some(account.id) == tx.source_account_id {
+                -tx.amount
+            } else {
+                Decimal::ZERO
+            };
             if !amount.is_zero() {
                 all_deltas.push((account.id, date, amount));
             }
@@ -156,71 +146,79 @@ async fn compute_unpaid_recurring(
         }
     }
 
-    // If there are no past-due transactions, return a zero-filled DataFrame.
     if all_deltas.is_empty() {
         return create_zeroed_dataframe(accounts, start_date, end_date);
     }
 
-    // --- The rest of the logic correctly builds a cumulative balance from the found deltas ---
     let account_ids: Vec<i32> = all_deltas.iter().map(|(id, _, _)| *id).collect();
     let dates: Vec<NaiveDate> = all_deltas.iter().map(|(_, date, _)| *date).collect();
-    let deltas: Vec<Decimal> = all_deltas.iter().map(|(_, _, a)| *a).collect();
+    // Keep as Decimal for calculations, convert to string only at the very end.
+    let deltas: Vec<f64> = all_deltas
+        .iter()
+        .map(|(_, _, a)| a.to_string().parse::<f64>().unwrap_or(0.0))
+        .collect();
 
-    let mut deltas_df = DataFrame::new(vec![
-        Series::new("account_id".into(), account_ids).into(),
-        Series::new("date".into(), dates).into(),
-        Series::new("delta".into(), deltas.iter().map(|d| d.to_string()).collect::<Vec<String>>()).into(),
-    ])?
+    let deltas_df = DataFrame::new(vec![
+        Column::new("account_id".into(), account_ids),
+        Column::new("date".into(), dates),
+        Column::new("delta".into(), deltas),
+    ])?;
+
+    let scaffold_df = build_scaffold_df(accounts, start_date, end_date)?;
+
+    // --- FIX: Corrected Polars logic for safe joins and cumulative sum ---
+    let result_df = scaffold_df
         .lazy()
-        .with_column(col("delta").cast(DataType::Float64))
-        .group_by([col("account_id"), col("date")])
-        .agg([col("delta").sum()])
-        .sort(["account_id", "date"], Default::default())
-        .collect()?;
-
-    // We need to convert the decimal column to a string for the final DataFrame schema
-    let delta_values = deltas_df.column("delta")?
-        .f64()?
-        .into_iter()
-        .collect::<Vec<Option<f64>>>();
-
-    let balance_series = delta_values.iter()
-        .map(|opt_val| opt_val.map(|val| Decimal::from_f64(val).unwrap_or_default()).unwrap_or_default())
-        .collect::<Vec<Decimal>>();
-
-    let balances = Series::new("balance".into(), balance_series.iter().map(|d| d.to_string()).collect::<Vec<String>>());
-    deltas_df.with_column(balances)?;
-    deltas_df = deltas_df.drop("delta")?;
-
-    let all_dates_df = build_scaffold_df(accounts, start_date, end_date)?;
-
-    let result_df = all_dates_df
         .join(
-            &deltas_df,
-            ["account_id", "date"],
-            ["account_id", "date"],
-            JoinType::Left.into(),
-            None,
-        )?
-        .lazy()
-        .with_column(col("balance").fill_null(lit("0.00")))
-        .with_column(col("balance").cast(DataType::Float64))
+            deltas_df.lazy(),
+            [col("account_id"), col("date")],
+            [col("account_id"), col("date")],
+            JoinArgs::new(JoinType::Left),
+        )
+        .with_column(col("delta").fill_null(0.0f64))
+        .group_by_stable([col("account_id"), col("date")])
+        .agg([
+            // Aggregate all deltas for a given day
+            col("delta").sum().alias("daily_delta"),
+        ])
         .sort(["account_id", "date"], Default::default())
-        .with_column(col("balance").sum().over([col("account_id")]).alias("balance"))
-        .with_column(col("balance").cast(DataType::String))
+        .with_column(
+            // Correctly calculate the running total over each account's partition
+            col("daily_delta")
+                .cum_sum(false)
+                .over([col("account_id")])
+                .alias("balance"),
+        )
+        .select([
+            col("account_id"),
+            col("date"),
+            // Cast to string as the final step
+            col("balance").cast(DataType::String),
+        ])
         .collect()?;
 
-    info!("Unpaid recurring computation completed successfully with {} data points", result_df.height());
+    info!(
+        "Unpaid recurring computation completed successfully with {} data points",
+        result_df.height()
+    );
     Ok(result_df)
 }
 
 // Helper function to create a zero-filled DataFrame if no transactions are found
-fn create_zeroed_dataframe(accounts: &[account::Model], start_date: NaiveDate, end_date: NaiveDate) -> Result<DataFrame> {
+fn create_zeroed_dataframe(
+    accounts: &[account::Model],
+    start_date: NaiveDate,
+    end_date: NaiveDate,
+) -> Result<DataFrame> {
     build_scaffold_df(accounts, start_date, end_date)
 }
 
-// Helper function to build the full date range for all accounts
-fn build_scaffold_df(accounts: &[account::Model], start_date: NaiveDate, end_date: NaiveDate) -> Result<DataFrame> {
+// Helper function to build the full date range for all accounts, initialized to zero
+fn build_scaffold_df(
+    accounts: &[account::Model],
+    start_date: NaiveDate,
+    end_date: NaiveDate,
+) -> Result<DataFrame> {
     let mut account_ids = Vec::new();
     let mut dates = Vec::new();
 
@@ -229,17 +227,18 @@ fn build_scaffold_df(accounts: &[account::Model], start_date: NaiveDate, end_dat
         while current_date <= end_date {
             account_ids.push(account.id);
             dates.push(current_date);
-            if current_date == NaiveDate::MAX { break; }
+            if current_date == NaiveDate::MAX {
+                break;
+            }
             current_date = current_date.succ_opt().unwrap_or(current_date);
         }
     }
 
-    let dates_len = dates.len();
-
+    let zero_balances: Vec<String> = vec!["0.00".to_string(); dates.len()];
     DataFrame::new(vec![
-        Series::new("account_id".into(), account_ids).into(),
-        Series::new("date".into(), dates).into(),
-        Series::new("balance".into(), vec!["0"; dates_len]).into(),
+        Column::new("account_id".into(), account_ids),
+        Column::new("date".into(), dates),
+        Column::new("balance".into(), zero_balances),
     ])
         .map_err(Into::into)
 }
