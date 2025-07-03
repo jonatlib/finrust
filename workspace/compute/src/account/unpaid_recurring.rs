@@ -117,7 +117,7 @@ async fn compute_unpaid_recurring(
 
     let mut all_deltas: Vec<(i32, NaiveDate, Decimal)> = Vec::new();
 
-    // As per your logic, this calculator should ONLY find past-due, unpaid items.
+    // Find only past-due, unpaid items.
     for account in accounts {
         debug!("Processing account: id={}, name={}", account.id, account.name);
 
@@ -151,7 +151,6 @@ async fn compute_unpaid_recurring(
         return create_zeroed_dataframe(accounts, start_date, end_date);
     }
 
-    // Create a DataFrame of the daily deltas from the past-due items.
     let account_ids: Vec<i32> = all_deltas.iter().map(|(id, _, _)| *id).collect();
     let dates: Vec<NaiveDate> = all_deltas.iter().map(|(_, date, _)| *date).collect();
     let deltas: Vec<f64> = all_deltas
@@ -167,7 +166,6 @@ async fn compute_unpaid_recurring(
 
     let scaffold_df = build_scaffold_df(accounts, start_date, end_date)?;
 
-    // --- FINAL FIX: Corrected and simplified Polars logic ---
     let result_df = scaffold_df
         .lazy()
         .join(
@@ -176,15 +174,16 @@ async fn compute_unpaid_recurring(
             [col("account_id"), col("date")],
             JoinArgs::new(JoinType::Left),
         )
-        // The 'balance' column from the scaffold is all zeros, so we can just use the delta.
         .drop(["balance"])
         .with_column(col("delta").fill_null(0.0f64))
-        // The group_by is needed in case multiple unpaid items are moved to the same day.
         .group_by_stable([col("account_id"), col("date")])
-        .agg([col("delta").sum()])
+        .agg([
+            // --- FIX: Explicitly name the output of the sum aggregation ---
+            col("delta").sum().alias("delta_sum")
+        ])
         .sort(["account_id", "date"], Default::default())
         .with_column(
-            // Correctly calculate the running total over each account's partition.
+            // This now correctly finds the `delta_sum` column we just created.
             col("delta_sum")
                 .cum_sum(false)
                 .over([col("account_id")])
@@ -193,7 +192,6 @@ async fn compute_unpaid_recurring(
         .select([
             col("account_id"),
             col("date"),
-            // Casting to string should be the very last operation.
             col("balance").cast(DataType::String),
         ])
         .collect()?;
@@ -235,7 +233,6 @@ fn build_scaffold_df(
         }
     }
 
-    // The scaffold balance is just a placeholder, its type is not critical.
     let zero_balances = vec![0.0f64; dates.len()];
     DataFrame::new(vec![
         Column::new("account_id".into(), account_ids),
