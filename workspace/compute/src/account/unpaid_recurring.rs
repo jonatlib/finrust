@@ -10,7 +10,7 @@ use tracing::{debug, info, instrument};
 use super::{AccountStateCalculator, MergeMethod};
 use crate::error::Result;
 
-use super::forecast::recurring::{get_recurring_income, get_recurring_transactions};
+use super::forecast::recurring::{get_past_due_transactions, get_recurring_income};
 
 /// A calculator that computes future non-paid recurring transactions and income.
 ///
@@ -122,7 +122,7 @@ async fn compute_unpaid_recurring(
         debug!("Processing account: id={}, name={}", account.id, account.name);
 
         let recurring_transactions =
-            get_recurring_transactions(db, account.id, start_date, today, today, future_offset)
+            get_past_due_transactions(db, account.id, start_date, today, future_offset)
                 .await?;
         let recurring_income =
             get_recurring_income(db, account.id, start_date, today, today, future_offset).await?;

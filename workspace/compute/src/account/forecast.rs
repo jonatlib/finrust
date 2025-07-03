@@ -12,7 +12,7 @@ use tracing::{debug, info, instrument, trace};
 use super::{AccountStateCalculator, MergeMethod};
 use crate::error::Result;
 
-use self::recurring::{get_recurring_income, get_recurring_transactions};
+use self::recurring::{get_balance_sheet_transactions, get_recurring_income};
 
 /// A calculator that computes account forecasts based on recurring transactions and income.
 pub struct ForecastCalculator {
@@ -137,13 +137,12 @@ async fn compute_forecast(
         );
         // Use a dummy future_offset that won't be used since we're only interested in future transactions
         let dummy_future_offset = Duration::days(0);
-        let recurring_transactions = get_recurring_transactions(
+        let recurring_transactions = get_balance_sheet_transactions(
             db,
             account.id,
             current_date,
             end_date,
             today,
-            dummy_future_offset,
         )
             .await?;
         debug!(
