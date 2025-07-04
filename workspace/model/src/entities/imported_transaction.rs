@@ -1,3 +1,5 @@
+pub mod transaction;
+
 use chrono::NaiveDate;
 use rust_decimal::Decimal;
 use sea_orm::entity::prelude::*;
@@ -87,7 +89,8 @@ pub enum Relation {
 
 impl Model {
     /// Get the reconciled transaction type, if any.
-    #[instrument(skip(self), fields(id = self.id, reconciled_type = ?self.reconciled_transaction_type, reconciled_id = ?self.reconciled_transaction_id))]
+    #[instrument(skip(self), fields(id = self.id, reconciled_type = ?self.reconciled_transaction_type, reconciled_id = ?self.reconciled_transaction_id
+    ))]
     pub fn get_reconciled_transaction_type(&self) -> Option<ReconciledTransactionType> {
         trace!(
             "Getting reconciled transaction type for imported transaction {}",
