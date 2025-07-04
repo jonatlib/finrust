@@ -20,6 +20,8 @@ pub struct ForecastCalculator {
     merge_method: MergeMethod,
     /// The initial balance to use when computing forecasts.
     initial_balance: Decimal,
+    /// The date to use as "today" for determining which recurring transactions to include.
+    today: Option<NaiveDate>,
 }
 
 impl ForecastCalculator {
@@ -28,6 +30,7 @@ impl ForecastCalculator {
         Self {
             merge_method,
             initial_balance: Decimal::ZERO,
+            today: None,
         }
     }
 
@@ -36,6 +39,25 @@ impl ForecastCalculator {
         Self {
             merge_method,
             initial_balance,
+            today: None,
+        }
+    }
+
+    /// Creates a new forecast calculator with the specified merge method and today date.
+    pub fn new_with_today(merge_method: MergeMethod, today: NaiveDate) -> Self {
+        Self {
+            merge_method,
+            initial_balance: Decimal::ZERO,
+            today: Some(today),
+        }
+    }
+
+    /// Creates a new forecast calculator with the specified merge method, initial balance, and today date.
+    pub fn new_with_initial_balance_and_today(merge_method: MergeMethod, initial_balance: Decimal, today: NaiveDate) -> Self {
+        Self {
+            merge_method,
+            initial_balance,
+            today: Some(today),
         }
     }
 
@@ -44,6 +66,7 @@ impl ForecastCalculator {
         Self {
             merge_method: MergeMethod::FirstWins,
             initial_balance: Decimal::ZERO,
+            today: None,
         }
     }
 }
@@ -57,8 +80,10 @@ impl AccountStateCalculator for ForecastCalculator {
         start_date: NaiveDate,
         end_date: NaiveDate,
     ) -> Result<DataFrame> {
-        // Use the current date as "today"
-        let today = chrono::Local::now().date_naive();
+        // Use the provided today date or default to the current date
+        let today = self
+            .today
+            .unwrap_or_else(|| chrono::Local::now().date_naive());
 
         compute_forecast(
             db,

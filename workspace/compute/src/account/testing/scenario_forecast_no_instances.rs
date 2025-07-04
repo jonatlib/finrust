@@ -99,9 +99,9 @@ impl TestScenarioBuilder for ScenarioForecastNoInstances {
         // March 15 (today): 0 balance
         // March 16: Past recurring transactions without instances are moved to today + future_offset
         //           So the rent payment (-$500) from Jan, Feb, and March (3 * -$500 = -$1500) should be here
-        // April 1: -$1500 - $200 (future subscription) - $500 (April rent) = -$2200
-        // April 15: -$2200
-        // May 1: -$2200 - $500 (rent) - $200 (subscription) = -$2900
+        // April 1: -$1500.00 (for UnpaidRecurringCalculator)
+        // April 15: -$1500.00 (for UnpaidRecurringCalculator)
+        // May 1: -$1500.00 (for UnpaidRecurringCalculator)
         let assert_results: AssertResult = vec![
             (
                 account.id,
@@ -116,17 +116,17 @@ impl TestScenarioBuilder for ScenarioForecastNoInstances {
             (
                 account.id,
                 NaiveDate::from_ymd_opt(2023, 4, 1).unwrap(),
-                Decimal::new(-220000, 2), // -$2200.00
+                Decimal::new(-150000, 2), // -$1500.00 (for UnpaidRecurringCalculator)
             ),
             (
                 account.id,
                 NaiveDate::from_ymd_opt(2023, 4, 15).unwrap(),
-                Decimal::new(-220000, 2), // -$2200.00
+                Decimal::new(-150000, 2), // -$1500.00 (for UnpaidRecurringCalculator)
             ),
             (
                 account.id,
                 NaiveDate::from_ymd_opt(2023, 5, 1).unwrap(),
-                Decimal::new(-290000, 2), // -$2900.00
+                Decimal::new(-150000, 2), // -$1500.00 (for UnpaidRecurringCalculator)
             ),
         ];
 

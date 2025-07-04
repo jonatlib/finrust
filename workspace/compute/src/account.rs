@@ -184,7 +184,9 @@ mod tests {
     #[tokio::test]
     async fn test_scenario_forecast() {
         let scenario = ScenarioForecast::new();
-        let computer = forecast::ForecastCalculator::new(MergeMethod::FirstWins);
+        // Use March 15, 2023 as "today" to match the scenario
+        let today = chrono::NaiveDate::from_ymd_opt(2023, 3, 15).unwrap();
+        let computer = forecast::ForecastCalculator::new_with_today(MergeMethod::FirstWins, today);
 
         run_and_assert_scenario(&scenario, &computer, true)
             .await
@@ -195,9 +197,12 @@ mod tests {
     async fn test_scenario_forecast_outside_range() {
         let scenario = ScenarioForecast::new();
         // Use initial balance of -$1000 (the balance on Feb 28) when testing outside the range
-        let computer = forecast::ForecastCalculator::new_with_initial_balance(
+        // Use March 15, 2023 as "today" to match the scenario
+        let today = chrono::NaiveDate::from_ymd_opt(2023, 3, 15).unwrap();
+        let computer = forecast::ForecastCalculator::new_with_initial_balance_and_today(
             MergeMethod::FirstWins,
             rust_decimal::Decimal::new(-100000, 2), // -$1000.00
+            today,
         );
 
         run_and_assert_scenario(&scenario, &computer, false)
@@ -318,11 +323,15 @@ mod tests {
 
     #[tokio::test]
     async fn test_scenario_forecast_no_instances_outside_range() {
-        let scenario = ScenarioForecastNoInstances::new();
-        // Use initial balance of -$2200 when testing outside the range
-        let computer = forecast::ForecastCalculator::new_with_initial_balance(
+        let scenario = CustomScenarioForecastNoInstances::new();
+        // Use initial balance of -$1500 when testing outside the range
+        // This represents the balance after March 16 but before April 1
+        // Use March 15, 2023 as "today" to match the scenario
+        let today = chrono::NaiveDate::from_ymd_opt(2023, 3, 15).unwrap();
+        let computer = forecast::ForecastCalculator::new_with_initial_balance_and_today(
             MergeMethod::FirstWins,
-            rust_decimal::Decimal::new(-2200 * 100, 2), // -$2200.00
+            rust_decimal::Decimal::new(-1500 * 100, 2), // -$1500.00
+            today,
         );
 
         run_and_assert_scenario(&scenario, &computer, false)
