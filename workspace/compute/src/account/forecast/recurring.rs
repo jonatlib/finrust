@@ -92,12 +92,6 @@ pub async fn get_past_due_transactions(
         .all(db)
         .await?;
 
-    debug!(
-        "Found {} potentially past-due recurring transaction definitions for account_id={}",
-        transactions.len(),
-        account_id
-    );
-
     let mut result = Vec::new();
     let instance_map: HashSet<(i32, NaiveDate)> =
         recurring_transaction_instance::Entity::find()
@@ -108,7 +102,7 @@ pub async fn get_past_due_transactions(
             .collect();
 
     for tx in &transactions {
-        // *** BUG FIX: Generate occurrences from the transaction's true start date ***
+        // Generate occurrences only in the past, from the transaction's own start date.
         let occurrences =
             generate_occurrences(tx.start_date, tx.end_date, &tx.period, tx.start_date, today);
 
@@ -127,16 +121,16 @@ pub async fn get_past_due_transactions(
     Ok(result)
 }
 
-// NOTE: This function should also be split into two versions.
 #[instrument(skip(db), fields(account_id, start_date, end_date, today, future_offset = %_future_offset.num_days()
 ))]
 pub async fn get_recurring_income(
     db: &DatabaseConnection,
-    account_id: i32,
+    _account_id: i32,
     _start_date: NaiveDate,
     _end_date: NaiveDate,
     _today: NaiveDate,
     _future_offset: Duration,
-) -> Result<Vec<(recurring_income::Model, NaiveDate)>> {
+) -> Result<Vec<(NaiveDate, recurring_income::Model)>> {
+    // This function should be refactored similar to the transaction functions.
     Ok(Vec::new())
 }

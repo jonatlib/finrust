@@ -113,7 +113,7 @@ async fn compute_unpaid_recurring(
     for account in accounts {
         debug!("Processing account: id={}, name={}", account.id, account.name);
 
-        // This calculator should only be finding past-due unpaid items.
+        // FIX 2: Call the correct, specialized function
         let recurring_transactions =
             get_past_due_transactions(db, account.id, start_date, today, future_offset)
                 .await?;
@@ -134,8 +134,9 @@ async fn compute_unpaid_recurring(
             }
         }
 
-        // --- FIX: Swapped `date` and `income` to match the function signature ---
-        for (income, date) in recurring_income {
+        // The tuple for income needs to be destructured correctly if its signature is also changed.
+        // Assuming (NaiveDate, Model) for now.
+        for (date, income) in recurring_income {
             if income.target_account_id == account.id && !income.amount.is_zero() {
                 all_deltas.push((account.id, date, income.amount));
             }
@@ -172,7 +173,9 @@ async fn compute_unpaid_recurring(
         .drop(["balance"])
         .with_column(col("delta").fill_null(0.0f64))
         .group_by_stable([col("account_id"), col("date")])
-        .agg([col("delta").sum()])
+        .agg([
+            col("delta").sum().alias("delta_sum"),
+        ])
         .sort(["account_id", "date"], Default::default())
         .with_column(
             col("delta_sum")

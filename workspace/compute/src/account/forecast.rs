@@ -195,7 +195,7 @@ async fn compute_forecast(
 
         // Add recurring income
         trace!("Processing recurring income for account {}", account.id);
-        for (income, date) in recurring_income {
+        for (date, income) in recurring_income {
             if income.target_account_id == account.id {
                 trace!(
                     "Adding recurring income: date={}, amount={}",
