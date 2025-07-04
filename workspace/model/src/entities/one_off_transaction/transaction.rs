@@ -1,5 +1,4 @@
 use chrono::NaiveDate;
-use std::vec::IntoIter;
 
 use crate::transaction::{Transaction, TransactionGenerator};
 use super::Model as OneOffTransaction;

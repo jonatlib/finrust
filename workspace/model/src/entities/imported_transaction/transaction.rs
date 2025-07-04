@@ -1,5 +1,4 @@
 use chrono::NaiveDate;
-use std::vec::IntoIter;
 
 use crate::transaction::{Transaction, TransactionGenerator};
 use super::Model as ImportedTransaction;
@@ -10,7 +9,7 @@ impl TransactionGenerator for ImportedTransaction {
         self.date >= start && self.date <= end
     }
 
-    fn generate_transactions(&self, start: NaiveDate, end: NaiveDate) -> Box<dyn Iterator<Item = Transaction>> {
+    fn generate_transactions(&self, start: NaiveDate, end: NaiveDate) -> impl Iterator<Item = Transaction> {
         let mut transactions = Vec::new();
 
         // Only generate a transaction if the date is within the range
@@ -23,8 +22,8 @@ impl TransactionGenerator for ImportedTransaction {
             ));
         }
 
-        // Convert the Vec to a boxed Iterator
-        Box::new(transactions.into_iter())
+        // Convert the Vec to an Iterator
+        transactions.into_iter()
     }
 }
 

@@ -1,5 +1,4 @@
 use chrono::NaiveDate;
-use std::vec::IntoIter;
 
 use crate::transaction::{Transaction, TransactionGenerator};
 use crate::entities::recurring_transaction_instance::{Model as RecurringTransactionInstance, InstanceStatus};

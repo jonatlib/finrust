@@ -1,5 +1,4 @@
 use chrono::{Datelike, NaiveDate, Weekday};
-use std::vec::IntoIter;
 
 use crate::transaction::{Transaction, TransactionGenerator};
 use crate::entities::recurring_income::Model as RecurringIncome;
