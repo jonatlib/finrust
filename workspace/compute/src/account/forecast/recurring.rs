@@ -121,16 +121,70 @@ pub async fn get_past_due_transactions(
     Ok(result)
 }
 
-#[instrument(skip(db), fields(account_id, start_date, end_date, today, future_offset = %_future_offset.num_days()
-))]
+/// Gets all future recurring income for the account within the given date range.
+/// As per your requirement, income cannot be past-due, so this function only
+/// finds occurrences on or after `today`.
+#[instrument(skip(db), fields(account_id, start_date, end_date, today))]
 pub async fn get_recurring_income(
     db: &DatabaseConnection,
-    _account_id: i32,
-    _start_date: NaiveDate,
-    _end_date: NaiveDate,
-    _today: NaiveDate,
-    _future_offset: Duration,
+    account_id: i32,
+    start_date: NaiveDate,
+    end_date: NaiveDate,
+    today: NaiveDate,
+    _future_offset: Duration, // Not used for income
 ) -> Result<Vec<(NaiveDate, recurring_income::Model)>> {
-    // This function should be refactored similar to the transaction functions.
-    Ok(Vec::new())
+    trace!(
+        "Getting future recurring income for account_id={} from {} to {}",
+        account_id,
+        start_date,
+        end_date,
+    );
+
+    let incomes = recurring_income::Entity::find()
+        .filter(recurring_income::Column::TargetAccountId.eq(account_id))
+        .filter(
+            Condition::any()
+                .add(recurring_income::Column::EndDate.is_null())
+                .add(recurring_income::Column::EndDate.gte(start_date)),
+        )
+        .filter(recurring_income::Column::StartDate.lte(end_date))
+        .all(db)
+        .await?;
+
+    debug!(
+        "Found {} recurring income definitions for account_id={}",
+        incomes.len(),
+        account_id
+    );
+
+    let mut result = Vec::new();
+
+    for income in &incomes {
+        let occurrences = generate_occurrences(
+            income.start_date,
+            income.end_date,
+            &income.period,
+            start_date,
+            end_date,
+        );
+
+        for date in occurrences {
+            if date >= today {
+                // Future recurring income is treated as if it were accounted on its date
+                trace!(
+                    "Adding future occurrence on {} for recurring income id={}",
+                    date, income.id
+                );
+                result.push((date, income.clone()));
+            }
+        }
+    }
+
+    debug!(
+        "Returning {} total recurring income occurrences for account_id={}",
+        result.len(),
+        account_id
+    );
+    Ok(result)
 }
+
