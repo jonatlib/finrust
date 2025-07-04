@@ -2,7 +2,6 @@ use async_trait::async_trait;
 use chrono::{Duration, NaiveDate};
 use model::entities::account;
 use polars::prelude::*;
-use rust_decimal::prelude::FromPrimitive;
 use rust_decimal::Decimal;
 use sea_orm::DatabaseConnection;
 use tracing::{debug, info, instrument};
@@ -10,6 +9,7 @@ use tracing::{debug, info, instrument};
 use super::{AccountStateCalculator, MergeMethod};
 use crate::error::Result;
 
+// Correctly import the renamed functions
 use super::forecast::recurring::{get_past_due_transactions, get_recurring_income};
 
 /// A calculator that computes future non-paid recurring transactions and income.
@@ -91,13 +91,6 @@ impl AccountStateCalculator for UnpaidRecurringCalculator {
     }
 }
 
-/// Computes the unpaid recurring transactions and income for accounts within a specified date range.
-///
-/// This function takes into account:
-/// - Past recurring transactions without instances, moving them to today + future_offset
-/// - Future recurring transactions without instances, including them on their original dates
-/// - Past recurring income, moving it to today + future_offset
-/// - Future recurring income, including it on its original date
 #[instrument(skip(db, accounts), fields(num_accounts = accounts.len(), start_date = %start_date, end_date = %end_date, today = %today, future_offset = %future_offset.num_days()
 ))]
 async fn compute_unpaid_recurring(
@@ -117,13 +110,14 @@ async fn compute_unpaid_recurring(
 
     let mut all_deltas: Vec<(i32, NaiveDate, Decimal)> = Vec::new();
 
-    // Find only past-due, unpaid items.
     for account in accounts {
         debug!("Processing account: id={}, name={}", account.id, account.name);
 
+        // This calculator should only be finding past-due unpaid items.
         let recurring_transactions =
             get_past_due_transactions(db, account.id, start_date, today, future_offset)
                 .await?;
+
         let recurring_income =
             get_recurring_income(db, account.id, start_date, today, today, future_offset).await?;
 
@@ -140,7 +134,8 @@ async fn compute_unpaid_recurring(
             }
         }
 
-        for (date, income) in recurring_income {
+        // --- FIX: Swapped `date` and `income` to match the function signature ---
+        for (income, date) in recurring_income {
             if income.target_account_id == account.id && !income.amount.is_zero() {
                 all_deltas.push((account.id, date, income.amount));
             }
@@ -177,13 +172,9 @@ async fn compute_unpaid_recurring(
         .drop(["balance"])
         .with_column(col("delta").fill_null(0.0f64))
         .group_by_stable([col("account_id"), col("date")])
-        .agg([
-            // --- FIX: Explicitly name the output of the sum aggregation ---
-            col("delta").sum().alias("delta_sum")
-        ])
+        .agg([col("delta").sum()])
         .sort(["account_id", "date"], Default::default())
         .with_column(
-            // This now correctly finds the `delta_sum` column we just created.
             col("delta_sum")
                 .cum_sum(false)
                 .over([col("account_id")])
