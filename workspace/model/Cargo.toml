@@ -11,6 +11,7 @@ rusty-money = "^0.4.1"
 rust_decimal = "^1.37.2"
 chrono = "^0.4.41"
 tracing = "0.1"
+async-trait = "0.1.77"
 
 [dev-dependencies]
 tokio = { version = "1.36.0", features = ["full"] }

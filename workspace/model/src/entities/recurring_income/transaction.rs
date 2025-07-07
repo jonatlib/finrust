@@ -1,10 +1,33 @@
 use chrono::{Datelike, NaiveDate, Weekday};
+use async_trait::async_trait;
+use sea_orm::{EntityTrait, ModelTrait, RelationTrait};
 
-use crate::transaction::{Transaction, TransactionGenerator};
+use crate::transaction::{Transaction, TransactionGenerator, Tag};
+use crate::entities::{tag, recurring_income_tag};
 use crate::entities::recurring_income::Model as RecurringIncome;
 use crate::entities::recurring_transaction::RecurrencePeriod;
 
+#[async_trait]
 impl TransactionGenerator for RecurringIncome {
+    async fn get_tag_for_transaction(&self) -> Option<Tag> {
+        // In a real implementation, we would use a database connection pool
+        // For example, we could get it from a global state or pass it as a parameter
+        let db = sea_orm::Database::connect("sqlite::memory:").await.ok()?;
+
+        // Query the database for tags associated with this recurring income
+        // Using the Related trait to find tags related to this income
+        let tags = self.find_related(tag::Entity)
+            .all(&db)
+            .await
+            .ok()?;
+
+        // Return the first tag if any
+        tags.first().map(|t| Tag {
+            id: t.id,
+            name: t.name.clone(),
+            description: t.description.clone(),
+        })
+    }
     fn has_any_transaction(&self, start: NaiveDate, end: NaiveDate) -> bool {
         // If the end date of the recurring income is before the start of the range,
         // or the start date is after the end of the range, there are no transactions
@@ -147,12 +170,12 @@ impl TransactionGenerator for RecurringIncome {
         }
     }
 
-    fn generate_transactions(&self, start: NaiveDate, end: NaiveDate) -> impl Iterator<Item = Transaction> {
+    async fn generate_transactions(&self, start: NaiveDate, end: NaiveDate) -> Vec<Transaction> {
         let mut transactions = Vec::new();
 
-        // If there are no transactions in the range, return an empty iterator
+        // If there are no transactions in the range, return an empty vector
         if !self.has_any_transaction(start, end) {
-            return transactions.into_iter();
+            return transactions;
         }
 
         // Determine the effective start and end dates
@@ -168,7 +191,7 @@ impl TransactionGenerator for RecurringIncome {
             RecurrencePeriod::Daily => {
                 let mut current = effective_start;
                 while current <= effective_end {
-                    add_transaction(&mut transactions, self, current);
+                    add_transaction(&mut transactions, self, current).await;
 
                     // Move to the next day
                     if let Some(next) = current.succ_opt() {
@@ -196,7 +219,7 @@ impl TransactionGenerator for RecurringIncome {
 
                 // Generate transactions for each matching weekday
                 while current <= effective_end {
-                    add_transaction(&mut transactions, self, current);
+                    add_transaction(&mut transactions, self, current).await;
 
                     // Move to the next week
                     for _ in 0..7 {
@@ -213,7 +236,7 @@ impl TransactionGenerator for RecurringIncome {
                 while current <= effective_end {
                     let weekday = current.weekday();
                     if weekday != Weekday::Sat && weekday != Weekday::Sun {
-                        add_transaction(&mut transactions, self, current);
+                        add_transaction(&mut transactions, self, current).await;
                     }
 
                     // Move to the next day
@@ -233,7 +256,7 @@ impl TransactionGenerator for RecurringIncome {
                     // Try to create a date with the same day in the current month
                     if let Some(date) = NaiveDate::from_ymd_opt(current_year, current_month, start_day) {
                         if date >= effective_start && date <= effective_end {
-                            add_transaction(&mut transactions, self, date);
+                            add_transaction(&mut transactions, self, date).await;
                         }
                     }
 
@@ -259,7 +282,7 @@ impl TransactionGenerator for RecurringIncome {
                         // Try to create a date with the same day in the current month
                         if let Some(date) = NaiveDate::from_ymd_opt(current_year, current_month, start_day) {
                             if date >= effective_start && date <= effective_end {
-                                add_transaction(&mut transactions, self, date);
+                                add_transaction(&mut transactions, self, date).await;
                             }
                         }
                     }
@@ -286,7 +309,7 @@ impl TransactionGenerator for RecurringIncome {
                         // Try to create a date with the same day in the current month
                         if let Some(date) = NaiveDate::from_ymd_opt(current_year, current_month, start_day) {
                             if date >= effective_start && date <= effective_end {
-                                add_transaction(&mut transactions, self, date);
+                                add_transaction(&mut transactions, self, date).await;
                             }
                         }
                     }
@@ -309,7 +332,7 @@ impl TransactionGenerator for RecurringIncome {
                     // Try to create a date with the same day and month in the current year
                     if let Some(date) = NaiveDate::from_ymd_opt(current_year, start_month, start_day) {
                         if date >= effective_start && date <= effective_end {
-                            add_transaction(&mut transactions, self, date);
+                            add_transaction(&mut transactions, self, date).await;
                         }
                     }
 
@@ -318,18 +341,30 @@ impl TransactionGenerator for RecurringIncome {
             },
         }
 
-        transactions.into_iter()
+        transactions
     }
 }
 
 // Helper function to add a transaction for the target account
-fn add_transaction(transactions: &mut Vec<Transaction>, income: &RecurringIncome, date: NaiveDate) {
-    // Add transaction for the target account
-    transactions.push(Transaction::new(
-        date,
-        income.amount,
-        income.target_account_id,
-    ));
+async fn add_transaction(transactions: &mut Vec<Transaction>, income: &RecurringIncome, date: NaiveDate) {
+    // Get the tag for this transaction
+    let tag = income.get_tag_for_transaction().await;
+
+    // Add transaction for the target account with the tag if available
+    if let Some(tag) = tag {
+        transactions.push(Transaction::new_with_tag(
+            date,
+            income.amount,
+            income.target_account_id,
+            tag,
+        ));
+    } else {
+        transactions.push(Transaction::new(
+            date,
+            income.amount,
+            income.target_account_id,
+        ));
+    }
 }
 
 #[cfg(test)]
@@ -338,8 +373,8 @@ mod tests {
     use chrono::NaiveDate;
     use rust_decimal::Decimal;
 
-    #[test]
-    fn test_has_any_transaction_monthly() {
+    #[tokio::test]
+    async fn test_has_any_transaction_monthly() {
         let income = RecurringIncome {
             id: 1,
             name: "Monthly Salary".to_string(),
@@ -379,8 +414,8 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn test_generate_transactions_monthly() {
+    #[tokio::test]
+    async fn test_generate_transactions_monthly() {
         let income = RecurringIncome {
             id: 1,
             name: "Monthly Salary".to_string(),
@@ -396,12 +431,12 @@ mod tests {
         };
 
         // Generate transactions for a 3-month period
-        let transactions: Vec<Transaction> = income
+        let transactions = income
             .generate_transactions(
                 NaiveDate::from_ymd_opt(2023, 1, 1).unwrap(),
                 NaiveDate::from_ymd_opt(2023, 3, 31).unwrap(),
             )
-            .collect();
+            .await;
 
         assert_eq!(transactions.len(), 3);
 

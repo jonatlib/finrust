@@ -6,7 +6,7 @@ use sea_orm::entity::prelude::*;
 use std::fmt;
 use tracing::{debug, instrument, trace};
 
-use super::account;
+use super::{account, tag};
 
 /// Enum representing the type of transaction that an imported transaction is reconciled with.
 /// This enum includes the ID of the reconciled transaction directly in its variants.
@@ -204,6 +204,19 @@ impl Model {
                 self.id
             );
         }
+    }
+}
+
+impl Related<tag::Entity> for Entity {
+    fn to() -> RelationDef {
+        super::imported_transaction_tag::Relation::Tag.def()
+    }
+    fn via() -> Option<RelationDef> {
+        Some(
+            super::imported_transaction_tag::Relation::Transaction
+                .def()
+                .rev(),
+        )
     }
 }
 
