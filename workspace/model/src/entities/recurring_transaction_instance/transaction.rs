@@ -80,7 +80,7 @@ impl TransactionGenerator for RecurringTransactionInstance {
         }
     }
 
-    async fn generate_transactions(&self, start: NaiveDate, end: NaiveDate, db: &DatabaseConnection) -> Vec<Transaction> {
+    async fn generate_transactions(&self, start: NaiveDate, end: NaiveDate, today: NaiveDate, db: &DatabaseConnection) -> Vec<Transaction> {
         let mut transactions = Vec::new();
 
         // Only generate transactions if the instance has a transaction within the date range
@@ -99,21 +99,32 @@ impl TransactionGenerator for RecurringTransactionInstance {
                     // to get the target_account_id and source_account_id.
                     let account_id = self.recurring_transaction_id; // This is a placeholder
 
-                    if tags.is_empty() {
-                        transactions.push(Transaction::new(date, amount, account_id));
+                    let mut transaction = if tags.is_empty() {
+                        Transaction::new(date, amount, account_id)
                     } else {
-                        transactions.push(Transaction::new_with_tags(date, amount, account_id, tags));
-                    }
+                        Transaction::new_with_tags(date, amount, account_id, tags)
+                    };
+
+                    // For paid instances, always mark as paid using the paid date or due date
+                    transaction.set_paid_on(Some(date.and_hms_opt(0, 0, 0).unwrap()));
+                    transactions.push(transaction);
                 },
                 InstanceStatus::Pending => {
                     // For pending instances, use the due date and expected amount
                     let account_id = self.recurring_transaction_id; // This is a placeholder
 
-                    if tags.is_empty() {
-                        transactions.push(Transaction::new(self.due_date, self.expected_amount, account_id));
+                    let mut transaction = if tags.is_empty() {
+                        Transaction::new(self.due_date, self.expected_amount, account_id)
                     } else {
-                        transactions.push(Transaction::new_with_tags(self.due_date, self.expected_amount, account_id, tags));
+                        Transaction::new_with_tags(self.due_date, self.expected_amount, account_id, tags)
+                    };
+
+                    // For pending instances: only mark as paid if the due date is today or in the past
+                    if self.due_date <= today {
+                        transaction.set_paid_on(Some(self.due_date.and_hms_opt(0, 0, 0).unwrap()));
                     }
+
+                    transactions.push(transaction);
                 },
                 InstanceStatus::Skipped => {
                     // Skipped instances don't generate transactions
@@ -214,10 +225,12 @@ mod tests {
         };
 
         // Generate transactions for the paid instance
+        let today = NaiveDate::from_ymd_opt(2023, 1, 20).unwrap(); // Set today to Jan 20, 2023
         let transactions = paid_instance
             .generate_transactions(
                 NaiveDate::from_ymd_opt(2023, 1, 1).unwrap(),
                 NaiveDate::from_ymd_opt(2023, 1, 31).unwrap(),
+                today,
                 &db,
             )
             .await;
@@ -226,6 +239,7 @@ mod tests {
         assert_eq!(transactions[0].date(), NaiveDate::from_ymd_opt(2023, 1, 14).unwrap());
         assert_eq!(transactions[0].amount(), Decimal::new(-950, 0));
         assert_eq!(transactions[0].account(), 101); // This is a placeholder in our implementation
+        assert!(transactions[0].is_paid()); // Should be paid since it's a paid instance
 
         // Pending instance
         let pending_instance = RecurringTransactionInstance {
@@ -240,10 +254,12 @@ mod tests {
         };
 
         // Generate transactions for the pending instance
+        let today = NaiveDate::from_ymd_opt(2023, 2, 10).unwrap(); // Set today to Feb 10, 2023 (before due date)
         let transactions = pending_instance
             .generate_transactions(
                 NaiveDate::from_ymd_opt(2023, 2, 1).unwrap(),
                 NaiveDate::from_ymd_opt(2023, 2, 28).unwrap(),
+                today,
                 &db,
             )
             .await;
@@ -252,6 +268,7 @@ mod tests {
         assert_eq!(transactions[0].date(), NaiveDate::from_ymd_opt(2023, 2, 15).unwrap());
         assert_eq!(transactions[0].amount(), Decimal::new(-1000, 0));
         assert_eq!(transactions[0].account(), 102); // This is a placeholder in our implementation
+        assert!(!transactions[0].is_paid()); // Should not be paid since due date (Feb 15) > today (Feb 10)
 
         // Skipped instance
         let skipped_instance = RecurringTransactionInstance {
@@ -266,10 +283,12 @@ mod tests {
         };
 
         // Generate transactions for the skipped instance
+        let today = NaiveDate::from_ymd_opt(2023, 3, 20).unwrap(); // Set today to Mar 20, 2023
         let transactions = skipped_instance
             .generate_transactions(
                 NaiveDate::from_ymd_opt(2023, 3, 1).unwrap(),
                 NaiveDate::from_ymd_opt(2023, 3, 31).unwrap(),
+                today,
                 &db,
             )
             .await;

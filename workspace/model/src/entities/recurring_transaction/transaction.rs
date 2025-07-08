@@ -1,9 +1,9 @@
 use chrono::{Datelike, NaiveDate, Weekday};
 use async_trait::async_trait;
-use sea_orm::{EntityTrait, ModelTrait, RelationTrait, DatabaseConnection};
+use sea_orm::{EntityTrait, ModelTrait, RelationTrait, DatabaseConnection, ColumnTrait, QueryFilter, ActiveModelTrait};
 
 use crate::transaction::{Transaction, TransactionGenerator, Tag};
-use crate::entities::{tag, recurring_transaction_tag};
+use crate::entities::{tag, recurring_transaction_tag, recurring_transaction_instance};
 use crate::entities::recurring_transaction::{Model as RecurringTransaction, RecurrencePeriod};
 
 #[async_trait]
@@ -197,7 +197,7 @@ impl TransactionGenerator for RecurringTransaction {
         }
     }
 
-    async fn generate_transactions(&self, start: NaiveDate, end: NaiveDate, db: &DatabaseConnection) -> Vec<Transaction> {
+    async fn generate_transactions(&self, start: NaiveDate, end: NaiveDate, today: NaiveDate, db: &DatabaseConnection) -> Vec<Transaction> {
         let mut transactions = Vec::new();
 
         // If there are no transactions in the range, return an empty vector
@@ -218,7 +218,7 @@ impl TransactionGenerator for RecurringTransaction {
             RecurrencePeriod::Daily => {
                 let mut current = effective_start;
                 while current <= effective_end {
-                    add_transaction(&mut transactions, self, current, db).await;
+                    add_transaction(&mut transactions, self, current, today, db).await;
 
                     // Move to the next day
                     if let Some(next) = current.succ_opt() {
@@ -246,7 +246,7 @@ impl TransactionGenerator for RecurringTransaction {
 
                 // Generate transactions for each matching weekday
                 while current <= effective_end {
-                    add_transaction(&mut transactions, self, current, db).await;
+                    add_transaction(&mut transactions, self, current, today, db).await;
 
                     // Move to the next week
                     for _ in 0..7 {
@@ -263,7 +263,7 @@ impl TransactionGenerator for RecurringTransaction {
                 while current <= effective_end {
                     let weekday = current.weekday();
                     if weekday != Weekday::Sat && weekday != Weekday::Sun {
-                        add_transaction(&mut transactions, self, current, db).await;
+                        add_transaction(&mut transactions, self, current, today, db).await;
                     }
 
                     // Move to the next day
@@ -283,7 +283,7 @@ impl TransactionGenerator for RecurringTransaction {
                     // Try to create a date with the same day in the current month
                     if let Some(date) = NaiveDate::from_ymd_opt(current_year, current_month, start_day) {
                         if date >= effective_start && date <= effective_end {
-                            add_transaction(&mut transactions, self, date, db).await;
+                            add_transaction(&mut transactions, self, date, today, db).await;
                         }
                     }
 
@@ -309,7 +309,7 @@ impl TransactionGenerator for RecurringTransaction {
                         // Try to create a date with the same day in the current month
                         if let Some(date) = NaiveDate::from_ymd_opt(current_year, current_month, start_day) {
                             if date >= effective_start && date <= effective_end {
-                                add_transaction(&mut transactions, self, date, db).await;
+                                add_transaction(&mut transactions, self, date, today, db).await;
                             }
                         }
                     }
@@ -336,7 +336,7 @@ impl TransactionGenerator for RecurringTransaction {
                         // Try to create a date with the same day in the current month
                         if let Some(date) = NaiveDate::from_ymd_opt(current_year, current_month, start_day) {
                             if date >= effective_start && date <= effective_end {
-                                add_transaction(&mut transactions, self, date, db).await;
+                                add_transaction(&mut transactions, self, date, today, db).await;
                             }
                         }
                     }
@@ -359,7 +359,7 @@ impl TransactionGenerator for RecurringTransaction {
                     // Try to create a date with the same day and month in the current year
                     if let Some(date) = NaiveDate::from_ymd_opt(current_year, start_month, start_day) {
                         if date >= effective_start && date <= effective_end {
-                            add_transaction(&mut transactions, self, date, db).await;
+                            add_transaction(&mut transactions, self, date, today, db).await;
                         }
                     }
 
@@ -373,42 +373,168 @@ impl TransactionGenerator for RecurringTransaction {
 }
 
 // Helper function to add transactions for both target and source accounts
-async fn add_transaction(transactions: &mut Vec<Transaction>, transaction: &RecurringTransaction, date: NaiveDate, db: &DatabaseConnection) {
+async fn add_transaction(transactions: &mut Vec<Transaction>, transaction: &RecurringTransaction, date: NaiveDate, today: NaiveDate, db: &DatabaseConnection) {
     // Load tags for this transaction
     let tags = transaction.get_tag_for_transaction(db, false).await;
 
-    if tags.is_empty() {
-        transactions.push(Transaction::new(
+    let mut target_transaction = if tags.is_empty() {
+        Transaction::new(
             date,
             transaction.amount,
             transaction.target_account_id,
-        ));
+        )
     } else {
-        transactions.push(Transaction::new_with_tags(
+        Transaction::new_with_tags(
             date,
             transaction.amount,
             transaction.target_account_id,
             tags.clone(),
-        ));
+        )
+    };
+
+    // For recurring transactions: check for linked existing recurring instances
+    // If they exist, take paid details from the instance. If not, set to not paid.
+    if let Ok(Some(instance)) = recurring_transaction_instance::Entity::find()
+        .filter(recurring_transaction_instance::Column::RecurringTransactionId.eq(transaction.id))
+        .filter(recurring_transaction_instance::Column::DueDate.eq(date))
+        .one(db)
+        .await
+    {
+        // Instance exists - check if it's paid and if the date is not in the future
+        match instance.status {
+            recurring_transaction_instance::InstanceStatus::Paid => {
+                // Use the paid date if available, otherwise use due date
+                let paid_date = instance.paid_date.unwrap_or(instance.due_date);
+                if paid_date <= today {
+                    target_transaction.set_paid_on(Some(paid_date.and_hms_opt(0, 0, 0).unwrap()));
+                }
+                // Update transaction date to instance date and amount to actual paid amount if available
+                target_transaction = if tags.is_empty() {
+                    Transaction::new(
+                        instance.due_date,
+                        instance.paid_amount.unwrap_or(instance.expected_amount),
+                        transaction.target_account_id,
+                    )
+                } else {
+                    Transaction::new_with_tags(
+                        instance.due_date,
+                        instance.paid_amount.unwrap_or(instance.expected_amount),
+                        transaction.target_account_id,
+                        tags.clone(),
+                    )
+                };
+                if paid_date <= today {
+                    target_transaction.set_paid_on(Some(paid_date.and_hms_opt(0, 0, 0).unwrap()));
+                }
+            },
+            recurring_transaction_instance::InstanceStatus::Pending => {
+                // Update transaction date to instance due date
+                target_transaction = if tags.is_empty() {
+                    Transaction::new(
+                        instance.due_date,
+                        instance.expected_amount,
+                        transaction.target_account_id,
+                    )
+                } else {
+                    Transaction::new_with_tags(
+                        instance.due_date,
+                        instance.expected_amount,
+                        transaction.target_account_id,
+                        tags.clone(),
+                    )
+                };
+                // Only mark as paid if due date is today or in the past
+                if instance.due_date <= today {
+                    target_transaction.set_paid_on(Some(instance.due_date.and_hms_opt(0, 0, 0).unwrap()));
+                }
+            },
+            recurring_transaction_instance::InstanceStatus::Skipped => {
+                // Skipped instances are not paid
+            }
+        }
     }
+    // If no instance exists, the transaction is not paid (default behavior)
+
+    transactions.push(target_transaction);
 
     // If there's a source account, add a transaction for it as well
     if let Some(source_account_id) = transaction.source_account_id {
         // For the source account, the amount is negated
-        if tags.is_empty() {
-            transactions.push(Transaction::new(
+        let mut source_transaction = if tags.is_empty() {
+            Transaction::new(
                 date,
                 -transaction.amount,
                 source_account_id,
-            ));
+            )
         } else {
-            transactions.push(Transaction::new_with_tags(
+            Transaction::new_with_tags(
                 date,
                 -transaction.amount,
                 source_account_id,
-                tags,
-            ));
+                tags.clone(),
+            )
+        };
+
+        // Apply the same instance-based payment logic to the source transaction
+        if let Ok(Some(instance)) = recurring_transaction_instance::Entity::find()
+            .filter(recurring_transaction_instance::Column::RecurringTransactionId.eq(transaction.id))
+            .filter(recurring_transaction_instance::Column::DueDate.eq(date))
+            .one(db)
+            .await
+        {
+            // Instance exists - check if it's paid and if the date is not in the future
+            match instance.status {
+                recurring_transaction_instance::InstanceStatus::Paid => {
+                    // Use the paid date if available, otherwise use due date
+                    let paid_date = instance.paid_date.unwrap_or(instance.due_date);
+                    // Update transaction date to instance date and amount to actual paid amount if available (negated for source)
+                    source_transaction = if tags.is_empty() {
+                        Transaction::new(
+                            instance.due_date,
+                            -(instance.paid_amount.unwrap_or(instance.expected_amount)),
+                            source_account_id,
+                        )
+                    } else {
+                        Transaction::new_with_tags(
+                            instance.due_date,
+                            -(instance.paid_amount.unwrap_or(instance.expected_amount)),
+                            source_account_id,
+                            tags.clone(),
+                        )
+                    };
+                    if paid_date <= today {
+                        source_transaction.set_paid_on(Some(paid_date.and_hms_opt(0, 0, 0).unwrap()));
+                    }
+                },
+                recurring_transaction_instance::InstanceStatus::Pending => {
+                    // Update transaction date to instance due date
+                    source_transaction = if tags.is_empty() {
+                        Transaction::new(
+                            instance.due_date,
+                            -instance.expected_amount,
+                            source_account_id,
+                        )
+                    } else {
+                        Transaction::new_with_tags(
+                            instance.due_date,
+                            -instance.expected_amount,
+                            source_account_id,
+                            tags.clone(),
+                        )
+                    };
+                    // Only mark as paid if due date is today or in the past
+                    if instance.due_date <= today {
+                        source_transaction.set_paid_on(Some(instance.due_date.and_hms_opt(0, 0, 0).unwrap()));
+                    }
+                },
+                recurring_transaction_instance::InstanceStatus::Skipped => {
+                    // Skipped instances are not paid
+                }
+            }
         }
+        // If no instance exists, the transaction is not paid (default behavior)
+
+        transactions.push(source_transaction);
     }
 }
 
@@ -479,30 +605,35 @@ mod tests {
         };
 
         // Generate transactions for a 3-month period
+        let today = NaiveDate::from_ymd_opt(2023, 2, 1).unwrap(); // Set today to Feb 1, 2023
         let transactions = transaction
             .generate_transactions(
                 NaiveDate::from_ymd_opt(2023, 1, 1).unwrap(),
                 NaiveDate::from_ymd_opt(2023, 3, 31).unwrap(),
+                today,
                 &db,
             )
             .await;
 
         assert_eq!(transactions.len(), 3);
 
-        // Check January transaction
+        // Check January transaction (should not be paid since no instance exists)
         assert_eq!(transactions[0].date(), NaiveDate::from_ymd_opt(2023, 1, 15).unwrap());
         assert_eq!(transactions[0].amount(), Decimal::new(-1000, 0));
         assert_eq!(transactions[0].account(), 1);
+        assert!(!transactions[0].is_paid()); // Should not be paid since no instance exists
 
-        // Check February transaction
+        // Check February transaction (should not be paid since no instance exists)
         assert_eq!(transactions[1].date(), NaiveDate::from_ymd_opt(2023, 2, 15).unwrap());
         assert_eq!(transactions[1].amount(), Decimal::new(-1000, 0));
         assert_eq!(transactions[1].account(), 1);
+        assert!(!transactions[1].is_paid()); // Should not be paid since no instance exists
 
-        // Check March transaction
+        // Check March transaction (should not be paid since no instance exists)
         assert_eq!(transactions[2].date(), NaiveDate::from_ymd_opt(2023, 3, 15).unwrap());
         assert_eq!(transactions[2].amount(), Decimal::new(-1000, 0));
         assert_eq!(transactions[2].account(), 1);
+        assert!(!transactions[2].is_paid()); // Should not be paid since no instance exists
     }
 
     #[tokio::test]
@@ -525,36 +656,88 @@ mod tests {
         };
 
         // Generate transactions for a 2-month period
+        let today = NaiveDate::from_ymd_opt(2023, 1, 25).unwrap(); // Set today to Jan 25, 2023
         let transactions = transaction
             .generate_transactions(
                 NaiveDate::from_ymd_opt(2023, 1, 1).unwrap(),
                 NaiveDate::from_ymd_opt(2023, 2, 28).unwrap(),
+                today,
                 &db,
             )
             .await;
 
         assert_eq!(transactions.len(), 4); // 2 months * 2 accounts = 4 transactions
 
-        // Check January transactions
+        // Check January transactions (should not be paid since no instance exists)
         // Target account
         assert_eq!(transactions[0].date(), NaiveDate::from_ymd_opt(2023, 1, 20).unwrap());
         assert_eq!(transactions[0].amount(), Decimal::new(500, 0));
         assert_eq!(transactions[0].account(), 2);
+        assert!(!transactions[0].is_paid()); // Should not be paid since no instance exists
 
         // Source account
         assert_eq!(transactions[1].date(), NaiveDate::from_ymd_opt(2023, 1, 20).unwrap());
         assert_eq!(transactions[1].amount(), Decimal::new(-500, 0));
         assert_eq!(transactions[1].account(), 1);
+        assert!(!transactions[1].is_paid()); // Should not be paid since no instance exists
 
-        // Check February transactions
+        // Check February transactions (should not be paid since no instance exists)
         // Target account
         assert_eq!(transactions[2].date(), NaiveDate::from_ymd_opt(2023, 2, 20).unwrap());
         assert_eq!(transactions[2].amount(), Decimal::new(500, 0));
         assert_eq!(transactions[2].account(), 2);
+        assert!(!transactions[2].is_paid()); // Should not be paid since no instance exists
 
         // Source account
         assert_eq!(transactions[3].date(), NaiveDate::from_ymd_opt(2023, 2, 20).unwrap());
         assert_eq!(transactions[3].amount(), Decimal::new(-500, 0));
         assert_eq!(transactions[3].account(), 1);
+        assert!(!transactions[3].is_paid()); // Should not be paid since no instance exists
+    }
+
+    #[tokio::test]
+    async fn test_generate_transactions_without_instances() {
+        // Create a mock database connection for testing
+        let db = sea_orm::Database::connect("sqlite::memory:").await.unwrap();
+
+        let transaction = RecurringTransaction {
+            id: 1,
+            name: "Monthly Rent".to_string(),
+            description: None,
+            amount: Decimal::new(-1000, 0),
+            start_date: NaiveDate::from_ymd_opt(2023, 1, 15).unwrap(),
+            end_date: None,
+            period: RecurrencePeriod::Monthly,
+            include_in_statistics: true,
+            target_account_id: 1,
+            source_account_id: None,
+            ledger_name: None,
+        };
+
+        // Generate transactions for a 3-month period without any instances in the database
+        let today = NaiveDate::from_ymd_opt(2023, 2, 1).unwrap(); // Set today to Feb 1, 2023
+        let transactions = transaction
+            .generate_transactions(
+                NaiveDate::from_ymd_opt(2023, 1, 1).unwrap(),
+                NaiveDate::from_ymd_opt(2023, 3, 31).unwrap(),
+                today,
+                &db,
+            )
+            .await;
+
+        assert_eq!(transactions.len(), 3);
+
+        // All transactions should not be paid since no instances exist
+        for (i, transaction) in transactions.iter().enumerate() {
+            assert!(!transaction.is_paid(), "Transaction {} should not be paid since no instance exists", i);
+        }
+
+        // Check that the transactions have the correct dates and amounts from the recurring rule
+        assert_eq!(transactions[0].date(), NaiveDate::from_ymd_opt(2023, 1, 15).unwrap());
+        assert_eq!(transactions[0].amount(), Decimal::new(-1000, 0));
+        assert_eq!(transactions[1].date(), NaiveDate::from_ymd_opt(2023, 2, 15).unwrap());
+        assert_eq!(transactions[1].amount(), Decimal::new(-1000, 0));
+        assert_eq!(transactions[2].date(), NaiveDate::from_ymd_opt(2023, 3, 15).unwrap());
+        assert_eq!(transactions[2].amount(), Decimal::new(-1000, 0));
     }
 }

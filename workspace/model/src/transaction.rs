@@ -1,4 +1,4 @@
-use chrono::NaiveDate;
+use chrono::{NaiveDate, NaiveDateTime};
 use rust_decimal::Decimal;
 use async_trait::async_trait;
 use sea_orm::DatabaseConnection;
@@ -12,12 +12,18 @@ pub struct Tag {
 }
 
 /// Represents a single transaction with a specific date, amount, and account.
+/// 
+/// The `paid_on` field indicates when the transaction was actually paid.
+/// If `paid_on` is None, the transaction is not yet paid.
+/// If the transaction is not paid and we have amount and date, we know when it will be paid
+/// (the transaction date represents the expected payment date).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Transaction {
     date: NaiveDate,
     amount: Decimal,
     account: i32,
     tags: Vec<Tag>,
+    paid_on: Option<NaiveDateTime>,
 }
 
 impl Transaction {
@@ -28,6 +34,7 @@ impl Transaction {
             amount,
             account,
             tags: Vec::new(),
+            paid_on: None,
         }
     }
 
@@ -38,6 +45,7 @@ impl Transaction {
             amount,
             account,
             tags: vec![tag],
+            paid_on: None,
         }
     }
 
@@ -48,6 +56,7 @@ impl Transaction {
             amount,
             account,
             tags,
+            paid_on: None,
         }
     }
 
@@ -98,6 +107,22 @@ impl Transaction {
     pub fn remove_tag(&mut self, tag_id: i32) {
         self.tags.retain(|t| t.id != tag_id);
     }
+
+    /// Gets the paid_on datetime of the transaction.
+    pub fn paid_on(&self) -> Option<NaiveDateTime> {
+        self.paid_on
+    }
+
+    /// Sets the paid_on datetime of the transaction.
+    pub fn set_paid_on(&mut self, paid_on: Option<NaiveDateTime>) {
+        self.paid_on = paid_on;
+    }
+
+    /// Checks if the transaction is paid.
+    /// Returns true if paid_on is Some, false otherwise.
+    pub fn is_paid(&self) -> bool {
+        self.paid_on.is_some()
+    }
 }
 
 /// A trait for types that can generate transactions within a date range.
@@ -107,7 +132,8 @@ pub trait TransactionGenerator {
     fn has_any_transaction(&self, start: NaiveDate, end: NaiveDate) -> bool;
 
     /// Generates transactions within the given date range.
-    async fn generate_transactions(&self, start: NaiveDate, end: NaiveDate, db: &DatabaseConnection) -> Vec<Transaction>;
+    /// The `today` parameter is used to determine payment status for different transaction types.
+    async fn generate_transactions(&self, start: NaiveDate, end: NaiveDate, today: NaiveDate, db: &DatabaseConnection) -> Vec<Transaction>;
 
     /// Gets tags for a transaction.
     /// If expand is true, expands all tags to include their parent hierarchy.

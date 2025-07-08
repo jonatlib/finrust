@@ -13,7 +13,7 @@ impl TransactionGenerator for OneOffTransaction {
         self.date >= start && self.date <= end
     }
 
-    async fn generate_transactions(&self, start: NaiveDate, end: NaiveDate, db: &DatabaseConnection) -> Vec<Transaction> {
+    async fn generate_transactions(&self, start: NaiveDate, end: NaiveDate, today: NaiveDate, db: &DatabaseConnection) -> Vec<Transaction> {
         let mut transactions = Vec::new();
 
         // Only generate a transaction if the date is within the range
@@ -21,38 +21,54 @@ impl TransactionGenerator for OneOffTransaction {
             // Load tags for this transaction
             let tags = self.get_tag_for_transaction(db, false).await;
 
-            if tags.is_empty() {
-                transactions.push(Transaction::new(
+            let mut target_transaction = if tags.is_empty() {
+                Transaction::new(
                     self.date,
                     self.amount,
                     self.target_account_id,
-                ));
+                )
             } else {
-                transactions.push(Transaction::new_with_tags(
+                Transaction::new_with_tags(
                     self.date,
                     self.amount,
                     self.target_account_id,
                     tags.clone(),
-                ));
+                )
+            };
+
+            // For one-off transactions: if the transaction date is today or in the past, mark as paid
+            if self.date <= today {
+                // Set paid_on to the transaction date at midnight (start of day)
+                target_transaction.set_paid_on(Some(self.date.and_hms_opt(0, 0, 0).unwrap()));
             }
+
+            transactions.push(target_transaction);
 
             // If there's a source account, add a transaction for it as well
             if let Some(source_account_id) = self.source_account_id {
                 // For the source account, the amount is negated
-                if tags.is_empty() {
-                    transactions.push(Transaction::new(
+                let mut source_transaction = if tags.is_empty() {
+                    Transaction::new(
                         self.date,
                         -self.amount,
                         source_account_id,
-                    ));
+                    )
                 } else {
-                    transactions.push(Transaction::new_with_tags(
+                    Transaction::new_with_tags(
                         self.date,
                         -self.amount,
                         source_account_id,
                         tags,
-                    ));
+                    )
+                };
+
+                // Apply the same payment logic to the source transaction
+                if self.date <= today {
+                    // Set paid_on to the transaction date at midnight (start of day)
+                    source_transaction.set_paid_on(Some(self.date.and_hms_opt(0, 0, 0).unwrap()));
                 }
+
+                transactions.push(source_transaction);
             }
         }
 
@@ -179,10 +195,12 @@ mod tests {
             linked_import_id: None,
         };
 
+        let today = NaiveDate::from_ymd_opt(2023, 1, 20).unwrap(); // Set today to Jan 20, 2023
         let transactions = transaction
             .generate_transactions(
                 NaiveDate::from_ymd_opt(2023, 1, 1).unwrap(),
                 NaiveDate::from_ymd_opt(2023, 1, 31).unwrap(),
+                today,
                 &db,
             )
             .await;
@@ -191,6 +209,7 @@ mod tests {
         assert_eq!(transactions[0].date(), NaiveDate::from_ymd_opt(2023, 1, 15).unwrap());
         assert_eq!(transactions[0].amount(), Decimal::new(100, 0));
         assert_eq!(transactions[0].account(), 1);
+        assert!(transactions[0].is_paid()); // Should be paid since Jan 15 <= Jan 20 (today)
 
         // Dual account transaction (transfer)
         let transfer = OneOffTransaction {
@@ -206,10 +225,12 @@ mod tests {
             linked_import_id: None,
         };
 
+        let today = NaiveDate::from_ymd_opt(2023, 1, 25).unwrap(); // Set today to Jan 25, 2023
         let transactions = transfer
             .generate_transactions(
                 NaiveDate::from_ymd_opt(2023, 1, 1).unwrap(),
                 NaiveDate::from_ymd_opt(2023, 1, 31).unwrap(),
+                today,
                 &db,
             )
             .await;
@@ -220,10 +241,12 @@ mod tests {
         assert_eq!(transactions[0].date(), NaiveDate::from_ymd_opt(2023, 1, 20).unwrap());
         assert_eq!(transactions[0].amount(), Decimal::new(200, 0));
         assert_eq!(transactions[0].account(), 2);
+        assert!(transactions[0].is_paid()); // Should be paid since Jan 20 <= Jan 25 (today)
 
         // Source account transaction (negated amount)
         assert_eq!(transactions[1].date(), NaiveDate::from_ymd_opt(2023, 1, 20).unwrap());
         assert_eq!(transactions[1].amount(), Decimal::new(-200, 0));
         assert_eq!(transactions[1].account(), 1);
+        assert!(transactions[1].is_paid()); // Should be paid since Jan 20 <= Jan 25 (today)
     }
 }

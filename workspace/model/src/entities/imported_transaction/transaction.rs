@@ -13,7 +13,7 @@ impl TransactionGenerator for ImportedTransaction {
         self.date >= start && self.date <= end
     }
 
-    async fn generate_transactions(&self, start: NaiveDate, end: NaiveDate, db: &DatabaseConnection) -> Vec<Transaction> {
+    async fn generate_transactions(&self, start: NaiveDate, end: NaiveDate, today: NaiveDate, db: &DatabaseConnection) -> Vec<Transaction> {
         let mut transactions = Vec::new();
 
         // Only generate a transaction if the date is within the range
@@ -21,20 +21,28 @@ impl TransactionGenerator for ImportedTransaction {
             // Load tags for this transaction
             let tags = self.get_tag_for_transaction(db, false).await;
 
-            if tags.is_empty() {
-                transactions.push(Transaction::new(
+            let mut transaction = if tags.is_empty() {
+                Transaction::new(
                     self.date,
                     self.amount,
                     self.account_id,
-                ));
+                )
             } else {
-                transactions.push(Transaction::new_with_tags(
+                Transaction::new_with_tags(
                     self.date,
                     self.amount,
                     self.account_id,
                     tags,
-                ));
+                )
+            };
+
+            // For one-off transactions: if the transaction date is today or in the past, mark as paid
+            if self.date <= today {
+                // Set paid_on to the transaction date at midnight (start of day)
+                transaction.set_paid_on(Some(self.date.and_hms_opt(0, 0, 0).unwrap()));
             }
+
+            transactions.push(transaction);
         }
 
         transactions
@@ -158,10 +166,12 @@ mod tests {
             reconciled_transaction_id: None,
         };
 
+        let today = NaiveDate::from_ymd_opt(2023, 1, 20).unwrap(); // Set today to Jan 20, 2023
         let transactions = transaction
             .generate_transactions(
                 NaiveDate::from_ymd_opt(2023, 1, 1).unwrap(),
                 NaiveDate::from_ymd_opt(2023, 1, 31).unwrap(),
+                today,
                 &db,
             )
             .await;
@@ -170,6 +180,7 @@ mod tests {
         assert_eq!(transactions[0].date(), NaiveDate::from_ymd_opt(2023, 1, 15).unwrap());
         assert_eq!(transactions[0].amount(), Decimal::new(100, 0));
         assert_eq!(transactions[0].account(), 1);
+        assert!(transactions[0].is_paid()); // Should be paid since Jan 15 <= Jan 20 (today)
     }
 
     #[tokio::test]
