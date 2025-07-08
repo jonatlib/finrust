@@ -8,31 +8,61 @@ use crate::entities::recurring_transaction_instance::{Model as RecurringTransact
 
 #[async_trait]
 impl TransactionGenerator for RecurringTransactionInstance {
-    async fn get_tag_for_transaction(&self) -> Option<Tag> {
-        // In a real implementation, we would use a database connection pool
-        // For example, we could get it from a global state or pass it as a parameter
-        let db = sea_orm::Database::connect("sqlite::memory:").await.ok()?;
-
+    async fn get_tag_for_transaction(&self, db: &DatabaseConnection, expand: bool) -> Vec<Tag> {
         // Query the database for tags associated with the parent recurring transaction
         // First, we need to get the recurring transaction
-        let recurring_transaction = crate::entities::recurring_transaction::Entity::find_by_id(self.recurring_transaction_id)
-            .one(&db)
+        let recurring_transaction = match crate::entities::recurring_transaction::Entity::find_by_id(self.recurring_transaction_id)
+            .one(db)
             .await
-            .ok()?
-            .unwrap();
+        {
+            Ok(Some(transaction)) => transaction,
+            _ => return Vec::new(),
+        };
 
         // Then, we can find the tags associated with the recurring transaction
-        let tags = recurring_transaction.find_related(tag::Entity)
-            .all(&db)
-            .await
-            .ok()?;
+        let tag_models = match recurring_transaction.find_related(tag::Entity).all(db).await {
+            Ok(tags) => tags,
+            Err(_) => return Vec::new(),
+        };
 
-        // Return the first tag if any
-        tags.first().map(|t| Tag {
-            id: t.id,
-            name: t.name.clone(),
-            description: t.description.clone(),
-        })
+        let mut result_tags = Vec::new();
+
+        for tag_model in tag_models {
+            let tag = Tag {
+                id: tag_model.id,
+                name: tag_model.name.clone(),
+                description: tag_model.description.clone(),
+            };
+
+            if expand {
+                // Expand this tag to include its parent hierarchy
+                match tag_model.expand(db).await {
+                    Ok(expanded_tags) => {
+                        for expanded_tag in expanded_tags {
+                            let expanded = Tag {
+                                id: expanded_tag.id,
+                                name: expanded_tag.name,
+                                description: expanded_tag.description,
+                            };
+                            if !result_tags.iter().any(|t: &Tag| t.id == expanded.id) {
+                                result_tags.push(expanded);
+                            }
+                        }
+                    }
+                    Err(_) => {
+                        // If expansion fails, just add the original tag
+                        if !result_tags.iter().any(|t: &Tag| t.id == tag.id) {
+                            result_tags.push(tag);
+                        }
+                    }
+                }
+            } else {
+                // Just add the tag without expansion
+                result_tags.push(tag);
+            }
+        }
+
+        result_tags
     }
     fn has_any_transaction(&self, start: NaiveDate, end: NaiveDate) -> bool {
         // Only consider Paid instances or Pending instances that are due within the date range
@@ -50,13 +80,13 @@ impl TransactionGenerator for RecurringTransactionInstance {
         }
     }
 
-    async fn generate_transactions(&self, start: NaiveDate, end: NaiveDate) -> Vec<Transaction> {
+    async fn generate_transactions(&self, start: NaiveDate, end: NaiveDate, db: &DatabaseConnection) -> Vec<Transaction> {
         let mut transactions = Vec::new();
 
         // Only generate transactions if the instance has a transaction within the date range
         if self.has_any_transaction(start, end) {
-            // Get the tag for this transaction
-            let tag = self.get_tag_for_transaction().await;
+            // Load tags for this transaction
+            let tags = self.get_tag_for_transaction(db, false).await;
 
             match self.status {
                 InstanceStatus::Paid => {
@@ -66,27 +96,23 @@ impl TransactionGenerator for RecurringTransactionInstance {
 
                     // We don't have direct access to the account IDs here, but we can assume
                     // that the recurring_transaction_id would be used to look up the accounts
-                    // in a real implementation. For now, we'll just use a placeholder.
-                    // In a real implementation, you would need to join with the recurring_transaction table
                     // to get the target_account_id and source_account_id.
                     let account_id = self.recurring_transaction_id; // This is a placeholder
 
-                    // Add transaction with the tag if available
-                    if let Some(tag) = tag {
-                        transactions.push(Transaction::new_with_tag(date, amount, account_id, tag));
-                    } else {
+                    if tags.is_empty() {
                         transactions.push(Transaction::new(date, amount, account_id));
+                    } else {
+                        transactions.push(Transaction::new_with_tags(date, amount, account_id, tags));
                     }
                 },
                 InstanceStatus::Pending => {
                     // For pending instances, use the due date and expected amount
                     let account_id = self.recurring_transaction_id; // This is a placeholder
 
-                    // Add transaction with the tag if available
-                    if let Some(tag) = tag {
-                        transactions.push(Transaction::new_with_tag(self.due_date, self.expected_amount, account_id, tag));
-                    } else {
+                    if tags.is_empty() {
                         transactions.push(Transaction::new(self.due_date, self.expected_amount, account_id));
+                    } else {
+                        transactions.push(Transaction::new_with_tags(self.due_date, self.expected_amount, account_id, tags));
                     }
                 },
                 InstanceStatus::Skipped => {
@@ -172,6 +198,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_generate_transactions() {
+        // Create a mock database connection for testing
+        let db = sea_orm::Database::connect("sqlite::memory:").await.unwrap();
+
         // Paid instance
         let paid_instance = RecurringTransactionInstance {
             id: 1,
@@ -189,6 +218,7 @@ mod tests {
             .generate_transactions(
                 NaiveDate::from_ymd_opt(2023, 1, 1).unwrap(),
                 NaiveDate::from_ymd_opt(2023, 1, 31).unwrap(),
+                &db,
             )
             .await;
 
@@ -214,6 +244,7 @@ mod tests {
             .generate_transactions(
                 NaiveDate::from_ymd_opt(2023, 2, 1).unwrap(),
                 NaiveDate::from_ymd_opt(2023, 2, 28).unwrap(),
+                &db,
             )
             .await;
 
@@ -239,6 +270,7 @@ mod tests {
             .generate_transactions(
                 NaiveDate::from_ymd_opt(2023, 3, 1).unwrap(),
                 NaiveDate::from_ymd_opt(2023, 3, 31).unwrap(),
+                &db,
             )
             .await;
 

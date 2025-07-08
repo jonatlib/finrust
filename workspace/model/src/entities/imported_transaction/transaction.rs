@@ -13,27 +13,26 @@ impl TransactionGenerator for ImportedTransaction {
         self.date >= start && self.date <= end
     }
 
-    async fn generate_transactions(&self, start: NaiveDate, end: NaiveDate) -> Vec<Transaction> {
+    async fn generate_transactions(&self, start: NaiveDate, end: NaiveDate, db: &DatabaseConnection) -> Vec<Transaction> {
         let mut transactions = Vec::new();
 
         // Only generate a transaction if the date is within the range
         if self.has_any_transaction(start, end) {
-            // Get the tag for this transaction
-            let tag = self.get_tag_for_transaction().await;
+            // Load tags for this transaction
+            let tags = self.get_tag_for_transaction(db, false).await;
 
-            // Add transaction for the account with the tag if available
-            if let Some(tag) = tag {
-                transactions.push(Transaction::new_with_tag(
-                    self.date,
-                    self.amount,
-                    self.account_id,
-                    tag,
-                ));
-            } else {
+            if tags.is_empty() {
                 transactions.push(Transaction::new(
                     self.date,
                     self.amount,
                     self.account_id,
+                ));
+            } else {
+                transactions.push(Transaction::new_with_tags(
+                    self.date,
+                    self.amount,
+                    self.account_id,
+                    tags,
                 ));
             }
         }
@@ -41,24 +40,52 @@ impl TransactionGenerator for ImportedTransaction {
         transactions
     }
 
-    async fn get_tag_for_transaction(&self) -> Option<Tag> {
-        // In a real implementation, we would use a database connection pool
-        // For example, we could get it from a global state or pass it as a parameter
-        let db = sea_orm::Database::connect("sqlite::memory:").await.ok()?;
-
+    async fn get_tag_for_transaction(&self, db: &DatabaseConnection, expand: bool) -> Vec<Tag> {
         // Query the database for tags associated with this imported transaction
         // Using the Related trait to find tags related to this transaction
-        let tags = self.find_related(tag::Entity)
-            .all(&db)
-            .await
-            .ok()?;
+        let tag_models = match self.find_related(tag::Entity).all(db).await {
+            Ok(tags) => tags,
+            Err(_) => return Vec::new(),
+        };
 
-        // Return the first tag if any
-        tags.first().map(|t| Tag {
-            id: t.id,
-            name: t.name.clone(),
-            description: t.description.clone(),
-        })
+        let mut result_tags = Vec::new();
+
+        for tag_model in tag_models {
+            let tag = Tag {
+                id: tag_model.id,
+                name: tag_model.name.clone(),
+                description: tag_model.description.clone(),
+            };
+
+            if expand {
+                // Expand this tag to include its parent hierarchy
+                match tag_model.expand(db).await {
+                    Ok(expanded_tags) => {
+                        for expanded_tag in expanded_tags {
+                            let expanded = Tag {
+                                id: expanded_tag.id,
+                                name: expanded_tag.name,
+                                description: expanded_tag.description,
+                            };
+                            if !result_tags.iter().any(|t: &Tag| t.id == expanded.id) {
+                                result_tags.push(expanded);
+                            }
+                        }
+                    }
+                    Err(_) => {
+                        // If expansion fails, just add the original tag
+                        if !result_tags.iter().any(|t: &Tag| t.id == tag.id) {
+                            result_tags.push(tag);
+                        }
+                    }
+                }
+            } else {
+                // Just add the tag without expansion
+                result_tags.push(tag);
+            }
+        }
+
+        result_tags
     }
 }
 
@@ -116,6 +143,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_generate_transactions() {
+        // Create a mock database connection for testing
+        let db = sea_orm::Database::connect("sqlite::memory:").await.unwrap();
+
         let transaction = ImportedTransaction {
             id: 1,
             account_id: 1,
@@ -132,6 +162,7 @@ mod tests {
             .generate_transactions(
                 NaiveDate::from_ymd_opt(2023, 1, 1).unwrap(),
                 NaiveDate::from_ymd_opt(2023, 1, 31).unwrap(),
+                &db,
             )
             .await;
 
@@ -139,5 +170,31 @@ mod tests {
         assert_eq!(transactions[0].date(), NaiveDate::from_ymd_opt(2023, 1, 15).unwrap());
         assert_eq!(transactions[0].amount(), Decimal::new(100, 0));
         assert_eq!(transactions[0].account(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_get_tag_for_transaction_no_expand() {
+        // Create a mock database connection for testing
+        let db = sea_orm::Database::connect("sqlite::memory:").await.unwrap();
+
+        let transaction = ImportedTransaction {
+            id: 1,
+            account_id: 1,
+            date: NaiveDate::from_ymd_opt(2023, 1, 15).unwrap(),
+            description: "Test".to_string(),
+            amount: Decimal::new(100, 0),
+            import_hash: "test_hash".to_string(),
+            raw_data: None,
+            reconciled_transaction_type: None,
+            reconciled_transaction_id: None,
+        };
+
+        // Test with expand=false (should return empty since no tags are set up in the mock DB)
+        let tags = transaction.get_tag_for_transaction(&db, false).await;
+        assert!(tags.is_empty());
+
+        // Test with expand=true (should also return empty since no tags are set up in the mock DB)
+        let tags_expanded = transaction.get_tag_for_transaction(&db, true).await;
+        assert!(tags_expanded.is_empty());
     }
 }

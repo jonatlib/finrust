@@ -1,6 +1,6 @@
 use chrono::{Datelike, NaiveDate, Weekday};
 use async_trait::async_trait;
-use sea_orm::{EntityTrait, ModelTrait, RelationTrait};
+use sea_orm::{EntityTrait, ModelTrait, RelationTrait, DatabaseConnection};
 
 use crate::transaction::{Transaction, TransactionGenerator, Tag};
 use crate::entities::{tag, recurring_transaction_tag};
@@ -8,24 +8,52 @@ use crate::entities::recurring_transaction::{Model as RecurringTransaction, Recu
 
 #[async_trait]
 impl TransactionGenerator for RecurringTransaction {
-    async fn get_tag_for_transaction(&self) -> Option<Tag> {
-        // In a real implementation, we would use a database connection pool
-        // For example, we could get it from a global state or pass it as a parameter
-        let db = sea_orm::Database::connect("sqlite::memory:").await.ok()?;
-
+    async fn get_tag_for_transaction(&self, db: &sea_orm::DatabaseConnection, expand: bool) -> Vec<Tag> {
         // Query the database for tags associated with this recurring transaction
         // Using the Related trait to find tags related to this transaction
-        let tags = self.find_related(tag::Entity)
-            .all(&db)
-            .await
-            .ok()?;
+        let tag_models = match self.find_related(tag::Entity).all(db).await {
+            Ok(tags) => tags,
+            Err(_) => return Vec::new(),
+        };
 
-        // Return the first tag if any
-        tags.first().map(|t| Tag {
-            id: t.id,
-            name: t.name.clone(),
-            description: t.description.clone(),
-        })
+        let mut result_tags = Vec::new();
+
+        for tag_model in tag_models {
+            let tag = Tag {
+                id: tag_model.id,
+                name: tag_model.name.clone(),
+                description: tag_model.description.clone(),
+            };
+
+            if expand {
+                // Expand this tag to include its parent hierarchy
+                match tag_model.expand(db).await {
+                    Ok(expanded_tags) => {
+                        for expanded_tag in expanded_tags {
+                            let expanded = Tag {
+                                id: expanded_tag.id,
+                                name: expanded_tag.name,
+                                description: expanded_tag.description,
+                            };
+                            if !result_tags.iter().any(|t: &Tag| t.id == expanded.id) {
+                                result_tags.push(expanded);
+                            }
+                        }
+                    }
+                    Err(_) => {
+                        // If expansion fails, just add the original tag
+                        if !result_tags.iter().any(|t: &Tag| t.id == tag.id) {
+                            result_tags.push(tag);
+                        }
+                    }
+                }
+            } else {
+                // Just add the tag without expansion
+                result_tags.push(tag);
+            }
+        }
+
+        result_tags
     }
     fn has_any_transaction(&self, start: NaiveDate, end: NaiveDate) -> bool {
         // If the end date of the recurring transaction is before the start of the range,
@@ -169,7 +197,7 @@ impl TransactionGenerator for RecurringTransaction {
         }
     }
 
-    async fn generate_transactions(&self, start: NaiveDate, end: NaiveDate) -> Vec<Transaction> {
+    async fn generate_transactions(&self, start: NaiveDate, end: NaiveDate, db: &DatabaseConnection) -> Vec<Transaction> {
         let mut transactions = Vec::new();
 
         // If there are no transactions in the range, return an empty vector
@@ -190,7 +218,7 @@ impl TransactionGenerator for RecurringTransaction {
             RecurrencePeriod::Daily => {
                 let mut current = effective_start;
                 while current <= effective_end {
-                    add_transaction(&mut transactions, self, current).await;
+                    add_transaction(&mut transactions, self, current, db).await;
 
                     // Move to the next day
                     if let Some(next) = current.succ_opt() {
@@ -218,7 +246,7 @@ impl TransactionGenerator for RecurringTransaction {
 
                 // Generate transactions for each matching weekday
                 while current <= effective_end {
-                    add_transaction(&mut transactions, self, current).await;
+                    add_transaction(&mut transactions, self, current, db).await;
 
                     // Move to the next week
                     for _ in 0..7 {
@@ -235,7 +263,7 @@ impl TransactionGenerator for RecurringTransaction {
                 while current <= effective_end {
                     let weekday = current.weekday();
                     if weekday != Weekday::Sat && weekday != Weekday::Sun {
-                        add_transaction(&mut transactions, self, current).await;
+                        add_transaction(&mut transactions, self, current, db).await;
                     }
 
                     // Move to the next day
@@ -255,7 +283,7 @@ impl TransactionGenerator for RecurringTransaction {
                     // Try to create a date with the same day in the current month
                     if let Some(date) = NaiveDate::from_ymd_opt(current_year, current_month, start_day) {
                         if date >= effective_start && date <= effective_end {
-                            add_transaction(&mut transactions, self, date).await;
+                            add_transaction(&mut transactions, self, date, db).await;
                         }
                     }
 
@@ -281,7 +309,7 @@ impl TransactionGenerator for RecurringTransaction {
                         // Try to create a date with the same day in the current month
                         if let Some(date) = NaiveDate::from_ymd_opt(current_year, current_month, start_day) {
                             if date >= effective_start && date <= effective_end {
-                                add_transaction(&mut transactions, self, date).await;
+                                add_transaction(&mut transactions, self, date, db).await;
                             }
                         }
                     }
@@ -308,7 +336,7 @@ impl TransactionGenerator for RecurringTransaction {
                         // Try to create a date with the same day in the current month
                         if let Some(date) = NaiveDate::from_ymd_opt(current_year, current_month, start_day) {
                             if date >= effective_start && date <= effective_end {
-                                add_transaction(&mut transactions, self, date).await;
+                                add_transaction(&mut transactions, self, date, db).await;
                             }
                         }
                     }
@@ -331,7 +359,7 @@ impl TransactionGenerator for RecurringTransaction {
                     // Try to create a date with the same day and month in the current year
                     if let Some(date) = NaiveDate::from_ymd_opt(current_year, start_month, start_day) {
                         if date >= effective_start && date <= effective_end {
-                            add_transaction(&mut transactions, self, date).await;
+                            add_transaction(&mut transactions, self, date, db).await;
                         }
                     }
 
@@ -345,42 +373,40 @@ impl TransactionGenerator for RecurringTransaction {
 }
 
 // Helper function to add transactions for both target and source accounts
-async fn add_transaction(transactions: &mut Vec<Transaction>, transaction: &RecurringTransaction, date: NaiveDate) {
-    // Get the tag for this transaction
-    let tag = transaction.get_tag_for_transaction().await;
+async fn add_transaction(transactions: &mut Vec<Transaction>, transaction: &RecurringTransaction, date: NaiveDate, db: &DatabaseConnection) {
+    // Load tags for this transaction
+    let tags = transaction.get_tag_for_transaction(db, false).await;
 
-    // Add transaction for the target account with the tag if available
-    if let Some(tag) = tag.clone() {
-        transactions.push(Transaction::new_with_tag(
-            date,
-            transaction.amount,
-            transaction.target_account_id,
-            tag,
-        ));
-    } else {
+    if tags.is_empty() {
         transactions.push(Transaction::new(
             date,
             transaction.amount,
             transaction.target_account_id,
+        ));
+    } else {
+        transactions.push(Transaction::new_with_tags(
+            date,
+            transaction.amount,
+            transaction.target_account_id,
+            tags.clone(),
         ));
     }
 
     // If there's a source account, add a transaction for it as well
     if let Some(source_account_id) = transaction.source_account_id {
         // For the source account, the amount is negated
-        // We also apply the same tag to the source account transaction
-        if let Some(tag) = tag {
-            transactions.push(Transaction::new_with_tag(
-                date,
-                -transaction.amount,
-                source_account_id,
-                tag,
-            ));
-        } else {
+        if tags.is_empty() {
             transactions.push(Transaction::new(
                 date,
                 -transaction.amount,
                 source_account_id,
+            ));
+        } else {
+            transactions.push(Transaction::new_with_tags(
+                date,
+                -transaction.amount,
+                source_account_id,
+                tags,
             ));
         }
     }
@@ -435,6 +461,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_generate_transactions_monthly() {
+        // Create a mock database connection for testing
+        let db = sea_orm::Database::connect("sqlite::memory:").await.unwrap();
+
         let transaction = RecurringTransaction {
             id: 1,
             name: "Monthly Rent".to_string(),
@@ -454,6 +483,7 @@ mod tests {
             .generate_transactions(
                 NaiveDate::from_ymd_opt(2023, 1, 1).unwrap(),
                 NaiveDate::from_ymd_opt(2023, 3, 31).unwrap(),
+                &db,
             )
             .await;
 
@@ -477,6 +507,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_generate_transactions_with_source_account() {
+        // Create a mock database connection for testing
+        let db = sea_orm::Database::connect("sqlite::memory:").await.unwrap();
+
         let transaction = RecurringTransaction {
             id: 2,
             name: "Monthly Transfer".to_string(),
@@ -496,6 +529,7 @@ mod tests {
             .generate_transactions(
                 NaiveDate::from_ymd_opt(2023, 1, 1).unwrap(),
                 NaiveDate::from_ymd_opt(2023, 2, 28).unwrap(),
+                &db,
             )
             .await;
 
