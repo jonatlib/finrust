@@ -16,6 +16,7 @@ polars = { version = "^0.48.1", features = ["lazy", "cum_agg"] }
 thiserror = "1.0"
 tracing = "0.1"
 async-trait = "0.1"
+cached = { version = "0.53", features = ["async", "redis_store"] }
 
 [dev-dependencies]
 tokio = { version = "1.36.0", features = ["full"] }

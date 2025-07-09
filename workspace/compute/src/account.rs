@@ -133,6 +133,7 @@ pub trait AccountStateCalculator {
 }
 
 pub mod balance;
+pub mod cache;
 pub mod date_split;
 pub mod forecast;
 pub mod merge;

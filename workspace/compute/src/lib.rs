@@ -4,19 +4,22 @@ pub mod error;
 pub mod tags;
 pub mod transaction;
 
-use chrono::{NaiveDate, Utc};
+use crate::account::cache::AccountStateCacheCalculator;
+use crate::account::AccountStateCalculator;
 use account::{
     balance::BalanceCalculator,
     merge::MergeCalculator,
     unpaid_recurring::UnpaidRecurringCalculator,
     MergeMethod,
 };
+use chrono::{NaiveDate, Utc};
+use std::time::Duration;
 
 /// Returns a default pre-configured compute instance that will be used most of the time.
-/// 
+///
 /// This function uses the provided date as "today" or the current date if none is provided.
 /// It has the same configuration as the one used in the `test_scenario_merge_real` test.
-pub fn default_compute(today: Option<NaiveDate>) -> MergeCalculator {
+pub fn default_compute(today: Option<NaiveDate>) -> impl AccountStateCalculator {
     // Create the today date
     let today = today.unwrap_or_else(|| Utc::now().date_naive());
 
@@ -34,19 +37,22 @@ pub fn default_compute(today: Option<NaiveDate>) -> MergeCalculator {
 
     // Create a merge calculator that combines both calculators
     // Use Sum merge method to sum the balances from both calculators
-    MergeCalculator::new(
-        vec![
-            Box::new(balance_calculator),
-            Box::new(unpaid_calculator),
-        ],
-        MergeMethod::Sum,
+    AccountStateCacheCalculator::new(
+        MergeCalculator::new(
+            vec![
+                Box::new(balance_calculator),
+                Box::new(unpaid_calculator),
+            ],
+            MergeMethod::Sum,
+        ),
+        20, Duration::from_secs(60), None,
     )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use account::testing::{ScenarioMergeReal, run_and_assert_scenario};
+    use account::testing::{run_and_assert_scenario, ScenarioMergeReal};
     use tokio;
 
     /// Test using the default compute with the real_merge scenario within range.
