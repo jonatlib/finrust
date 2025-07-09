@@ -1,5 +1,6 @@
 pub mod account;
 pub mod error;
+pub mod tags;
 pub mod transaction;
 
 use chrono::{NaiveDate, Utc};
