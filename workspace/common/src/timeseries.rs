@@ -5,10 +5,12 @@
 
 use chrono::NaiveDate;
 use rust_decimal::Decimal;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use utoipa::ToSchema;
 
 /// A single data point in an account state timeseries
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 pub struct AccountStatePoint {
     /// The account identifier
     pub account_id: i32,
@@ -22,7 +24,7 @@ pub struct AccountStatePoint {
 /// 
 /// This is a transport-friendly wrapper that doesn't depend on polars
 /// and can be easily serialized/deserialized for API usage.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct AccountStateTimeseries {
     /// All data points in the timeseries
     pub data_points: Vec<AccountStatePoint>,
@@ -31,7 +33,7 @@ pub struct AccountStateTimeseries {
 }
 
 /// Date range specification for timeseries data
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 pub struct DateRange {
     /// Start date (inclusive)
     pub start: NaiveDate,
@@ -147,12 +149,12 @@ impl AccountStateTimeseries {
                 .or_insert_with(Vec::new)
                 .push(point);
         }
-        
+
         // Sort each account's data points by date
         for points in grouped.values_mut() {
             points.sort_by_key(|p| p.date);
         }
-        
+
         grouped
     }
 

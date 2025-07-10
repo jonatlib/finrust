@@ -5,12 +5,14 @@
 
 use chrono::NaiveDate;
 use rust_decimal::Decimal;
+use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 /// Statistics for a specific account and time period
 /// 
 /// This is a transport-friendly wrapper that doesn't depend on polars
 /// and can be easily serialized/deserialized for API usage.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 pub struct AccountStatistics {
     /// The account identifier
     pub account_id: i32,
@@ -32,7 +34,7 @@ pub struct AccountStatistics {
 /// 
 /// This structure groups statistics by time period and provides
 /// convenient access methods.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct AccountStatisticsCollection {
     /// The time period these statistics cover
     pub period: TimePeriod,
@@ -41,7 +43,7 @@ pub struct AccountStatisticsCollection {
 }
 
 /// Time period specification for statistics
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 pub enum TimePeriod {
     /// Statistics for a specific year
     Year(i32),
@@ -162,7 +164,7 @@ mod tests {
     fn test_time_period_descriptions() {
         assert_eq!(TimePeriod::year(2024).description(), "Year 2024");
         assert_eq!(TimePeriod::month(2024, 6).description(), "2024-06");
-        
+
         let start = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap();
         let end = NaiveDate::from_ymd_opt(2024, 12, 31).unwrap();
         assert_eq!(

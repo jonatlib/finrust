@@ -75,7 +75,7 @@ pub enum MergeMethod {
 /// Different implementations may use different strategies for calculating account state,
 /// such as using historical transactions, recurring transactions, or forecasting models.
 #[async_trait]
-pub trait AccountStateCalculator {
+pub trait AccountStateCalculator: Send + Sync {
     /// Computes the account state for the given accounts within the specified date range.
     ///
     /// This method calculates the state (typically balance) of each account for each day

@@ -17,6 +17,40 @@ model = { path = "workspace/model" }
 compute = { path = "workspace/compute" }
 common = { path = "workspace/common" }
 
+# Web framework and async runtime
+tokio = { version = "1.0", features = ["full"] }
+axum = { version = "0.7", features = ["macros"] }
+tower = { version = "0.4", features = ["full"] }
+tower-http = { version = "0.5", features = ["cors", "trace", "compression-gzip", "timeout"] }
 
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# OpenAPI and documentation
+utoipa = { version = "4.0", features = ["axum_extras", "chrono"] }
+utoipa-swagger-ui = { version = "6.0", features = ["axum"] }
+
+# Database
+sea-orm = { version = "^1.1.12", features = ["sqlx-sqlite", "sqlx-postgres", "runtime-tokio-rustls", "macros"] }
+
+# Caching
+moka = { version = "0.12", features = ["future"] }
+
+# Logging and tracing
 tracing = "0.1"
-tracing-subscriber = "0.3"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-opentelemetry = "0.22"
+
+# Time and decimal handling
+chrono = { version = "0.4", features = ["serde"] }
+rust_decimal = { version = "1.0", features = ["serde-with-str"] }
+polars = { version = "^0.48.1", features = ["lazy", "cum_agg"] }
+
+# Configuration and environment
+config = "0.14"
+dotenvy = "0.15"
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
