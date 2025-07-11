@@ -9,7 +9,7 @@ use common::AccountStateTimeseries;
 use compute::{account::AccountStateCalculator, default_compute};
 use model::entities::account;
 use sea_orm::EntityTrait;
-use tracing::instrument;
+use tracing::{instrument, error, warn, info, debug, trace};
 
 /// Get timeseries data for a specific account
 #[utoipa::path(
@@ -31,11 +31,17 @@ pub async fn get_account_timeseries(
     Query(query): Query<TimeseriesQuery>,
     State(state): State<AppState>,
 ) -> Result<Json<ApiResponse<AccountStateTimeseries>>, StatusCode> {
+    trace!("Entering get_account_timeseries function for account_id: {}", account_id);
+    debug!("Fetching timeseries for account ID: {} with query: {:?}", account_id, query);
+
     // Create cache key
     let cache_key = format!("timeseries_{}_{:?}", account_id, query);
+    trace!("Generated cache key: {}", cache_key);
 
     // Check cache first
+    debug!("Checking cache for timeseries");
     if let Some(CachedData::Timeseries(timeseries)) = state.cache.get(&cache_key).await {
+        info!("Timeseries for account ID {} retrieved from cache", account_id);
         let response = ApiResponse {
             data: timeseries,
             message: "Account timeseries retrieved from cache".to_string(),
@@ -43,50 +49,73 @@ pub async fn get_account_timeseries(
         };
         return Ok(Json(response));
     }
+    debug!("Cache miss for account timeseries, proceeding with database query");
 
     // Get the account from database
+    trace!("Looking up account with ID: {}", account_id);
     let account_model = match account::Entity::find_by_id(account_id).one(&state.db).await {
-        Ok(Some(account)) => account,
-        Ok(None) => return Err(StatusCode::NOT_FOUND),
-        Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
+        Ok(Some(account)) => {
+            debug!("Found account: {}", account.name);
+            account
+        }
+        Ok(None) => {
+            warn!("Account with ID {} not found", account_id);
+            return Err(StatusCode::NOT_FOUND);
+        }
+        Err(db_error) => {
+            error!("Failed to retrieve account with ID {}: {}", account_id, db_error);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
     };
 
     // Only include accounts that are marked for statistics
     if !account_model.include_in_statistics {
+        warn!("Account with ID {} is not included in statistics", account_id);
         return Err(StatusCode::NOT_FOUND);
     }
 
     // Compute timeseries using the compute module
+    debug!("Computing timeseries for account: {} from {} to {}", 
+           account_model.name, query.start_date, query.end_date);
     let accounts = vec![account_model];
     let compute = default_compute(None);
 
+    trace!("Executing timeseries computation");
     let timeseries_result = compute
         .compute_account_state(&state.db, &accounts, query.start_date, query.end_date)
         .await;
 
     let timeseries = match timeseries_result {
         Ok(df) => {
+            debug!("Successfully computed timeseries dataframe, converting to timeseries format");
             // Convert DataFrame to AccountStateTimeseries manually
             match convert_dataframe_to_timeseries(df) {
-                Ok(timeseries) => timeseries,
-                Err(_) => {
-                    // Return error if conversion fails
+                Ok(timeseries) => {
+                    debug!("Successfully converted dataframe to timeseries");
+                    timeseries
+                }
+                Err(conversion_error) => {
+                    error!("Failed to convert dataframe to timeseries for account ID {}: {}", 
+                           account_id, conversion_error);
                     return Err(StatusCode::INTERNAL_SERVER_ERROR);
                 }
             }
         }
-        Err(_) => {
-            // Return error if computation fails
+        Err(compute_error) => {
+            error!("Failed to compute timeseries for account ID {}: {}", account_id, compute_error);
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     };
 
     // Cache the result
+    trace!("Caching timeseries result with key: {}", cache_key);
     state
         .cache
         .insert(cache_key, CachedData::Timeseries(timeseries.clone()))
         .await;
+    debug!("Timeseries cached successfully");
 
+    info!("Account timeseries for ID {} retrieved and cached successfully", account_id);
     let response = ApiResponse {
         data: timeseries,
         message: "Account timeseries retrieved successfully".to_string(),
@@ -111,16 +140,30 @@ pub async fn get_all_accounts_timeseries(
     Query(query): Query<TimeseriesQuery>,
     State(state): State<AppState>,
 ) -> Result<Json<ApiResponse<AccountStateTimeseries>>, StatusCode> {
+    trace!("Entering get_all_accounts_timeseries function");
+    debug!("Fetching timeseries for all accounts with query: {:?}", query);
+
     // Get all accounts that are included in statistics
+    trace!("Querying database for all accounts");
     let accounts = match account::Entity::find().all(&state.db).await {
-        Ok(accounts) => accounts
-            .into_iter()
-            .filter(|a| a.include_in_statistics)
-            .collect::<Vec<_>>(),
-        Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
+        Ok(accounts) => {
+            let all_count = accounts.len();
+            let filtered_accounts: Vec<_> = accounts
+                .into_iter()
+                .filter(|a| a.include_in_statistics)
+                .collect();
+            let filtered_count = filtered_accounts.len();
+            debug!("Retrieved {} total accounts, {} included in statistics", all_count, filtered_count);
+            filtered_accounts
+        }
+        Err(db_error) => {
+            error!("Failed to retrieve accounts from database: {}", db_error);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
     };
 
     if accounts.is_empty() {
+        warn!("No accounts found that are included in statistics");
         // Return empty timeseries when no accounts are found
         let empty_timeseries = AccountStateTimeseries::new(vec![]);
         let response = ApiResponse {
@@ -132,29 +175,37 @@ pub async fn get_all_accounts_timeseries(
     }
 
     // Compute timeseries for all accounts using the compute module
+    debug!("Computing timeseries for {} accounts from {} to {}", 
+           accounts.len(), query.start_date, query.end_date);
     let compute = default_compute(None);
 
+    trace!("Executing timeseries computation for all accounts");
     let timeseries_result = compute
         .compute_account_state(&state.db, &accounts, query.start_date, query.end_date)
         .await;
 
     let timeseries = match timeseries_result {
         Ok(df) => {
+            debug!("Successfully computed timeseries dataframe for all accounts, converting to timeseries format");
             // Convert DataFrame to AccountStateTimeseries using the conversion function
             match convert_dataframe_to_timeseries(df) {
-                Ok(timeseries) => timeseries,
-                Err(_) => {
-                    // Return error if conversion fails
+                Ok(timeseries) => {
+                    debug!("Successfully converted dataframe to timeseries for all accounts");
+                    timeseries
+                }
+                Err(conversion_error) => {
+                    error!("Failed to convert dataframe to timeseries for all accounts: {}", conversion_error);
                     return Err(StatusCode::INTERNAL_SERVER_ERROR);
                 }
             }
         }
-        Err(_) => {
-            // Return error if computation fails
+        Err(compute_error) => {
+            error!("Failed to compute timeseries for all accounts: {}", compute_error);
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     };
 
+    info!("Successfully computed timeseries for {} accounts", accounts.len());
     let response = ApiResponse {
         data: timeseries,
         message: "All accounts timeseries retrieved successfully".to_string(),
