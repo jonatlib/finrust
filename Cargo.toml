@@ -3,6 +3,10 @@ name = "finrust"
 version = "0.1.0"
 edition = "2024"
 
+[[bin]]
+name = "finrust-cli"
+path = "src/bin/main.rs"
+
 [workspace]
 members = [
     "workspace/model",
@@ -14,6 +18,7 @@ members = [
 
 [dependencies]
 model = { path = "workspace/model" }
+migration = { path = "workspace/migration" }
 compute = { path = "workspace/compute" }
 common = { path = "workspace/common" }
 
@@ -54,3 +59,6 @@ dotenvy = "0.15"
 # Error handling
 anyhow = "1.0"
 thiserror = "1.0"
+
+# CLI
+clap = { version = "4.0", features = ["derive"] }
