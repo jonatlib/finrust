@@ -3,11 +3,11 @@ use clap::{Parser, Subcommand};
 
 pub mod commands;
 
-use commands::init_database;
+use commands::{init_database, serve};
 
 #[derive(Parser)]
-#[command(name = "finrust-cli")]
-#[command(about = "FinRust CLI tool for database management and other operations")]
+#[command(name = "finrust")]
+#[command(about = "FinRust application with CLI tools and web server")]
 #[command(version)]
 pub struct Cli {
     #[command(subcommand)]
@@ -16,6 +16,8 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
+    /// Start the web server
+    Serve,
     /// Initialize the database using migrations
     ///
     /// Examples:
@@ -37,6 +39,9 @@ pub enum Commands {
 impl Cli {
     pub async fn run(self) -> Result<()> {
         match self.command {
+            Commands::Serve => {
+                serve().await?;
+            }
             Commands::InitDb { database_url } => {
                 init_database(&database_url).await?;
             }
