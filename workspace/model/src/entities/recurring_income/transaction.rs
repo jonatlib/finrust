@@ -1,10 +1,10 @@
 use async_trait::async_trait;
 use chrono::{Datelike, NaiveDate, Weekday};
-use sea_orm::{DatabaseConnection, EntityTrait, ModelTrait, RelationTrait};
+use sea_orm::{DatabaseConnection, ModelTrait};
 
 use crate::entities::recurring_income::Model as RecurringIncome;
 use crate::entities::recurring_transaction::RecurrencePeriod;
-use crate::entities::{recurring_income_tag, tag};
+use crate::entities::tag;
 use crate::transaction::{Tag, Transaction, TransactionGenerator};
 
 #[async_trait]

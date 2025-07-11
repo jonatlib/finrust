@@ -102,7 +102,8 @@ impl Model {
             self.reconciled_transaction_type.as_ref(),
             self.reconciled_transaction_id,
         ) {
-            let result = match entity_type {
+            
+            match entity_type {
                 ReconciledTransactionEntityType::OneOff => {
                     debug!(
                         "Imported transaction {} is reconciled with OneOff transaction {}",
@@ -131,8 +132,7 @@ impl Model {
                     );
                     Some(ReconciledTransactionType::RecurringInstance(id))
                 }
-            };
-            result
+            }
         } else {
             debug!("Imported transaction {} is not reconciled", self.id);
             None

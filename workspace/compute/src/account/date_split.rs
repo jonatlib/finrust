@@ -4,7 +4,6 @@ use model::entities::account;
 use polars::prelude::*;
 use rust_decimal::Decimal;
 use sea_orm::DatabaseConnection;
-use std::cell::RefCell;
 use std::str::FromStr;
 use tracing::{debug, info, instrument};
 

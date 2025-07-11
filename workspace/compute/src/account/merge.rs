@@ -131,7 +131,7 @@ impl MergeCalculator {
                 // Parse balance
                 if let Ok(balance) = balance_str.parse::<rust_decimal::Decimal>() {
                     let key = (account_id, date);
-                    data_map.entry(key).or_insert_with(Vec::new).push(balance);
+                    data_map.entry(key).or_default().push(balance);
                 } else {
                     warn!("Failed to parse balance '{}' as Decimal", balance_str);
                 }

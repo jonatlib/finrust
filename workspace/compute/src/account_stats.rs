@@ -4,11 +4,10 @@
 //! such as minimum and maximum states, average expenses and income, upcoming expenses,
 //! and end-of-period states.
 
-use chrono::{Datelike, NaiveDate};
+use chrono::NaiveDate;
 use polars::prelude::*;
 use rust_decimal::Decimal;
 use sea_orm::DatabaseConnection;
-use std::str::FromStr;
 use tracing::instrument;
 
 use model::entities::account;

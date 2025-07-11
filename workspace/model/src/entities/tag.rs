@@ -1,5 +1,5 @@
 use sea_orm::entity::prelude::*;
-use sea_orm::{DatabaseConnection, EntityTrait, QuerySelect, RelationTrait};
+use sea_orm::{DatabaseConnection, EntityTrait, RelationTrait};
 
 /// Represents a tag that can be applied to accounts or transactions.
 /// Tags can be hierarchical (e.g., "Expenses" -> "Groceries").

@@ -1,13 +1,13 @@
 use async_trait::async_trait;
 use chrono::NaiveDate;
 use sea_orm::{
-    ColumnTrait, DatabaseConnection, EntityTrait, ModelTrait, QueryFilter, RelationTrait,
+    DatabaseConnection, EntityTrait, ModelTrait,
 };
 
 use crate::entities::recurring_transaction_instance::{
     InstanceStatus, Model as RecurringTransactionInstance,
 };
-use crate::entities::{recurring_transaction_tag, tag};
+use crate::entities::tag;
 use crate::transaction::{Tag, Transaction, TransactionGenerator};
 
 #[async_trait]

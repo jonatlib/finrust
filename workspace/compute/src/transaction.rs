@@ -1,4 +1,3 @@
-use chrono::NaiveDate;
 use model::transaction::Transaction;
 use polars::prelude::*;
 use rust_decimal::prelude::ToPrimitive;

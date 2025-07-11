@@ -1,11 +1,11 @@
 use async_trait::async_trait;
 use chrono::NaiveDate;
 use sea_orm::{
-    ColumnTrait, DatabaseConnection, EntityTrait, ModelTrait, QueryFilter, RelationTrait,
+    DatabaseConnection, ModelTrait,
 };
 
 use super::Model as ImportedTransaction;
-use crate::entities::{imported_transaction_tag, tag};
+use crate::entities::tag;
 use crate::transaction::{Tag, Transaction, TransactionGenerator};
 
 #[async_trait]
