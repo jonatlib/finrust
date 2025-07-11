@@ -1,14 +1,21 @@
-use chrono::{Datelike, NaiveDate, Weekday};
 use async_trait::async_trait;
-use sea_orm::{EntityTrait, ModelTrait, RelationTrait, DatabaseConnection, ColumnTrait, QueryFilter, ActiveModelTrait};
+use chrono::{Datelike, NaiveDate, Weekday};
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, ModelTrait, QueryFilter,
+    RelationTrait,
+};
 
-use crate::transaction::{Transaction, TransactionGenerator, Tag};
-use crate::entities::{tag, recurring_transaction_tag, recurring_transaction_instance};
 use crate::entities::recurring_transaction::{Model as RecurringTransaction, RecurrencePeriod};
+use crate::entities::{recurring_transaction_instance, recurring_transaction_tag, tag};
+use crate::transaction::{Tag, Transaction, TransactionGenerator};
 
 #[async_trait]
 impl TransactionGenerator for RecurringTransaction {
-    async fn get_tag_for_transaction(&self, db: &sea_orm::DatabaseConnection, expand: bool) -> Vec<Tag> {
+    async fn get_tag_for_transaction(
+        &self,
+        db: &sea_orm::DatabaseConnection,
+        expand: bool,
+    ) -> Vec<Tag> {
         // Query the database for tags associated with this recurring transaction
         // Using the Related trait to find tags related to this transaction
         let tag_models = match self.find_related(tag::Entity).all(db).await {
@@ -69,7 +76,11 @@ impl TransactionGenerator for RecurringTransaction {
         }
 
         // Determine the effective start date (the later of the transaction start date and the range start date)
-        let effective_start = if self.start_date > start { self.start_date } else { start };
+        let effective_start = if self.start_date > start {
+            self.start_date
+        } else {
+            start
+        };
 
         // Check if there's at least one occurrence in the range
         match self.period {
@@ -78,7 +89,7 @@ impl TransactionGenerator for RecurringTransaction {
                 // Check if there's at least one matching weekday in the range
                 let days_diff = (end.signed_duration_since(effective_start)).num_days();
                 days_diff >= 0 && days_diff / 7 >= 0
-            },
+            }
             RecurrencePeriod::WorkDay => {
                 // Check if there's at least one workday in the range
                 let mut current = effective_start;
@@ -93,7 +104,7 @@ impl TransactionGenerator for RecurringTransaction {
                     }
                 }
                 false
-            },
+            }
             RecurrencePeriod::Monthly => {
                 // Check if there's at least one matching day of month in the range
                 let start_day = self.start_date.day();
@@ -102,7 +113,9 @@ impl TransactionGenerator for RecurringTransaction {
 
                 while NaiveDate::from_ymd_opt(current_year, current_month, 1).unwrap() <= end {
                     // Try to create a date with the same day in the current month
-                    if let Some(date) = NaiveDate::from_ymd_opt(current_year, current_month, start_day) {
+                    if let Some(date) =
+                        NaiveDate::from_ymd_opt(current_year, current_month, start_day)
+                    {
                         if date >= effective_start && date <= end {
                             return true;
                         }
@@ -116,7 +129,7 @@ impl TransactionGenerator for RecurringTransaction {
                     }
                 }
                 false
-            },
+            }
             RecurrencePeriod::Quarterly => {
                 // Check if there's at least one matching day in a quarter in the range
                 let start_day = self.start_date.day();
@@ -130,7 +143,9 @@ impl TransactionGenerator for RecurringTransaction {
                     // Check if this is a matching month in a quarter (e.g., if start is in Feb, check Feb, May, Aug, Nov)
                     if current_month % 3 == quarter_month % 3 {
                         // Try to create a date with the same day in the current month
-                        if let Some(date) = NaiveDate::from_ymd_opt(current_year, current_month, start_day) {
+                        if let Some(date) =
+                            NaiveDate::from_ymd_opt(current_year, current_month, start_day)
+                        {
                             if date >= effective_start && date <= end {
                                 return true;
                             }
@@ -145,7 +160,7 @@ impl TransactionGenerator for RecurringTransaction {
                     }
                 }
                 false
-            },
+            }
             RecurrencePeriod::HalfYearly => {
                 // Check if there's at least one matching day in a half-year in the range
                 let start_day = self.start_date.day();
@@ -159,7 +174,9 @@ impl TransactionGenerator for RecurringTransaction {
                     // Check if this is a matching month in a half-year
                     if current_month % 6 == half_year_month % 6 {
                         // Try to create a date with the same day in the current month
-                        if let Some(date) = NaiveDate::from_ymd_opt(current_year, current_month, start_day) {
+                        if let Some(date) =
+                            NaiveDate::from_ymd_opt(current_year, current_month, start_day)
+                        {
                             if date >= effective_start && date <= end {
                                 return true;
                             }
@@ -174,7 +191,7 @@ impl TransactionGenerator for RecurringTransaction {
                     }
                 }
                 false
-            },
+            }
             RecurrencePeriod::Yearly => {
                 // Check if there's at least one matching day and month in a year in the range
                 let start_day = self.start_date.day();
@@ -184,7 +201,9 @@ impl TransactionGenerator for RecurringTransaction {
 
                 while current_year <= end.year() {
                     // Try to create a date with the same day and month in the current year
-                    if let Some(date) = NaiveDate::from_ymd_opt(current_year, start_month, start_day) {
+                    if let Some(date) =
+                        NaiveDate::from_ymd_opt(current_year, start_month, start_day)
+                    {
                         if date >= effective_start && date <= end {
                             return true;
                         }
@@ -193,11 +212,17 @@ impl TransactionGenerator for RecurringTransaction {
                     current_year += 1;
                 }
                 false
-            },
+            }
         }
     }
 
-    async fn generate_transactions(&self, start: NaiveDate, end: NaiveDate, today: NaiveDate, db: &DatabaseConnection) -> Vec<Transaction> {
+    async fn generate_transactions(
+        &self,
+        start: NaiveDate,
+        end: NaiveDate,
+        today: NaiveDate,
+        db: &DatabaseConnection,
+    ) -> Vec<Transaction> {
         let mut transactions = Vec::new();
 
         // If there are no transactions in the range, return an empty vector
@@ -206,7 +231,11 @@ impl TransactionGenerator for RecurringTransaction {
         }
 
         // Determine the effective start and end dates
-        let effective_start = if self.start_date > start { self.start_date } else { start };
+        let effective_start = if self.start_date > start {
+            self.start_date
+        } else {
+            start
+        };
         let effective_end = if let Some(end_date) = self.end_date {
             if end_date < end { end_date } else { end }
         } else {
@@ -227,7 +256,7 @@ impl TransactionGenerator for RecurringTransaction {
                         break;
                     }
                 }
-            },
+            }
             RecurrencePeriod::Weekly => {
                 let start_weekday = self.start_date.weekday();
                 let mut current = effective_start;
@@ -257,7 +286,7 @@ impl TransactionGenerator for RecurringTransaction {
                         }
                     }
                 }
-            },
+            }
             RecurrencePeriod::WorkDay => {
                 let mut current = effective_start;
                 while current <= effective_end {
@@ -273,15 +302,19 @@ impl TransactionGenerator for RecurringTransaction {
                         break;
                     }
                 }
-            },
+            }
             RecurrencePeriod::Monthly => {
                 let start_day = self.start_date.day();
                 let mut current_month = effective_start.month();
                 let mut current_year = effective_start.year();
 
-                while NaiveDate::from_ymd_opt(current_year, current_month, 1).unwrap() <= effective_end {
+                while NaiveDate::from_ymd_opt(current_year, current_month, 1).unwrap()
+                    <= effective_end
+                {
                     // Try to create a date with the same day in the current month
-                    if let Some(date) = NaiveDate::from_ymd_opt(current_year, current_month, start_day) {
+                    if let Some(date) =
+                        NaiveDate::from_ymd_opt(current_year, current_month, start_day)
+                    {
                         if date >= effective_start && date <= effective_end {
                             add_transaction(&mut transactions, self, date, today, db).await;
                         }
@@ -294,7 +327,7 @@ impl TransactionGenerator for RecurringTransaction {
                         current_year += 1;
                     }
                 }
-            },
+            }
             RecurrencePeriod::Quarterly => {
                 let start_day = self.start_date.day();
                 let start_month = self.start_date.month();
@@ -303,11 +336,15 @@ impl TransactionGenerator for RecurringTransaction {
                 let mut current_month = effective_start.month();
                 let mut current_year = effective_start.year();
 
-                while NaiveDate::from_ymd_opt(current_year, current_month, 1).unwrap() <= effective_end {
+                while NaiveDate::from_ymd_opt(current_year, current_month, 1).unwrap()
+                    <= effective_end
+                {
                     // Check if this is a matching month in a quarter
                     if current_month % 3 == quarter_month % 3 {
                         // Try to create a date with the same day in the current month
-                        if let Some(date) = NaiveDate::from_ymd_opt(current_year, current_month, start_day) {
+                        if let Some(date) =
+                            NaiveDate::from_ymd_opt(current_year, current_month, start_day)
+                        {
                             if date >= effective_start && date <= effective_end {
                                 add_transaction(&mut transactions, self, date, today, db).await;
                             }
@@ -321,7 +358,7 @@ impl TransactionGenerator for RecurringTransaction {
                         current_year += 1;
                     }
                 }
-            },
+            }
             RecurrencePeriod::HalfYearly => {
                 let start_day = self.start_date.day();
                 let start_month = self.start_date.month();
@@ -330,11 +367,15 @@ impl TransactionGenerator for RecurringTransaction {
                 let mut current_month = effective_start.month();
                 let mut current_year = effective_start.year();
 
-                while NaiveDate::from_ymd_opt(current_year, current_month, 1).unwrap() <= effective_end {
+                while NaiveDate::from_ymd_opt(current_year, current_month, 1).unwrap()
+                    <= effective_end
+                {
                     // Check if this is a matching month in a half-year
                     if current_month % 6 == half_year_month % 6 {
                         // Try to create a date with the same day in the current month
-                        if let Some(date) = NaiveDate::from_ymd_opt(current_year, current_month, start_day) {
+                        if let Some(date) =
+                            NaiveDate::from_ymd_opt(current_year, current_month, start_day)
+                        {
                             if date >= effective_start && date <= effective_end {
                                 add_transaction(&mut transactions, self, date, today, db).await;
                             }
@@ -348,7 +389,7 @@ impl TransactionGenerator for RecurringTransaction {
                         current_year += 1;
                     }
                 }
-            },
+            }
             RecurrencePeriod::Yearly => {
                 let start_day = self.start_date.day();
                 let start_month = self.start_date.month();
@@ -357,7 +398,9 @@ impl TransactionGenerator for RecurringTransaction {
 
                 while current_year <= effective_end.year() {
                     // Try to create a date with the same day and month in the current year
-                    if let Some(date) = NaiveDate::from_ymd_opt(current_year, start_month, start_day) {
+                    if let Some(date) =
+                        NaiveDate::from_ymd_opt(current_year, start_month, start_day)
+                    {
                         if date >= effective_start && date <= effective_end {
                             add_transaction(&mut transactions, self, date, today, db).await;
                         }
@@ -365,7 +408,7 @@ impl TransactionGenerator for RecurringTransaction {
 
                     current_year += 1;
                 }
-            },
+            }
         }
 
         transactions
@@ -373,16 +416,18 @@ impl TransactionGenerator for RecurringTransaction {
 }
 
 // Helper function to add transactions for both target and source accounts
-async fn add_transaction(transactions: &mut Vec<Transaction>, transaction: &RecurringTransaction, date: NaiveDate, today: NaiveDate, db: &DatabaseConnection) {
+async fn add_transaction(
+    transactions: &mut Vec<Transaction>,
+    transaction: &RecurringTransaction,
+    date: NaiveDate,
+    today: NaiveDate,
+    db: &DatabaseConnection,
+) {
     // Load tags for this transaction
     let tags = transaction.get_tag_for_transaction(db, false).await;
 
     let mut target_transaction = if tags.is_empty() {
-        Transaction::new(
-            date,
-            transaction.amount,
-            transaction.target_account_id,
-        )
+        Transaction::new(date, transaction.amount, transaction.target_account_id)
     } else {
         Transaction::new_with_tags(
             date,
@@ -426,7 +471,7 @@ async fn add_transaction(transactions: &mut Vec<Transaction>, transaction: &Recu
                 if paid_date <= today {
                     target_transaction.set_paid_on(Some(paid_date.and_hms_opt(0, 0, 0).unwrap()));
                 }
-            },
+            }
             recurring_transaction_instance::InstanceStatus::Pending => {
                 // Update transaction date to instance due date
                 target_transaction = if tags.is_empty() {
@@ -445,9 +490,10 @@ async fn add_transaction(transactions: &mut Vec<Transaction>, transaction: &Recu
                 };
                 // Only mark as paid if due date is today or in the past
                 if instance.due_date <= today {
-                    target_transaction.set_paid_on(Some(instance.due_date.and_hms_opt(0, 0, 0).unwrap()));
+                    target_transaction
+                        .set_paid_on(Some(instance.due_date.and_hms_opt(0, 0, 0).unwrap()));
                 }
-            },
+            }
             recurring_transaction_instance::InstanceStatus::Skipped => {
                 // Skipped instances are not paid
             }
@@ -461,23 +507,16 @@ async fn add_transaction(transactions: &mut Vec<Transaction>, transaction: &Recu
     if let Some(source_account_id) = transaction.source_account_id {
         // For the source account, the amount is negated
         let mut source_transaction = if tags.is_empty() {
-            Transaction::new(
-                date,
-                -transaction.amount,
-                source_account_id,
-            )
+            Transaction::new(date, -transaction.amount, source_account_id)
         } else {
-            Transaction::new_with_tags(
-                date,
-                -transaction.amount,
-                source_account_id,
-                tags.clone(),
-            )
+            Transaction::new_with_tags(date, -transaction.amount, source_account_id, tags.clone())
         };
 
         // Apply the same instance-based payment logic to the source transaction
         if let Ok(Some(instance)) = recurring_transaction_instance::Entity::find()
-            .filter(recurring_transaction_instance::Column::RecurringTransactionId.eq(transaction.id))
+            .filter(
+                recurring_transaction_instance::Column::RecurringTransactionId.eq(transaction.id),
+            )
             .filter(recurring_transaction_instance::Column::DueDate.eq(date))
             .one(db)
             .await
@@ -503,9 +542,10 @@ async fn add_transaction(transactions: &mut Vec<Transaction>, transaction: &Recu
                         )
                     };
                     if paid_date <= today {
-                        source_transaction.set_paid_on(Some(paid_date.and_hms_opt(0, 0, 0).unwrap()));
+                        source_transaction
+                            .set_paid_on(Some(paid_date.and_hms_opt(0, 0, 0).unwrap()));
                     }
-                },
+                }
                 recurring_transaction_instance::InstanceStatus::Pending => {
                     // Update transaction date to instance due date
                     source_transaction = if tags.is_empty() {
@@ -524,9 +564,10 @@ async fn add_transaction(transactions: &mut Vec<Transaction>, transaction: &Recu
                     };
                     // Only mark as paid if due date is today or in the past
                     if instance.due_date <= today {
-                        source_transaction.set_paid_on(Some(instance.due_date.and_hms_opt(0, 0, 0).unwrap()));
+                        source_transaction
+                            .set_paid_on(Some(instance.due_date.and_hms_opt(0, 0, 0).unwrap()));
                     }
-                },
+                }
                 recurring_transaction_instance::InstanceStatus::Skipped => {
                     // Skipped instances are not paid
                 }
@@ -618,19 +659,28 @@ mod tests {
         assert_eq!(transactions.len(), 3);
 
         // Check January transaction (should not be paid since no instance exists)
-        assert_eq!(transactions[0].date(), NaiveDate::from_ymd_opt(2023, 1, 15).unwrap());
+        assert_eq!(
+            transactions[0].date(),
+            NaiveDate::from_ymd_opt(2023, 1, 15).unwrap()
+        );
         assert_eq!(transactions[0].amount(), Decimal::new(-1000, 0));
         assert_eq!(transactions[0].account(), 1);
         assert!(!transactions[0].is_paid()); // Should not be paid since no instance exists
 
         // Check February transaction (should not be paid since no instance exists)
-        assert_eq!(transactions[1].date(), NaiveDate::from_ymd_opt(2023, 2, 15).unwrap());
+        assert_eq!(
+            transactions[1].date(),
+            NaiveDate::from_ymd_opt(2023, 2, 15).unwrap()
+        );
         assert_eq!(transactions[1].amount(), Decimal::new(-1000, 0));
         assert_eq!(transactions[1].account(), 1);
         assert!(!transactions[1].is_paid()); // Should not be paid since no instance exists
 
         // Check March transaction (should not be paid since no instance exists)
-        assert_eq!(transactions[2].date(), NaiveDate::from_ymd_opt(2023, 3, 15).unwrap());
+        assert_eq!(
+            transactions[2].date(),
+            NaiveDate::from_ymd_opt(2023, 3, 15).unwrap()
+        );
         assert_eq!(transactions[2].amount(), Decimal::new(-1000, 0));
         assert_eq!(transactions[2].account(), 1);
         assert!(!transactions[2].is_paid()); // Should not be paid since no instance exists
@@ -670,26 +720,38 @@ mod tests {
 
         // Check January transactions (should not be paid since no instance exists)
         // Target account
-        assert_eq!(transactions[0].date(), NaiveDate::from_ymd_opt(2023, 1, 20).unwrap());
+        assert_eq!(
+            transactions[0].date(),
+            NaiveDate::from_ymd_opt(2023, 1, 20).unwrap()
+        );
         assert_eq!(transactions[0].amount(), Decimal::new(500, 0));
         assert_eq!(transactions[0].account(), 2);
         assert!(!transactions[0].is_paid()); // Should not be paid since no instance exists
 
         // Source account
-        assert_eq!(transactions[1].date(), NaiveDate::from_ymd_opt(2023, 1, 20).unwrap());
+        assert_eq!(
+            transactions[1].date(),
+            NaiveDate::from_ymd_opt(2023, 1, 20).unwrap()
+        );
         assert_eq!(transactions[1].amount(), Decimal::new(-500, 0));
         assert_eq!(transactions[1].account(), 1);
         assert!(!transactions[1].is_paid()); // Should not be paid since no instance exists
 
         // Check February transactions (should not be paid since no instance exists)
         // Target account
-        assert_eq!(transactions[2].date(), NaiveDate::from_ymd_opt(2023, 2, 20).unwrap());
+        assert_eq!(
+            transactions[2].date(),
+            NaiveDate::from_ymd_opt(2023, 2, 20).unwrap()
+        );
         assert_eq!(transactions[2].amount(), Decimal::new(500, 0));
         assert_eq!(transactions[2].account(), 2);
         assert!(!transactions[2].is_paid()); // Should not be paid since no instance exists
 
         // Source account
-        assert_eq!(transactions[3].date(), NaiveDate::from_ymd_opt(2023, 2, 20).unwrap());
+        assert_eq!(
+            transactions[3].date(),
+            NaiveDate::from_ymd_opt(2023, 2, 20).unwrap()
+        );
         assert_eq!(transactions[3].amount(), Decimal::new(-500, 0));
         assert_eq!(transactions[3].account(), 1);
         assert!(!transactions[3].is_paid()); // Should not be paid since no instance exists
@@ -729,15 +791,28 @@ mod tests {
 
         // All transactions should not be paid since no instances exist
         for (i, transaction) in transactions.iter().enumerate() {
-            assert!(!transaction.is_paid(), "Transaction {} should not be paid since no instance exists", i);
+            assert!(
+                !transaction.is_paid(),
+                "Transaction {} should not be paid since no instance exists",
+                i
+            );
         }
 
         // Check that the transactions have the correct dates and amounts from the recurring rule
-        assert_eq!(transactions[0].date(), NaiveDate::from_ymd_opt(2023, 1, 15).unwrap());
+        assert_eq!(
+            transactions[0].date(),
+            NaiveDate::from_ymd_opt(2023, 1, 15).unwrap()
+        );
         assert_eq!(transactions[0].amount(), Decimal::new(-1000, 0));
-        assert_eq!(transactions[1].date(), NaiveDate::from_ymd_opt(2023, 2, 15).unwrap());
+        assert_eq!(
+            transactions[1].date(),
+            NaiveDate::from_ymd_opt(2023, 2, 15).unwrap()
+        );
         assert_eq!(transactions[1].amount(), Decimal::new(-1000, 0));
-        assert_eq!(transactions[2].date(), NaiveDate::from_ymd_opt(2023, 3, 15).unwrap());
+        assert_eq!(
+            transactions[2].date(),
+            NaiveDate::from_ymd_opt(2023, 3, 15).unwrap()
+        );
         assert_eq!(transactions[2].amount(), Decimal::new(-1000, 0));
     }
 }

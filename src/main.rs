@@ -3,16 +3,14 @@ use tokio::net::TcpListener;
 use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-mod schemas;
+mod config;
 mod handlers;
 mod helpers;
 mod router;
-mod config;
+mod schemas;
 
-use config::{initialize_app_state, get_bind_address};
+use config::{get_bind_address, initialize_app_state};
 use router::create_router;
-
-
 
 /// Main entry point for the FinRust application.
 #[tokio::main]

@@ -1,2 +1,2 @@
-pub mod stats;
 pub mod converters;
+pub mod stats;

@@ -48,7 +48,6 @@ pub enum ComputeError {
 // Implement From<polars::error::PolarsError> for ComputeError
 impl From<polars::error::PolarsError> for ComputeError {
     fn from(error: polars::error::PolarsError) -> Self {
-        
         match error {
             polars::error::PolarsError::NoData(_) => {
                 let err = ComputeError::DataFrame(format!("No data: {}", error));

@@ -72,7 +72,14 @@ impl TestScenarioBuilder for ScenarioMergeReal {
         for index in (0u32..=2) {
             new_recurring_instance(&db, &r1, date!(2025, 10 + index, 11)).await?;
 
-            expect!(assert_results, account1, 2025, 10 + index, 12, 200_000 - 1_000 * (1 + index as i64));
+            expect!(
+                assert_results,
+                account1,
+                2025,
+                10 + index,
+                12,
+                200_000 - 1_000 * (1 + index as i64)
+            );
             expect!(assert_results, account2, 2025, 10 + index, 12, 100_000);
         }
 
@@ -96,7 +103,10 @@ impl TestScenarioBuilder for ScenarioMergeReal {
         // So it should not be accounted for until the instance is created
         // But also after `today` it should be taken that it is paid
 
-        let mut long_recurring_active: recurring_transaction::ActiveModel = new_recurring_transaction(&db, &account1, date!(2026, 01, 01), -100_000).await?.into();
+        let mut long_recurring_active: recurring_transaction::ActiveModel =
+            new_recurring_transaction(&db, &account1, date!(2026, 01, 01), -100_000)
+                .await?
+                .into();
         long_recurring_active.period = Set(RecurrencePeriod::Yearly);
         let long_recurring = long_recurring_active.update(&db).await?;
 
@@ -104,8 +114,22 @@ impl TestScenarioBuilder for ScenarioMergeReal {
         // Now test transfers between accounts
 
         new_one_off_account_transfer(&db, &account1, &account2, date!(2026, 01, 20), 1_000).await?;
-        expect!(assert_results, account1, 2026, 01, 21, 200_000 - 1_000 * 4 - 1_000);
-        expect!(assert_results, account2, 2026, 01, 21, 100_000 - 1_000 * 1 + 1_000);
+        expect!(
+            assert_results,
+            account1,
+            2026,
+            01,
+            21,
+            200_000 - 1_000 * 4 - 1_000
+        );
+        expect!(
+            assert_results,
+            account2,
+            2026,
+            01,
+            21,
+            100_000 - 1_000 * 1 + 1_000
+        );
 
         /////////////////////////////////////////////////////////////////////////////////////////////////
         // Now fastforward into future and check that
@@ -120,8 +144,22 @@ impl TestScenarioBuilder for ScenarioMergeReal {
         // And now we are in the future
 
         for index in (0u32..6) {
-            expect!(assert_results, account1, 2026, 07 + index, 22, 189_000 - (1000 * index as i64) - 100_000);
-            expect!(assert_results, account2, 2026, 07 + index, 22, 94_000 - (1000 * index as i64));
+            expect!(
+                assert_results,
+                account1,
+                2026,
+                07 + index,
+                22,
+                189_000 - (1000 * index as i64) - 100_000
+            );
+            expect!(
+                assert_results,
+                account2,
+                2026,
+                07 + index,
+                22,
+                94_000 - (1000 * index as i64)
+            );
         }
 
         // Return the test scenario

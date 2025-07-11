@@ -87,12 +87,20 @@ impl DateSplitCalculator {
             .compute_account_state(db, accounts, split_date, split_date)
             .await?;
 
-        debug!("First calculator returned DataFrame with {} rows for split date", split_date_df.height());
+        debug!(
+            "First calculator returned DataFrame with {} rows for split date",
+            split_date_df.height()
+        );
 
         // Extract the balance on the split date for each account
         let mut account_balances = std::collections::HashMap::new();
         for i in 0..split_date_df.height() {
-            let account_id = split_date_df.column("account_id")?.get(i).unwrap().try_extract::<i32>().unwrap();
+            let account_id = split_date_df
+                .column("account_id")?
+                .get(i)
+                .unwrap()
+                .try_extract::<i32>()
+                .unwrap();
             let date_val = split_date_df.column("date")?.get(i).unwrap();
             let date_str = date_val.to_string();
             let date = NaiveDate::parse_from_str(&date_str, "%Y-%m-%d").unwrap();
@@ -103,7 +111,10 @@ impl DateSplitCalculator {
                 let balance_str = balance_str.trim_matches('"');
                 if let Ok(balance) = Decimal::from_str(balance_str) {
                     account_balances.insert(account_id, balance);
-                    debug!("Extracted balance for account {} on split date {}: {}", account_id, split_date, balance);
+                    debug!(
+                        "Extracted balance for account {} on split date {}: {}",
+                        account_id, split_date, balance
+                    );
                 }
             }
         }
@@ -122,7 +133,11 @@ impl DateSplitCalculator {
         } else if !account_balances.is_empty() {
             // If there are multiple accounts, use the sum of their balances
             let total_balance: Decimal = account_balances.values().sum();
-            debug!("Using total balance {} for second calculator (sum of {} accounts)", total_balance, account_balances.len());
+            debug!(
+                "Using total balance {} for second calculator (sum of {} accounts)",
+                total_balance,
+                account_balances.len()
+            );
             total_balance
         } else {
             debug!("No balances found, using zero");
@@ -162,29 +177,48 @@ impl AccountStateCalculator for DateSplitCalculator {
         // If the entire date range is before the split date, use only the first calculator
         if end_date < self.split_date {
             debug!("Entire date range is before split date, using only first calculator");
-            return self.first_calculator.compute_account_state(db, accounts, start_date, end_date).await;
+            return self
+                .first_calculator
+                .compute_account_state(db, accounts, start_date, end_date)
+                .await;
         }
 
         // If the entire date range is on or after the split date, use only the second calculator
         if start_date >= self.split_date {
             debug!("Entire date range is on or after split date, using only second calculator");
-            return self.second_calculator.compute_account_state(db, accounts, start_date, end_date).await;
+            return self
+                .second_calculator
+                .compute_account_state(db, accounts, start_date, end_date)
+                .await;
         }
 
         // Otherwise, we need to use both calculators and merge the results
         debug!("Date range spans split date, using both calculators");
 
         // Compute account state using the first calculator for dates before the split date
-        let first_df = self.first_calculator
-            .compute_account_state(db, accounts, start_date, self.split_date.pred_opt().unwrap())
+        let first_df = self
+            .first_calculator
+            .compute_account_state(
+                db,
+                accounts,
+                start_date,
+                self.split_date.pred_opt().unwrap(),
+            )
             .await?;
-        debug!("First calculator returned DataFrame with {} rows", first_df.height());
+        debug!(
+            "First calculator returned DataFrame with {} rows",
+            first_df.height()
+        );
 
         // Compute account state using the second calculator for dates on or after the split date
-        let second_df = self.second_calculator
+        let second_df = self
+            .second_calculator
             .compute_account_state(db, accounts, self.split_date, end_date)
             .await?;
-        debug!("Second calculator returned DataFrame with {} rows", second_df.height());
+        debug!(
+            "Second calculator returned DataFrame with {} rows",
+            second_df.height()
+        );
 
         // Concatenate the DataFrames by extracting and combining their data
         let mut account_ids = Vec::new();
@@ -193,7 +227,12 @@ impl AccountStateCalculator for DateSplitCalculator {
 
         // Extract data from first DataFrame
         for i in 0..first_df.height() {
-            let account_id = first_df.column("account_id")?.get(i).unwrap().try_extract::<i32>().unwrap();
+            let account_id = first_df
+                .column("account_id")?
+                .get(i)
+                .unwrap()
+                .try_extract::<i32>()
+                .unwrap();
             let date_val = first_df.column("date")?.get(i).unwrap();
             // Convert the date value to a string and then parse it
             let date_str = date_val.to_string();
@@ -209,7 +248,12 @@ impl AccountStateCalculator for DateSplitCalculator {
 
         // Extract data from second DataFrame
         for i in 0..second_df.height() {
-            let account_id = second_df.column("account_id")?.get(i).unwrap().try_extract::<i32>().unwrap();
+            let account_id = second_df
+                .column("account_id")?
+                .get(i)
+                .unwrap()
+                .try_extract::<i32>()
+                .unwrap();
             let date_val = second_df.column("date")?.get(i).unwrap();
             // Convert the date value to a string and then parse it
             let date_str = date_val.to_string();

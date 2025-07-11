@@ -1,10 +1,12 @@
-use chrono::NaiveDate;
 use async_trait::async_trait;
-use sea_orm::{EntityTrait, ModelTrait, QueryFilter, ColumnTrait, DatabaseConnection, RelationTrait};
+use chrono::NaiveDate;
+use sea_orm::{
+    ColumnTrait, DatabaseConnection, EntityTrait, ModelTrait, QueryFilter, RelationTrait,
+};
 
-use crate::transaction::{Transaction, TransactionGenerator, Tag};
-use crate::entities::{tag, imported_transaction_tag};
 use super::Model as ImportedTransaction;
+use crate::entities::{imported_transaction_tag, tag};
+use crate::transaction::{Tag, Transaction, TransactionGenerator};
 
 #[async_trait]
 impl TransactionGenerator for ImportedTransaction {
@@ -13,7 +15,13 @@ impl TransactionGenerator for ImportedTransaction {
         self.date >= start && self.date <= end
     }
 
-    async fn generate_transactions(&self, start: NaiveDate, end: NaiveDate, today: NaiveDate, db: &DatabaseConnection) -> Vec<Transaction> {
+    async fn generate_transactions(
+        &self,
+        start: NaiveDate,
+        end: NaiveDate,
+        today: NaiveDate,
+        db: &DatabaseConnection,
+    ) -> Vec<Transaction> {
         let mut transactions = Vec::new();
 
         // Only generate a transaction if the date is within the range
@@ -22,18 +30,9 @@ impl TransactionGenerator for ImportedTransaction {
             let tags = self.get_tag_for_transaction(db, false).await;
 
             let mut transaction = if tags.is_empty() {
-                Transaction::new(
-                    self.date,
-                    self.amount,
-                    self.account_id,
-                )
+                Transaction::new(self.date, self.amount, self.account_id)
             } else {
-                Transaction::new_with_tags(
-                    self.date,
-                    self.amount,
-                    self.account_id,
-                    tags,
-                )
+                Transaction::new_with_tags(self.date, self.amount, self.account_id, tags)
             };
 
             // For one-off transactions: if the transaction date is today or in the past, mark as paid
@@ -177,7 +176,10 @@ mod tests {
             .await;
 
         assert_eq!(transactions.len(), 1);
-        assert_eq!(transactions[0].date(), NaiveDate::from_ymd_opt(2023, 1, 15).unwrap());
+        assert_eq!(
+            transactions[0].date(),
+            NaiveDate::from_ymd_opt(2023, 1, 15).unwrap()
+        );
         assert_eq!(transactions[0].amount(), Decimal::new(100, 0));
         assert_eq!(transactions[0].account(), 1);
         assert!(transactions[0].is_paid()); // Should be paid since Jan 15 <= Jan 20 (today)

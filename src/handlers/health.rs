@@ -1,6 +1,6 @@
+use crate::schemas::{AppState, HealthResponse};
 use axum::{extract::State, http::StatusCode, response::Json};
 use tracing::instrument;
-use crate::schemas::{AppState, HealthResponse};
 
 /// Health check endpoint
 #[utoipa::path(
@@ -13,7 +13,9 @@ use crate::schemas::{AppState, HealthResponse};
     )
 )]
 #[instrument]
-pub async fn health_check(State(state): State<AppState>) -> Result<Json<HealthResponse>, StatusCode> {
+pub async fn health_check(
+    State(state): State<AppState>,
+) -> Result<Json<HealthResponse>, StatusCode> {
     // Test database connection
     let db_status = match state.db.ping().await {
         Ok(_) => "connected".to_string(),

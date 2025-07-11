@@ -1,8 +1,6 @@
 use chrono::NaiveDate;
 use model::entities::{recurring_income, recurring_transaction_instance};
-use sea_orm::{
-    ColumnTrait, Condition, DatabaseConnection, EntityTrait, QueryFilter,
-};
+use sea_orm::{ColumnTrait, Condition, DatabaseConnection, EntityTrait, QueryFilter};
 use tracing::{debug, instrument, trace};
 
 use crate::account::utils::generate_occurrences;
@@ -131,12 +129,12 @@ fn process_income_occurrences(
     );
 
     // Process occurrences using the common function
-    process_occurrences(occurrences, instances, today, income.id, 
-        |instance| {
-            instance.due_date
-        },
-        |instance| {
-            instance.paid_date
-        }
+    process_occurrences(
+        occurrences,
+        instances,
+        today,
+        income.id,
+        |instance| instance.due_date,
+        |instance| instance.paid_date,
     )
 }

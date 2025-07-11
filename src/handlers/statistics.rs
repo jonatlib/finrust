@@ -1,10 +1,14 @@
-use axum::{extract::{Path, Query, State}, http::StatusCode, response::Json};
+use crate::helpers::stats::{compute_account_statistics, determine_time_period};
+use crate::schemas::{ApiResponse, AppState, CachedData, StatisticsQuery};
+use axum::{
+    extract::{Path, Query, State},
+    http::StatusCode,
+    response::Json,
+};
 use common::AccountStatisticsCollection;
 use model::entities::account;
 use sea_orm::EntityTrait;
 use tracing::instrument;
-use crate::schemas::{AppState, ApiResponse, StatisticsQuery, CachedData};
-use crate::helpers::stats::{determine_time_period, compute_account_statistics};
 
 /// Get statistics for a specific account
 #[utoipa::path(
@@ -62,7 +66,10 @@ pub async fn get_account_statistics(
     let collection = AccountStatisticsCollection::new(period, statistics);
 
     // Cache the result
-    state.cache.insert(cache_key, CachedData::Statistics(collection.clone())).await;
+    state
+        .cache
+        .insert(cache_key, CachedData::Statistics(collection.clone()))
+        .await;
 
     let response = ApiResponse {
         data: collection,
@@ -90,7 +97,10 @@ pub async fn get_all_accounts_statistics(
 ) -> Result<Json<ApiResponse<Vec<AccountStatisticsCollection>>>, StatusCode> {
     // Get all accounts that are included in statistics
     let accounts = match account::Entity::find().all(&state.db).await {
-        Ok(accounts) => accounts.into_iter().filter(|a| a.include_in_statistics).collect::<Vec<_>>(),
+        Ok(accounts) => accounts
+            .into_iter()
+            .filter(|a| a.include_in_statistics)
+            .collect::<Vec<_>>(),
         Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
     };
 

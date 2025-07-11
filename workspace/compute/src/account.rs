@@ -360,7 +360,11 @@ mod tests {
             }
         }
 
-        assert!(false, "This should fail because balance mismatch instead = {:?}", result);
+        assert!(
+            false,
+            "This should fail because balance mismatch instead = {:?}",
+            result
+        );
     }
 
     #[tokio::test]
@@ -371,10 +375,8 @@ mod tests {
         let today = NaiveDate::from_ymd_opt(2026, 06, 22).unwrap();
 
         // Create the balance calculator
-        let balance_calculator = balance::BalanceCalculator::new_with_today(
-            MergeMethod::FirstWins,
-            today,
-        );
+        let balance_calculator =
+            balance::BalanceCalculator::new_with_today(MergeMethod::FirstWins, today);
 
         // Create the unpaid recurring calculator
         let unpaid_calculator = unpaid_recurring::UnpaidRecurringCalculator::new_with_sum_merge(
@@ -385,10 +387,7 @@ mod tests {
         // Create a merge calculator that combines both calculators
         // Use Sum merge method to sum the balances from both calculators
         let merge_calculator = merge::MergeCalculator::new(
-            vec![
-                Box::new(balance_calculator),
-                Box::new(unpaid_calculator),
-            ],
+            vec![Box::new(balance_calculator), Box::new(unpaid_calculator)],
             MergeMethod::Sum,
         );
 
@@ -417,7 +416,11 @@ mod tests {
             }
         }
 
-        assert!(false, "This should fail because balance mismatch instead = {:?}", result);
+        assert!(
+            false,
+            "This should fail because balance mismatch instead = {:?}",
+            result
+        );
     }
 
     #[tokio::test]
@@ -428,10 +431,8 @@ mod tests {
         let today = NaiveDate::from_ymd_opt(2026, 06, 22).unwrap();
 
         // Create the balance calculator
-        let balance_calculator = balance::BalanceCalculator::new_with_today(
-            MergeMethod::FirstWins,
-            today,
-        );
+        let balance_calculator =
+            balance::BalanceCalculator::new_with_today(MergeMethod::FirstWins, today);
 
         // Create the unpaid recurring calculator
         let unpaid_calculator = unpaid_recurring::UnpaidRecurringCalculator::new_with_sum_merge(
@@ -441,10 +442,7 @@ mod tests {
 
         // Create a merge calculator that combines both calculators
         let merge_calculator = merge::MergeCalculator::new(
-            vec![
-                Box::new(balance_calculator),
-                Box::new(unpaid_calculator),
-            ],
+            vec![Box::new(balance_calculator), Box::new(unpaid_calculator)],
             MergeMethod::Sum,
         );
 

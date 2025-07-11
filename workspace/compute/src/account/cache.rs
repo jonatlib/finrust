@@ -50,14 +50,19 @@ impl ComputeStateKey {
 /// - Different caches for different method arguments
 /// - Cache clearing functionality
 /// - Thread-safe implementation using Arc<Mutex<>>
-pub struct AccountStateCacheCalculator<T: AccountStateCalculator, C: Cached<ComputeStateKey, DataFrame> = TimedSizedCache<ComputeStateKey, DataFrame>> {
+pub struct AccountStateCacheCalculator<
+    T: AccountStateCalculator,
+    C: Cached<ComputeStateKey, DataFrame> = TimedSizedCache<ComputeStateKey, DataFrame>,
+> {
     /// The wrapped calculator
     inner: T,
     /// Cache for compute_account_state results
     compute_cache: Arc<Mutex<C>>,
 }
 
-impl<T: AccountStateCalculator, C: Cached<ComputeStateKey, DataFrame>> AccountStateCacheCalculator<T, C> {
+impl<T: AccountStateCalculator, C: Cached<ComputeStateKey, DataFrame>>
+    AccountStateCacheCalculator<T, C>
+{
     /// Creates a new cache calculator wrapping the provided calculator with a custom cache store.
     ///
     /// # Arguments
@@ -97,7 +102,9 @@ impl<T: AccountStateCalculator, C: Cached<ComputeStateKey, DataFrame>> AccountSt
     }
 }
 
-impl<T: AccountStateCalculator> AccountStateCacheCalculator<T, TimedSizedCache<ComputeStateKey, DataFrame>> {
+impl<T: AccountStateCalculator>
+    AccountStateCacheCalculator<T, TimedSizedCache<ComputeStateKey, DataFrame>>
+{
     /// Creates a new cache calculator wrapping the provided calculator.
     ///
     /// # Arguments
@@ -105,7 +112,12 @@ impl<T: AccountStateCalculator> AccountStateCacheCalculator<T, TimedSizedCache<C
     /// * `cache_size` - Maximum number of entries in the cache
     /// * `ttl` - Time to live for cached entries
     /// * `cache_store` - Optional custom cache store implementation
-    pub fn new(inner: T, cache_size: usize, ttl: Duration, cache_store: Option<TimedSizedCache<ComputeStateKey, DataFrame>>) -> Self {
+    pub fn new(
+        inner: T,
+        cache_size: usize,
+        ttl: Duration,
+        cache_store: Option<TimedSizedCache<ComputeStateKey, DataFrame>>,
+    ) -> Self {
         let compute_cache = if let Some(store) = cache_store {
             Arc::new(Mutex::new(store))
         } else {
@@ -132,7 +144,9 @@ impl<T: AccountStateCalculator> AccountStateCacheCalculator<T, TimedSizedCache<C
 }
 
 #[async_trait]
-impl<T: AccountStateCalculator + Send + Sync, C: Cached<ComputeStateKey, DataFrame> + Send + Sync> AccountStateCalculator for AccountStateCacheCalculator<T, C> {
+impl<T: AccountStateCalculator + Send + Sync, C: Cached<ComputeStateKey, DataFrame> + Send + Sync>
+    AccountStateCalculator for AccountStateCacheCalculator<T, C>
+{
     async fn compute_account_state(
         &self,
         db: &DatabaseConnection,
@@ -150,7 +164,10 @@ impl<T: AccountStateCalculator + Send + Sync, C: Cached<ComputeStateKey, DataFra
         }
 
         // Not in cache, compute the result
-        let result = self.inner.compute_account_state(db, accounts, start_date, end_date).await?;
+        let result = self
+            .inner
+            .compute_account_state(db, accounts, start_date, end_date)
+            .await?;
 
         // Store in cache
         if let Ok(mut cache) = self.compute_cache.lock() {

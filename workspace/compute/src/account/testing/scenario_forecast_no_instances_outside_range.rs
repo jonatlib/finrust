@@ -24,7 +24,8 @@ impl CustomScenarioForecastNoInstances {
 impl TestScenarioBuilder for CustomScenarioForecastNoInstances {
     async fn get_scenario(&self) -> std::result::Result<TestScenario, sea_orm::DbErr> {
         // Get the base scenario
-        let (db, accounts, assert_result) = ScenarioForecastNoInstances::new().get_scenario().await?;
+        let (db, accounts, assert_result) =
+            ScenarioForecastNoInstances::new().get_scenario().await?;
 
         // Update the expected balances for April 1, April 15, and May 1
         let april_1_2023 = NaiveDate::from_ymd_opt(2023, 4, 1).unwrap();

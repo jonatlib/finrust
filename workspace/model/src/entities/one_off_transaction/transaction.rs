@@ -1,10 +1,12 @@
-use chrono::NaiveDate;
 use async_trait::async_trait;
-use sea_orm::{EntityTrait, ModelTrait, QueryFilter, ColumnTrait, DatabaseConnection, RelationTrait};
+use chrono::NaiveDate;
+use sea_orm::{
+    ColumnTrait, DatabaseConnection, EntityTrait, ModelTrait, QueryFilter, RelationTrait,
+};
 
-use crate::transaction::{Transaction, TransactionGenerator, Tag};
-use crate::entities::{tag, one_off_transaction_tag};
 use super::Model as OneOffTransaction;
+use crate::entities::{one_off_transaction_tag, tag};
+use crate::transaction::{Tag, Transaction, TransactionGenerator};
 
 #[async_trait]
 impl TransactionGenerator for OneOffTransaction {
@@ -13,7 +15,13 @@ impl TransactionGenerator for OneOffTransaction {
         self.date >= start && self.date <= end
     }
 
-    async fn generate_transactions(&self, start: NaiveDate, end: NaiveDate, today: NaiveDate, db: &DatabaseConnection) -> Vec<Transaction> {
+    async fn generate_transactions(
+        &self,
+        start: NaiveDate,
+        end: NaiveDate,
+        today: NaiveDate,
+        db: &DatabaseConnection,
+    ) -> Vec<Transaction> {
         let mut transactions = Vec::new();
 
         // Only generate a transaction if the date is within the range
@@ -22,11 +30,7 @@ impl TransactionGenerator for OneOffTransaction {
             let tags = self.get_tag_for_transaction(db, false).await;
 
             let mut target_transaction = if tags.is_empty() {
-                Transaction::new(
-                    self.date,
-                    self.amount,
-                    self.target_account_id,
-                )
+                Transaction::new(self.date, self.amount, self.target_account_id)
             } else {
                 Transaction::new_with_tags(
                     self.date,
@@ -48,18 +52,9 @@ impl TransactionGenerator for OneOffTransaction {
             if let Some(source_account_id) = self.source_account_id {
                 // For the source account, the amount is negated
                 let mut source_transaction = if tags.is_empty() {
-                    Transaction::new(
-                        self.date,
-                        -self.amount,
-                        source_account_id,
-                    )
+                    Transaction::new(self.date, -self.amount, source_account_id)
                 } else {
-                    Transaction::new_with_tags(
-                        self.date,
-                        -self.amount,
-                        source_account_id,
-                        tags,
-                    )
+                    Transaction::new_with_tags(self.date, -self.amount, source_account_id, tags)
                 };
 
                 // Apply the same payment logic to the source transaction
@@ -206,7 +201,10 @@ mod tests {
             .await;
 
         assert_eq!(transactions.len(), 1);
-        assert_eq!(transactions[0].date(), NaiveDate::from_ymd_opt(2023, 1, 15).unwrap());
+        assert_eq!(
+            transactions[0].date(),
+            NaiveDate::from_ymd_opt(2023, 1, 15).unwrap()
+        );
         assert_eq!(transactions[0].amount(), Decimal::new(100, 0));
         assert_eq!(transactions[0].account(), 1);
         assert!(transactions[0].is_paid()); // Should be paid since Jan 15 <= Jan 20 (today)
@@ -238,13 +236,19 @@ mod tests {
         assert_eq!(transactions.len(), 2);
 
         // Target account transaction
-        assert_eq!(transactions[0].date(), NaiveDate::from_ymd_opt(2023, 1, 20).unwrap());
+        assert_eq!(
+            transactions[0].date(),
+            NaiveDate::from_ymd_opt(2023, 1, 20).unwrap()
+        );
         assert_eq!(transactions[0].amount(), Decimal::new(200, 0));
         assert_eq!(transactions[0].account(), 2);
         assert!(transactions[0].is_paid()); // Should be paid since Jan 20 <= Jan 25 (today)
 
         // Source account transaction (negated amount)
-        assert_eq!(transactions[1].date(), NaiveDate::from_ymd_opt(2023, 1, 20).unwrap());
+        assert_eq!(
+            transactions[1].date(),
+            NaiveDate::from_ymd_opt(2023, 1, 20).unwrap()
+        );
         assert_eq!(transactions[1].amount(), Decimal::new(-200, 0));
         assert_eq!(transactions[1].account(), 1);
         assert!(transactions[1].is_paid()); // Should be paid since Jan 20 <= Jan 25 (today)

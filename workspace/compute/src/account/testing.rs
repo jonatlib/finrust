@@ -23,7 +23,7 @@ use polars::prelude::*;
 use polars::prelude::{col, lit};
 use rust_decimal::Decimal;
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbErr};
-use tracing::{debug, error, info, Level};
+use tracing::{Level, debug, error, info};
 #[cfg(test)]
 use tracing_subscriber::FmtSubscriber;
 
@@ -142,7 +142,9 @@ pub async fn run_and_assert_scenario(
 
     if min_date >= max_date {
         error!("No date range selected, falling back to default");
-        return Err(ComputeError::Date("Date range outside datapoints".to_owned()));
+        return Err(ComputeError::Date(
+            "Date range outside datapoints".to_owned(),
+        ));
     }
 
     let mut computer_result = computer

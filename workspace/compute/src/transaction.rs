@@ -32,7 +32,10 @@ impl TransactionPolars for Transaction {
     /// - account: The account ID as an i32
     fn to_series(&self) -> Vec<Series> {
         vec![
-            Series::new("date".into(), &[self.date().and_hms_opt(0, 0, 0).unwrap().timestamp_millis()]),
+            Series::new(
+                "date".into(),
+                &[self.date().and_hms_opt(0, 0, 0).unwrap().timestamp_millis()],
+            ),
             Series::new("amount".into(), &[self.amount().to_f64().unwrap_or(0.0)]),
             Series::new("account".into(), &[self.account()]),
         ]
@@ -53,7 +56,7 @@ impl TransactionPolars for Transaction {
 /// This trait extends any iterator that yields Transaction objects with the ability
 /// to convert the entire iterator into a Polars DataFrame. This is useful for
 /// processing collections of transactions in bulk for data analysis.
-pub trait TransactionIteratorPolars<T: Iterator<Item=Transaction>> {
+pub trait TransactionIteratorPolars<T: Iterator<Item = Transaction>> {
     /// Convert an iterator of Transactions to a Polars DataFrame.
     ///
     /// Consumes the iterator and returns a DataFrame containing all transactions,
@@ -61,7 +64,7 @@ pub trait TransactionIteratorPolars<T: Iterator<Item=Transaction>> {
     fn to_df(self) -> Result<DataFrame, PolarsError>;
 }
 
-impl<T: Iterator<Item=Transaction>> TransactionIteratorPolars<T> for T {
+impl<T: Iterator<Item = Transaction>> TransactionIteratorPolars<T> for T {
     /// Implements the to_df method for any iterator over Transactions.
     ///
     /// This implementation:
@@ -80,7 +83,13 @@ impl<T: Iterator<Item=Transaction>> TransactionIteratorPolars<T> for T {
 
         // Collect all transaction data into separate vectors
         for transaction in self {
-            dates.push(transaction.date().and_hms_opt(0, 0, 0).unwrap().timestamp_millis());
+            dates.push(
+                transaction
+                    .date()
+                    .and_hms_opt(0, 0, 0)
+                    .unwrap()
+                    .timestamp_millis(),
+            );
             amounts.push(transaction.amount().to_f64().unwrap_or(0.0));
             accounts.push(transaction.account());
         }

@@ -1,11 +1,15 @@
-use axum::{extract::{Path, Query, State}, http::StatusCode, response::Json};
-use common::{AccountStateTimeseries};
-use compute::{default_compute, account::AccountStateCalculator};
+use crate::helpers::converters::convert_dataframe_to_timeseries;
+use crate::schemas::{ApiResponse, AppState, CachedData, TimeseriesQuery};
+use axum::{
+    extract::{Path, Query, State},
+    http::StatusCode,
+    response::Json,
+};
+use common::AccountStateTimeseries;
+use compute::{account::AccountStateCalculator, default_compute};
 use model::entities::account;
 use sea_orm::EntityTrait;
 use tracing::instrument;
-use crate::schemas::{AppState, ApiResponse, TimeseriesQuery, CachedData};
-use crate::helpers::converters::convert_dataframe_to_timeseries;
 
 /// Get timeseries data for a specific account
 #[utoipa::path(
@@ -56,7 +60,9 @@ pub async fn get_account_timeseries(
     let accounts = vec![account_model];
     let compute = default_compute(None);
 
-    let timeseries_result = compute.compute_account_state(&state.db, &accounts, query.start_date, query.end_date).await;
+    let timeseries_result = compute
+        .compute_account_state(&state.db, &accounts, query.start_date, query.end_date)
+        .await;
 
     let timeseries = match timeseries_result {
         Ok(df) => {
@@ -76,7 +82,10 @@ pub async fn get_account_timeseries(
     };
 
     // Cache the result
-    state.cache.insert(cache_key, CachedData::Timeseries(timeseries.clone())).await;
+    state
+        .cache
+        .insert(cache_key, CachedData::Timeseries(timeseries.clone()))
+        .await;
 
     let response = ApiResponse {
         data: timeseries,
@@ -104,7 +113,10 @@ pub async fn get_all_accounts_timeseries(
 ) -> Result<Json<ApiResponse<AccountStateTimeseries>>, StatusCode> {
     // Get all accounts that are included in statistics
     let accounts = match account::Entity::find().all(&state.db).await {
-        Ok(accounts) => accounts.into_iter().filter(|a| a.include_in_statistics).collect::<Vec<_>>(),
+        Ok(accounts) => accounts
+            .into_iter()
+            .filter(|a| a.include_in_statistics)
+            .collect::<Vec<_>>(),
         Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
     };
 
@@ -122,7 +134,9 @@ pub async fn get_all_accounts_timeseries(
     // Compute timeseries for all accounts using the compute module
     let compute = default_compute(None);
 
-    let timeseries_result = compute.compute_account_state(&state.db, &accounts, query.start_date, query.end_date).await;
+    let timeseries_result = compute
+        .compute_account_state(&state.db, &accounts, query.start_date, query.end_date)
+        .await;
 
     let timeseries = match timeseries_result {
         Ok(df) => {

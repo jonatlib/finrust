@@ -64,8 +64,8 @@ impl Model {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sea_orm::{Database, Schema, DbBackend, Set, Statement};
     use sea_orm::sea_query::SqliteQueryBuilder;
+    use sea_orm::{Database, DbBackend, Schema, Set, Statement};
 
     async fn setup_test_db() -> DatabaseConnection {
         let db = Database::connect("sqlite::memory:").await.unwrap();
@@ -73,13 +73,20 @@ mod tests {
         // Create the tags table
         let schema = Schema::new(DbBackend::Sqlite);
         let stmt = schema.create_table_from_entity(Entity);
-        let statement = Statement::from_string(DbBackend::Sqlite, stmt.to_string(SqliteQueryBuilder));
+        let statement =
+            Statement::from_string(DbBackend::Sqlite, stmt.to_string(SqliteQueryBuilder));
         db.execute(statement).await.unwrap();
 
         db
     }
 
-    async fn create_test_tag(db: &DatabaseConnection, id: i32, name: &str, description: Option<&str>, parent_id: Option<i32>) -> Model {
+    async fn create_test_tag(
+        db: &DatabaseConnection,
+        id: i32,
+        name: &str,
+        description: Option<&str>,
+        parent_id: Option<i32>,
+    ) -> Model {
         let tag = ActiveModel {
             id: Set(id),
             name: Set(name.to_string()),
@@ -96,7 +103,8 @@ mod tests {
         let db = setup_test_db().await;
 
         // Create a root tag (no parent)
-        let root_tag = create_test_tag(&db, 1, "Expenses", Some("Root expenses category"), None).await;
+        let root_tag =
+            create_test_tag(&db, 1, "Expenses", Some("Root expenses category"), None).await;
 
         // Expand should return only the tag itself
         let expanded = root_tag.expand(&db).await.unwrap();
@@ -112,10 +120,12 @@ mod tests {
         let db = setup_test_db().await;
 
         // Create parent tag
-        let parent_tag = create_test_tag(&db, 1, "Expenses", Some("Root expenses category"), None).await;
+        let parent_tag =
+            create_test_tag(&db, 1, "Expenses", Some("Root expenses category"), None).await;
 
         // Create child tag
-        let child_tag = create_test_tag(&db, 2, "Groceries", Some("Food and groceries"), Some(1)).await;
+        let child_tag =
+            create_test_tag(&db, 2, "Groceries", Some("Food and groceries"), Some(1)).await;
 
         // Expand child tag should return [child, parent]
         let expanded = child_tag.expand(&db).await.unwrap();
@@ -138,9 +148,11 @@ mod tests {
         let db = setup_test_db().await;
 
         // Create a 3-level hierarchy: Root -> Category -> Subcategory
-        let root_tag = create_test_tag(&db, 1, "Expenses", Some("Root expenses category"), None).await;
+        let root_tag =
+            create_test_tag(&db, 1, "Expenses", Some("Root expenses category"), None).await;
         let category_tag = create_test_tag(&db, 2, "Food", Some("Food expenses"), Some(1)).await;
-        let subcategory_tag = create_test_tag(&db, 3, "Groceries", Some("Grocery shopping"), Some(2)).await;
+        let subcategory_tag =
+            create_test_tag(&db, 3, "Groceries", Some("Grocery shopping"), Some(2)).await;
 
         // Expand the deepest tag should return [subcategory, category, root]
         let expanded = subcategory_tag.expand(&db).await.unwrap();
@@ -168,14 +180,17 @@ mod tests {
         let db = setup_test_db().await;
 
         // Disable foreign key constraints for this test
-        let statement = Statement::from_string(DbBackend::Sqlite, "PRAGMA foreign_keys = OFF".to_string());
+        let statement =
+            Statement::from_string(DbBackend::Sqlite, "PRAGMA foreign_keys = OFF".to_string());
         db.execute(statement).await.unwrap();
 
         // Create a tag that references a non-existent parent
-        let orphan_tag = create_test_tag(&db, 1, "Orphan", Some("Tag with missing parent"), Some(999)).await;
+        let orphan_tag =
+            create_test_tag(&db, 1, "Orphan", Some("Tag with missing parent"), Some(999)).await;
 
         // Re-enable foreign key constraints
-        let statement = Statement::from_string(DbBackend::Sqlite, "PRAGMA foreign_keys = ON".to_string());
+        let statement =
+            Statement::from_string(DbBackend::Sqlite, "PRAGMA foreign_keys = ON".to_string());
         db.execute(statement).await.unwrap();
 
         // Expand should handle the missing parent gracefully and return only the tag itself

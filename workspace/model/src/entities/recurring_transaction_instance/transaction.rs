@@ -1,26 +1,37 @@
-use chrono::NaiveDate;
 use async_trait::async_trait;
-use sea_orm::{EntityTrait, ModelTrait, QueryFilter, ColumnTrait, DatabaseConnection, RelationTrait};
+use chrono::NaiveDate;
+use sea_orm::{
+    ColumnTrait, DatabaseConnection, EntityTrait, ModelTrait, QueryFilter, RelationTrait,
+};
 
-use crate::transaction::{Transaction, TransactionGenerator, Tag};
-use crate::entities::{tag, recurring_transaction_tag};
-use crate::entities::recurring_transaction_instance::{Model as RecurringTransactionInstance, InstanceStatus};
+use crate::entities::recurring_transaction_instance::{
+    InstanceStatus, Model as RecurringTransactionInstance,
+};
+use crate::entities::{recurring_transaction_tag, tag};
+use crate::transaction::{Tag, Transaction, TransactionGenerator};
 
 #[async_trait]
 impl TransactionGenerator for RecurringTransactionInstance {
     async fn get_tag_for_transaction(&self, db: &DatabaseConnection, expand: bool) -> Vec<Tag> {
         // Query the database for tags associated with the parent recurring transaction
         // First, we need to get the recurring transaction
-        let recurring_transaction = match crate::entities::recurring_transaction::Entity::find_by_id(self.recurring_transaction_id)
+        let recurring_transaction =
+            match crate::entities::recurring_transaction::Entity::find_by_id(
+                self.recurring_transaction_id,
+            )
             .one(db)
             .await
-        {
-            Ok(Some(transaction)) => transaction,
-            _ => return Vec::new(),
-        };
+            {
+                Ok(Some(transaction)) => transaction,
+                _ => return Vec::new(),
+            };
 
         // Then, we can find the tags associated with the recurring transaction
-        let tag_models = match recurring_transaction.find_related(tag::Entity).all(db).await {
+        let tag_models = match recurring_transaction
+            .find_related(tag::Entity)
+            .all(db)
+            .await
+        {
             Ok(tags) => tags,
             Err(_) => return Vec::new(),
         };
@@ -71,16 +82,22 @@ impl TransactionGenerator for RecurringTransactionInstance {
                 // For paid instances, use the paid date if available, otherwise use the due date
                 let transaction_date = self.paid_date.unwrap_or(self.due_date);
                 transaction_date >= start && transaction_date <= end
-            },
+            }
             InstanceStatus::Pending => {
                 // For pending instances, use the due date
                 self.due_date >= start && self.due_date <= end
-            },
+            }
             InstanceStatus::Skipped => false, // Skipped instances don't generate transactions
         }
     }
 
-    async fn generate_transactions(&self, start: NaiveDate, end: NaiveDate, today: NaiveDate, db: &DatabaseConnection) -> Vec<Transaction> {
+    async fn generate_transactions(
+        &self,
+        start: NaiveDate,
+        end: NaiveDate,
+        today: NaiveDate,
+        db: &DatabaseConnection,
+    ) -> Vec<Transaction> {
         let mut transactions = Vec::new();
 
         // Only generate transactions if the instance has a transaction within the date range
@@ -108,7 +125,7 @@ impl TransactionGenerator for RecurringTransactionInstance {
                     // For paid instances, always mark as paid using the paid date or due date
                     transaction.set_paid_on(Some(date.and_hms_opt(0, 0, 0).unwrap()));
                     transactions.push(transaction);
-                },
+                }
                 InstanceStatus::Pending => {
                     // For pending instances, use the due date and expected amount
                     let account_id = self.recurring_transaction_id; // This is a placeholder
@@ -116,7 +133,12 @@ impl TransactionGenerator for RecurringTransactionInstance {
                     let mut transaction = if tags.is_empty() {
                         Transaction::new(self.due_date, self.expected_amount, account_id)
                     } else {
-                        Transaction::new_with_tags(self.due_date, self.expected_amount, account_id, tags)
+                        Transaction::new_with_tags(
+                            self.due_date,
+                            self.expected_amount,
+                            account_id,
+                            tags,
+                        )
                     };
 
                     // For pending instances: only mark as paid if the due date is today or in the past
@@ -125,7 +147,7 @@ impl TransactionGenerator for RecurringTransactionInstance {
                     }
 
                     transactions.push(transaction);
-                },
+                }
                 InstanceStatus::Skipped => {
                     // Skipped instances don't generate transactions
                 }
@@ -236,7 +258,10 @@ mod tests {
             .await;
 
         assert_eq!(transactions.len(), 1);
-        assert_eq!(transactions[0].date(), NaiveDate::from_ymd_opt(2023, 1, 14).unwrap());
+        assert_eq!(
+            transactions[0].date(),
+            NaiveDate::from_ymd_opt(2023, 1, 14).unwrap()
+        );
         assert_eq!(transactions[0].amount(), Decimal::new(-950, 0));
         assert_eq!(transactions[0].account(), 101); // This is a placeholder in our implementation
         assert!(transactions[0].is_paid()); // Should be paid since it's a paid instance
@@ -265,7 +290,10 @@ mod tests {
             .await;
 
         assert_eq!(transactions.len(), 1);
-        assert_eq!(transactions[0].date(), NaiveDate::from_ymd_opt(2023, 2, 15).unwrap());
+        assert_eq!(
+            transactions[0].date(),
+            NaiveDate::from_ymd_opt(2023, 2, 15).unwrap()
+        );
         assert_eq!(transactions[0].amount(), Decimal::new(-1000, 0));
         assert_eq!(transactions[0].account(), 102); // This is a placeholder in our implementation
         assert!(!transactions[0].is_paid()); // Should not be paid since due date (Feb 15) > today (Feb 10)

@@ -27,11 +27,7 @@ pub struct UnpaidRecurringCalculator {
 
 impl UnpaidRecurringCalculator {
     /// Creates a new unpaid recurring calculator with the specified merge method, today date, and future offset.
-    pub fn new(
-        merge_method: MergeMethod,
-        today: NaiveDate,
-        future_offset: Duration,
-    ) -> Self {
+    pub fn new(merge_method: MergeMethod, today: NaiveDate, future_offset: Duration) -> Self {
         Self {
             merge_method,
             today,
@@ -40,10 +36,7 @@ impl UnpaidRecurringCalculator {
     }
 
     /// Creates a new unpaid recurring calculator with the Sum merge method and the specified today date and future offset.
-    pub fn new_with_sum_merge(
-        today: NaiveDate,
-        future_offset: Duration,
-    ) -> Self {
+    pub fn new_with_sum_merge(today: NaiveDate, future_offset: Duration) -> Self {
         Self {
             merge_method: MergeMethod::Sum,
             today,
@@ -78,7 +71,7 @@ impl AccountStateCalculator for UnpaidRecurringCalculator {
             self.today,
             self.future_offset,
         )
-            .await
+        .await
     }
 
     fn merge_method(&self) -> MergeMethod {
@@ -111,12 +104,14 @@ async fn compute_unpaid_recurring(
     let mut all_deltas: Vec<(i32, NaiveDate, Decimal)> = Vec::new();
 
     for account in accounts {
-        debug!("Processing account: id={}, name={}", account.id, account.name);
+        debug!(
+            "Processing account: id={}, name={}",
+            account.id, account.name
+        );
 
         // FIX 2: Call the correct, specialized function
         let recurring_transactions =
-            get_past_due_transactions(db, account.id, start_date, today, future_offset)
-                .await?;
+            get_past_due_transactions(db, account.id, start_date, today, future_offset).await?;
 
         let recurring_income =
             get_recurring_income(db, account.id, start_date, today, today, future_offset).await?;
@@ -173,9 +168,7 @@ async fn compute_unpaid_recurring(
         .drop(["balance"])
         .with_column(col("delta").fill_null(0.0f64))
         .group_by_stable([col("account_id"), col("date")])
-        .agg([
-            col("delta").sum().alias("delta_sum"),
-        ])
+        .agg([col("delta").sum().alias("delta_sum")])
         .sort(["account_id", "date"], Default::default())
         .with_column(
             col("delta_sum")
@@ -233,5 +226,5 @@ fn build_scaffold_df(
         Column::new("date".into(), dates),
         Column::new("balance".into(), zero_balances),
     ])
-        .map_err(Into::into)
+    .map_err(Into::into)
 }

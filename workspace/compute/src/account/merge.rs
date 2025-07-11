@@ -6,7 +6,7 @@ use sea_orm::DatabaseConnection;
 use std::collections::HashMap;
 use tracing::{debug, info, instrument, warn};
 
-use super::{balance, forecast, AccountStateCalculator, MergeMethod};
+use super::{AccountStateCalculator, MergeMethod, balance, forecast};
 use crate::error::Result;
 
 /// A calculator that merges the results of multiple account state calculators.
@@ -159,7 +159,9 @@ impl MergeCalculator {
                     balances_vec[0]
                 }
                 MergeMethod::DateSplit => {
-                    return Err(crate::error::ComputeError::Runtime("Not implemented DateSplit for regular merge".to_owned()))
+                    return Err(crate::error::ComputeError::Runtime(
+                        "Not implemented DateSplit for regular merge".to_owned(),
+                    ));
                 }
             };
 
@@ -429,7 +431,9 @@ impl AccountStateCalculator for MergeCalculator {
         }
 
         // For DateSplit merge method, not implemented
-        return Err(crate::error::ComputeError::Runtime("Not implemented DateSplit for regular merge".to_owned()))
+        return Err(crate::error::ComputeError::Runtime(
+            "Not implemented DateSplit for regular merge".to_owned(),
+        ));
     }
 
     fn merge_method(&self) -> MergeMethod {

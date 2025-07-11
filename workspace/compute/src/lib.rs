@@ -4,13 +4,11 @@ pub mod error;
 pub mod tags;
 pub mod transaction;
 
-use crate::account::cache::AccountStateCacheCalculator;
 use crate::account::AccountStateCalculator;
+use crate::account::cache::AccountStateCacheCalculator;
 use account::{
-    balance::BalanceCalculator,
-    merge::MergeCalculator,
+    MergeMethod, balance::BalanceCalculator, merge::MergeCalculator,
     unpaid_recurring::UnpaidRecurringCalculator,
-    MergeMethod,
 };
 use chrono::{NaiveDate, Utc};
 use std::time::Duration;
@@ -24,35 +22,29 @@ pub fn default_compute(today: Option<NaiveDate>) -> impl AccountStateCalculator 
     let today = today.unwrap_or_else(|| Utc::now().date_naive());
 
     // Create the balance calculator
-    let balance_calculator = BalanceCalculator::new_with_today(
-        MergeMethod::FirstWins,
-        today,
-    );
+    let balance_calculator = BalanceCalculator::new_with_today(MergeMethod::FirstWins, today);
 
     // Create the unpaid recurring calculator
-    let unpaid_calculator = UnpaidRecurringCalculator::new_with_sum_merge(
-        today,
-        chrono::Duration::days(7),
-    );
+    let unpaid_calculator =
+        UnpaidRecurringCalculator::new_with_sum_merge(today, chrono::Duration::days(7));
 
     // Create a merge calculator that combines both calculators
     // Use Sum merge method to sum the balances from both calculators
     AccountStateCacheCalculator::new(
         MergeCalculator::new(
-            vec![
-                Box::new(balance_calculator),
-                Box::new(unpaid_calculator),
-            ],
+            vec![Box::new(balance_calculator), Box::new(unpaid_calculator)],
             MergeMethod::Sum,
         ),
-        20, Duration::from_secs(60), None,
+        20,
+        Duration::from_secs(60),
+        None,
     )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use account::testing::{run_and_assert_scenario, ScenarioMergeReal};
+    use account::testing::{ScenarioMergeReal, run_and_assert_scenario};
     use tokio;
 
     /// Test using the default compute with the real_merge scenario within range.

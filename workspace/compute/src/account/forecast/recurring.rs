@@ -1,8 +1,6 @@
 use chrono::{Duration, NaiveDate};
 use model::entities::{recurring_income, recurring_transaction, recurring_transaction_instance};
-use sea_orm::{
-    ColumnTrait, Condition, DatabaseConnection, EntityTrait, QueryFilter,
-};
+use sea_orm::{ColumnTrait, Condition, DatabaseConnection, EntityTrait, QueryFilter};
 use std::collections::HashSet;
 use tracing::{debug, instrument, trace};
 
@@ -36,14 +34,16 @@ pub async fn get_balance_sheet_transactions(
         .await?;
 
     let mut result = Vec::new();
-    let instance_map: HashSet<(i32, NaiveDate)> =
-        recurring_transaction_instance::Entity::find()
-            .filter(recurring_transaction_instance::Column::Status.eq(recurring_transaction_instance::InstanceStatus::Paid))
-            .all(db)
-            .await?
-            .into_iter()
-            .map(|i| (i.recurring_transaction_id, i.due_date))
-            .collect();
+    let instance_map: HashSet<(i32, NaiveDate)> = recurring_transaction_instance::Entity::find()
+        .filter(
+            recurring_transaction_instance::Column::Status
+                .eq(recurring_transaction_instance::InstanceStatus::Paid),
+        )
+        .all(db)
+        .await?
+        .into_iter()
+        .map(|i| (i.recurring_transaction_id, i.due_date))
+        .collect();
 
     for tx in &transactions {
         let occurrences =
@@ -93,13 +93,12 @@ pub async fn get_past_due_transactions(
         .await?;
 
     let mut result = Vec::new();
-    let instance_map: HashSet<(i32, NaiveDate)> =
-        recurring_transaction_instance::Entity::find()
-            .all(db)
-            .await?
-            .into_iter()
-            .map(|i| (i.recurring_transaction_id, i.due_date))
-            .collect();
+    let instance_map: HashSet<(i32, NaiveDate)> = recurring_transaction_instance::Entity::find()
+        .all(db)
+        .await?
+        .into_iter()
+        .map(|i| (i.recurring_transaction_id, i.due_date))
+        .collect();
 
     for tx in &transactions {
         // Generate occurrences only in the past, from the transaction's own start date.
@@ -135,9 +134,7 @@ pub async fn get_recurring_income(
 ) -> Result<Vec<(NaiveDate, recurring_income::Model)>> {
     trace!(
         "Getting future recurring income for account_id={} from {} to {}",
-        account_id,
-        start_date,
-        end_date,
+        account_id, start_date, end_date,
     );
 
     let incomes = recurring_income::Entity::find()
@@ -187,4 +184,3 @@ pub async fn get_recurring_income(
     );
     Ok(result)
 }
-

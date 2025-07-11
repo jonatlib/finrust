@@ -1,5 +1,5 @@
 use chrono::NaiveDate;
-use model::transaction::{Transaction, Tag};
+use model::transaction::{Tag, Transaction};
 use polars::prelude::*;
 use rust_decimal::prelude::ToPrimitive;
 use sea_orm::DatabaseConnection;
@@ -9,7 +9,7 @@ use tracing::{debug, info, instrument};
 use crate::error::Result;
 
 /// A computer that calculates expenses and incomes per account, per day, per tag.
-/// 
+///
 /// This computer processes transactions and creates a DataFrame with multi-index
 /// of date, account, single-tag and the corresponding value (sum of expenses/incomes).
 /// This is not a balance calculation, just a sum per tag, account, and day.
@@ -23,16 +23,16 @@ impl TagsComputer {
     }
 
     /// Computes expenses and incomes per account, per day, per tag.
-    /// 
+    ///
     /// # Arguments
-    /// 
+    ///
     /// * `db` - Database connection for retrieving data
     /// * `transactions` - Vector of transactions to process
     /// * `start_date` - Start date for the computation range
     /// * `end_date` - End date for the computation range
-    /// 
+    ///
     /// # Returns
-    /// 
+    ///
     /// A DataFrame with columns: date, account, tag_id, tag_name, amount
     /// where each row represents the sum of transactions for a specific
     /// date, account, and tag combination.
@@ -57,10 +57,14 @@ impl TagsComputer {
             .filter(|t| t.date() >= start_date && t.date() <= end_date)
             .collect();
 
-        debug!("Filtered to {} transactions within date range", filtered_transactions.len());
+        debug!(
+            "Filtered to {} transactions within date range",
+            filtered_transactions.len()
+        );
 
         // Group transactions by (date, account, tag) and sum amounts
-        let mut tag_data: HashMap<(NaiveDate, i32, i32, String), rust_decimal::Decimal> = HashMap::new();
+        let mut tag_data: HashMap<(NaiveDate, i32, i32, String), rust_decimal::Decimal> =
+            HashMap::new();
 
         for transaction in filtered_transactions {
             let date = transaction.date();
@@ -100,7 +104,12 @@ impl TagsComputer {
         sorted_data.sort_by_key(|(key, _)| (key.0, key.1, key.2));
 
         for ((date, account, tag_id, tag_name), amount) in sorted_data {
-            dates.push(date.and_hms_opt(0, 0, 0).unwrap().and_utc().timestamp_millis());
+            dates.push(
+                date.and_hms_opt(0, 0, 0)
+                    .unwrap()
+                    .and_utc()
+                    .timestamp_millis(),
+            );
             accounts.push(account);
             tag_ids.push(tag_id);
             tag_names.push(tag_name);
@@ -140,7 +149,9 @@ mod tests {
         // Mock database connection (not used in this test)
         let db = sea_orm::Database::connect("sqlite::memory:").await.unwrap();
 
-        let result = computer.compute_tags_summary(&db, vec![], start_date, end_date).await;
+        let result = computer
+            .compute_tags_summary(&db, vec![], start_date, end_date)
+            .await;
 
         assert!(result.is_ok());
         let df = result.unwrap();
@@ -172,20 +183,22 @@ mod tests {
         let transaction1 = Transaction::new_with_tag(
             NaiveDate::from_ymd_opt(2023, 1, 15).unwrap(),
             Decimal::new(-5000, 2), // -50.00
-            1, // account 1
+            1,                      // account 1
             tag1,
         );
 
         let transaction2 = Transaction::new_with_tag(
             NaiveDate::from_ymd_opt(2023, 1, 15).unwrap(),
             Decimal::new(-2000, 2), // -20.00
-            1, // account 1
+            1,                      // account 1
             tag2,
         );
 
         let transactions = vec![transaction1, transaction2];
 
-        let result = computer.compute_tags_summary(&db, transactions, start_date, end_date).await;
+        let result = computer
+            .compute_tags_summary(&db, transactions, start_date, end_date)
+            .await;
 
         assert!(result.is_ok());
         let df = result.unwrap();

@@ -38,8 +38,10 @@ pub async fn min_state_in_year(
 ) -> Result<Vec<AccountStats>> {
     let start_date = NaiveDate::from_ymd_opt(year, 1, 1).unwrap();
     let end_date = NaiveDate::from_ymd_opt(year, 12, 31).unwrap();
-    
-    let df = calculator.compute_account_state(db, accounts, start_date, end_date).await?;
+
+    let df = calculator
+        .compute_account_state(db, accounts, start_date, end_date)
+        .await?;
     compute_min_state_from_dataframe(df)
 }
 
@@ -54,8 +56,10 @@ pub async fn min_state_in_month(
 ) -> Result<Vec<AccountStats>> {
     let start_date = NaiveDate::from_ymd_opt(year, month, 1).unwrap();
     let end_date = get_last_day_of_month(year, month);
-    
-    let df = calculator.compute_account_state(db, accounts, start_date, end_date).await?;
+
+    let df = calculator
+        .compute_account_state(db, accounts, start_date, end_date)
+        .await?;
     compute_min_state_from_dataframe(df)
 }
 
@@ -69,8 +73,10 @@ pub async fn max_state_in_year(
 ) -> Result<Vec<AccountStats>> {
     let start_date = NaiveDate::from_ymd_opt(year, 1, 1).unwrap();
     let end_date = NaiveDate::from_ymd_opt(year, 12, 31).unwrap();
-    
-    let df = calculator.compute_account_state(db, accounts, start_date, end_date).await?;
+
+    let df = calculator
+        .compute_account_state(db, accounts, start_date, end_date)
+        .await?;
     compute_max_state_from_dataframe(df)
 }
 
@@ -85,8 +91,10 @@ pub async fn max_state_in_month(
 ) -> Result<Vec<AccountStats>> {
     let start_date = NaiveDate::from_ymd_opt(year, month, 1).unwrap();
     let end_date = get_last_day_of_month(year, month);
-    
-    let df = calculator.compute_account_state(db, accounts, start_date, end_date).await?;
+
+    let df = calculator
+        .compute_account_state(db, accounts, start_date, end_date)
+        .await?;
     compute_max_state_from_dataframe(df)
 }
 
@@ -100,8 +108,10 @@ pub async fn average_expense_in_year(
 ) -> Result<Vec<AccountStats>> {
     let start_date = NaiveDate::from_ymd_opt(year, 1, 1).unwrap();
     let end_date = NaiveDate::from_ymd_opt(year, 12, 31).unwrap();
-    
-    let df = calculator.compute_account_state(db, accounts, start_date, end_date).await?;
+
+    let df = calculator
+        .compute_account_state(db, accounts, start_date, end_date)
+        .await?;
     compute_basic_stats_from_dataframe(df, StatType::AverageExpense)
 }
 
@@ -116,8 +126,10 @@ pub async fn average_expense_in_month(
 ) -> Result<Vec<AccountStats>> {
     let start_date = NaiveDate::from_ymd_opt(year, month, 1).unwrap();
     let end_date = get_last_day_of_month(year, month);
-    
-    let df = calculator.compute_account_state(db, accounts, start_date, end_date).await?;
+
+    let df = calculator
+        .compute_account_state(db, accounts, start_date, end_date)
+        .await?;
     compute_basic_stats_from_dataframe(df, StatType::AverageExpense)
 }
 
@@ -131,8 +143,10 @@ pub async fn average_income_in_year(
 ) -> Result<Vec<AccountStats>> {
     let start_date = NaiveDate::from_ymd_opt(year, 1, 1).unwrap();
     let end_date = NaiveDate::from_ymd_opt(year, 12, 31).unwrap();
-    
-    let df = calculator.compute_account_state(db, accounts, start_date, end_date).await?;
+
+    let df = calculator
+        .compute_account_state(db, accounts, start_date, end_date)
+        .await?;
     compute_basic_stats_from_dataframe(df, StatType::AverageIncome)
 }
 
@@ -147,8 +161,10 @@ pub async fn average_income_in_month(
 ) -> Result<Vec<AccountStats>> {
     let start_date = NaiveDate::from_ymd_opt(year, month, 1).unwrap();
     let end_date = get_last_day_of_month(year, month);
-    
-    let df = calculator.compute_account_state(db, accounts, start_date, end_date).await?;
+
+    let df = calculator
+        .compute_account_state(db, accounts, start_date, end_date)
+        .await?;
     compute_basic_stats_from_dataframe(df, StatType::AverageIncome)
 }
 
@@ -162,8 +178,10 @@ pub async fn upcoming_expenses_until_year_end(
     from_date: NaiveDate,
 ) -> Result<Vec<AccountStats>> {
     let end_date = NaiveDate::from_ymd_opt(year, 12, 31).unwrap();
-    
-    let df = calculator.compute_account_state(db, accounts, from_date, end_date).await?;
+
+    let df = calculator
+        .compute_account_state(db, accounts, from_date, end_date)
+        .await?;
     compute_basic_stats_from_dataframe(df, StatType::UpcomingExpenses)
 }
 
@@ -178,8 +196,10 @@ pub async fn upcoming_expenses_until_month_end(
     from_date: NaiveDate,
 ) -> Result<Vec<AccountStats>> {
     let end_date = get_last_day_of_month(year, month);
-    
-    let df = calculator.compute_account_state(db, accounts, from_date, end_date).await?;
+
+    let df = calculator
+        .compute_account_state(db, accounts, from_date, end_date)
+        .await?;
     compute_basic_stats_from_dataframe(df, StatType::UpcomingExpenses)
 }
 
@@ -193,8 +213,10 @@ pub async fn end_of_year_state(
 ) -> Result<Vec<AccountStats>> {
     let start_date = NaiveDate::from_ymd_opt(year, 1, 1).unwrap();
     let end_date = NaiveDate::from_ymd_opt(year, 12, 31).unwrap();
-    
-    let df = calculator.compute_account_state(db, accounts, start_date, end_date).await?;
+
+    let df = calculator
+        .compute_account_state(db, accounts, start_date, end_date)
+        .await?;
     compute_end_of_period_state_from_dataframe(df, end_date)
 }
 
@@ -209,8 +231,10 @@ pub async fn end_of_month_state(
 ) -> Result<Vec<AccountStats>> {
     let start_date = NaiveDate::from_ymd_opt(year, month, 1).unwrap();
     let end_date = get_last_day_of_month(year, month);
-    
-    let df = calculator.compute_account_state(db, accounts, start_date, end_date).await?;
+
+    let df = calculator
+        .compute_account_state(db, accounts, start_date, end_date)
+        .await?;
     compute_end_of_period_state_from_dataframe(df, end_date)
 }
 
@@ -225,7 +249,7 @@ enum StatType {
 
 fn compute_min_state_from_dataframe(df: DataFrame) -> Result<Vec<AccountStats>> {
     let mut stats = Vec::new();
-    
+
     // For now, return empty stats to avoid compilation errors
     // TODO: Implement proper DataFrame processing when Polars API is better understood
     for account in get_unique_account_ids(&df)? {
@@ -239,13 +263,13 @@ fn compute_min_state_from_dataframe(df: DataFrame) -> Result<Vec<AccountStats>> 
             end_of_period_state: None,
         });
     }
-    
+
     Ok(stats)
 }
 
 fn compute_max_state_from_dataframe(df: DataFrame) -> Result<Vec<AccountStats>> {
     let mut stats = Vec::new();
-    
+
     // For now, return empty stats to avoid compilation errors
     // TODO: Implement proper DataFrame processing when Polars API is better understood
     for account in get_unique_account_ids(&df)? {
@@ -259,13 +283,16 @@ fn compute_max_state_from_dataframe(df: DataFrame) -> Result<Vec<AccountStats>> 
             end_of_period_state: None,
         });
     }
-    
+
     Ok(stats)
 }
 
-fn compute_basic_stats_from_dataframe(df: DataFrame, stat_type: StatType) -> Result<Vec<AccountStats>> {
+fn compute_basic_stats_from_dataframe(
+    df: DataFrame,
+    stat_type: StatType,
+) -> Result<Vec<AccountStats>> {
     let mut stats = Vec::new();
-    
+
     // For now, return empty stats to avoid compilation errors
     // TODO: Implement proper DataFrame processing when Polars API is better understood
     for account in get_unique_account_ids(&df)? {
@@ -278,22 +305,25 @@ fn compute_basic_stats_from_dataframe(df: DataFrame, stat_type: StatType) -> Res
             upcoming_expenses: None,
             end_of_period_state: None,
         };
-        
+
         match stat_type {
             StatType::AverageExpense => stat.average_expense = Some(Decimal::ZERO),
             StatType::AverageIncome => stat.average_income = Some(Decimal::ZERO),
             StatType::UpcomingExpenses => stat.upcoming_expenses = Some(Decimal::ZERO),
         }
-        
+
         stats.push(stat);
     }
-    
+
     Ok(stats)
 }
 
-fn compute_end_of_period_state_from_dataframe(df: DataFrame, _end_date: NaiveDate) -> Result<Vec<AccountStats>> {
+fn compute_end_of_period_state_from_dataframe(
+    df: DataFrame,
+    _end_date: NaiveDate,
+) -> Result<Vec<AccountStats>> {
     let mut stats = Vec::new();
-    
+
     // For now, return empty stats to avoid compilation errors
     // TODO: Implement proper DataFrame processing when Polars API is better understood
     for account in get_unique_account_ids(&df)? {
@@ -307,7 +337,7 @@ fn compute_end_of_period_state_from_dataframe(df: DataFrame, _end_date: NaiveDat
             end_of_period_state: Some(Decimal::ZERO), // Placeholder
         });
     }
-    
+
     Ok(stats)
 }
 
@@ -321,7 +351,7 @@ fn get_last_day_of_month(year: i32, month: u32) -> NaiveDate {
     // Get the first day of the next month, then subtract one day
     let next_month = if month == 12 { 1 } else { month + 1 };
     let next_year = if month == 12 { year + 1 } else { year };
-    
+
     NaiveDate::from_ymd_opt(next_year, next_month, 1)
         .unwrap()
         .pred_opt()
@@ -331,12 +361,24 @@ fn get_last_day_of_month(year: i32, month: u32) -> NaiveDate {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_get_last_day_of_month() {
-        assert_eq!(get_last_day_of_month(2023, 1), NaiveDate::from_ymd_opt(2023, 1, 31).unwrap());
-        assert_eq!(get_last_day_of_month(2023, 2), NaiveDate::from_ymd_opt(2023, 2, 28).unwrap());
-        assert_eq!(get_last_day_of_month(2024, 2), NaiveDate::from_ymd_opt(2024, 2, 29).unwrap()); // Leap year
-        assert_eq!(get_last_day_of_month(2023, 12), NaiveDate::from_ymd_opt(2023, 12, 31).unwrap());
+        assert_eq!(
+            get_last_day_of_month(2023, 1),
+            NaiveDate::from_ymd_opt(2023, 1, 31).unwrap()
+        );
+        assert_eq!(
+            get_last_day_of_month(2023, 2),
+            NaiveDate::from_ymd_opt(2023, 2, 28).unwrap()
+        );
+        assert_eq!(
+            get_last_day_of_month(2024, 2),
+            NaiveDate::from_ymd_opt(2024, 2, 29).unwrap()
+        ); // Leap year
+        assert_eq!(
+            get_last_day_of_month(2023, 12),
+            NaiveDate::from_ymd_opt(2023, 12, 31).unwrap()
+        );
     }
 }

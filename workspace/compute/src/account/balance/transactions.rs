@@ -1,8 +1,6 @@
 use chrono::NaiveDate;
 use model::entities::{imported_transaction, one_off_transaction};
-use sea_orm::{
-    ColumnTrait, Condition, DatabaseConnection, EntityTrait, QueryFilter,
-};
+use sea_orm::{ColumnTrait, Condition, DatabaseConnection, EntityTrait, QueryFilter};
 use tracing::{debug, instrument, trace};
 
 use crate::error::Result;

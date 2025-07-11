@@ -1,6 +1,6 @@
+use async_trait::async_trait;
 use chrono::{NaiveDate, NaiveDateTime};
 use rust_decimal::Decimal;
-use async_trait::async_trait;
 use sea_orm::DatabaseConnection;
 
 /// Represents a tag that can be applied to transactions.
@@ -12,7 +12,7 @@ pub struct Tag {
 }
 
 /// Represents a single transaction with a specific date, amount, and account.
-/// 
+///
 /// The `paid_on` field indicates when the transaction was actually paid.
 /// If `paid_on` is None, the transaction is not yet paid.
 /// If the transaction is not paid and we have amount and date, we know when it will be paid
@@ -133,7 +133,13 @@ pub trait TransactionGenerator {
 
     /// Generates transactions within the given date range.
     /// The `today` parameter is used to determine payment status for different transaction types.
-    async fn generate_transactions(&self, start: NaiveDate, end: NaiveDate, today: NaiveDate, db: &DatabaseConnection) -> Vec<Transaction>;
+    async fn generate_transactions(
+        &self,
+        start: NaiveDate,
+        end: NaiveDate,
+        today: NaiveDate,
+        db: &DatabaseConnection,
+    ) -> Vec<Transaction>;
 
     /// Gets tags for a transaction.
     /// If expand is true, expands all tags to include their parent hierarchy.
