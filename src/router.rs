@@ -1,10 +1,18 @@
 use crate::handlers::{
+    accounts::{create_account, delete_account, get_account, get_accounts, update_account},
     health::health_check,
     statistics::{get_account_statistics, get_all_accounts_statistics},
     timeseries::{get_account_timeseries, get_all_accounts_timeseries},
+    transactions::{
+        create_transaction, delete_transaction, get_account_transactions, get_transaction,
+        get_transactions, update_transaction,
+    },
 };
 use crate::schemas::{ApiDoc, AppState};
-use axum::{Router, routing::get};
+use axum::{
+    routing::{delete, get, post, put},
+    Router,
+};
 use std::time::Duration;
 use tower::ServiceBuilder;
 use tower_http::{
@@ -18,7 +26,20 @@ pub fn create_router(state: AppState) -> Router {
     Router::new()
         // Health check
         .route("/health", get(health_check))
-        // API v1 routes
+        // Account CRUD routes
+        .route("/api/v1/accounts", post(create_account))
+        .route("/api/v1/accounts", get(get_accounts))
+        .route("/api/v1/accounts/:account_id", get(get_account))
+        .route("/api/v1/accounts/:account_id", put(update_account))
+        .route("/api/v1/accounts/:account_id", delete(delete_account))
+        // Transaction CRUD routes
+        .route("/api/v1/transactions", post(create_transaction))
+        .route("/api/v1/transactions", get(get_transactions))
+        .route("/api/v1/transactions/:transaction_id", get(get_transaction))
+        .route("/api/v1/transactions/:transaction_id", put(update_transaction))
+        .route("/api/v1/transactions/:transaction_id", delete(delete_transaction))
+        .route("/api/v1/accounts/:account_id/transactions", get(get_account_transactions))
+        // API v1 routes (existing statistics and timeseries)
         .route(
             "/api/v1/accounts/:account_id/statistics",
             get(get_account_statistics),
