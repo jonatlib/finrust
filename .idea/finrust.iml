@@ -8,6 +8,7 @@
       <sourceFolder url="file://$MODULE_DIR$/workspace/model/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/workspace/common/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/workspace/compute/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/tests" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

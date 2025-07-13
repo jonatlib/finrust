@@ -11,7 +11,7 @@ use tracing::{instrument, error, warn, info, debug, trace};
 use utoipa::ToSchema;
 
 /// Request body for creating a new account
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Deserialize, Serialize, ToSchema)]
 pub struct CreateAccountRequest {
     /// Account name
     pub name: String,
@@ -28,7 +28,7 @@ pub struct CreateAccountRequest {
 }
 
 /// Request body for updating an account
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Deserialize, Serialize, ToSchema)]
 pub struct UpdateAccountRequest {
     /// Account name
     pub name: Option<String>,
@@ -347,3 +347,4 @@ pub async fn delete_account(
         }
     }
 }
+

@@ -9,6 +9,12 @@ mod helpers;
 mod router;
 mod schemas;
 
+#[cfg(test)]
+mod test_utils;
+
+#[cfg(test)]
+mod tests;
+
 use cli::Cli;
 
 /// Main entry point for the FinRust application.

@@ -46,7 +46,7 @@ pub struct TimeseriesQuery {
 }
 
 /// API response wrapper
-#[derive(Serialize, ToSchema)]
+#[derive(Serialize, Deserialize, ToSchema)]
 pub struct ApiResponse<T> {
     /// Response data
     pub data: T,
