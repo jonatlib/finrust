@@ -4,7 +4,7 @@ pub mod test_utils {
     use crate::schemas::AppState;
     use axum::Router;
     use moka::future::Cache;
-    use sea_orm::{Database, DatabaseConnection};
+    use sea_orm::{Database, DatabaseConnection, ActiveModelTrait, Set};
     use migration::{Migrator, MigratorTrait};
 
     /// Create an in-memory SQLite database for testing
@@ -24,6 +24,21 @@ pub mod test_utils {
     /// Create AppState for testing
     pub async fn setup_test_app_state() -> AppState {
         let db = setup_test_db().await;
+
+        // Create test users for the tests to reference
+        let test_user1 = model::entities::user::ActiveModel {
+            username: Set("test_user1".to_string()),
+            ..Default::default()
+        };
+
+        let test_user2 = model::entities::user::ActiveModel {
+            username: Set("test_user2".to_string()),
+            ..Default::default()
+        };
+
+        test_user1.insert(&db).await.expect("Failed to create test user 1");
+        test_user2.insert(&db).await.expect("Failed to create test user 2");
+
         let cache = Cache::new(100);
 
         AppState { db, cache }
