@@ -24,6 +24,8 @@ use axum::{
     routing::{delete, get, post, put},
     Router,
 };
+#[cfg(not(test))]
+use axum_prometheus::PrometheusMetricLayer;
 use std::time::Duration;
 use tower::ServiceBuilder;
 use tower_http::{
@@ -34,9 +36,23 @@ use utoipa_swagger_ui::SwaggerUi;
 
 /// Create application router with all routes and middleware
 pub fn create_router(state: AppState) -> Router {
-    Router::new()
+    // Create Prometheus metrics layer only in non-test environments
+    #[cfg(not(test))]
+    let (prometheus_layer, metric_handle) = PrometheusMetricLayer::pair();
+
+    let mut router = Router::new()
         // Health check
-        .route("/health", get(health_check))
+        .route("/health", get(health_check));
+
+    // Only add Prometheus metrics endpoint in non-test environments
+    #[cfg(not(test))]
+    {
+        router = router
+            // Prometheus metrics endpoint
+            .route("/metrics", get(move || async move { metric_handle.render() }));
+    }
+
+    router
         // Account CRUD routes
         .route("/api/v1/accounts", post(create_account))
         .route("/api/v1/accounts", get(get_accounts))
@@ -95,12 +111,24 @@ pub fn create_router(state: AppState) -> Router {
         // Swagger UI
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         // Add middleware
-        .layer(
-            ServiceBuilder::new()
-                .layer(TraceLayer::new_for_http())
-                .layer(CompressionLayer::new())
-                .layer(TimeoutLayer::new(Duration::from_secs(30)))
-                .layer(CorsLayer::permissive()),
-        )
+        .layer({
+            #[cfg(not(test))]
+            {
+                ServiceBuilder::new()
+                    .layer(TraceLayer::new_for_http())
+                    .layer(prometheus_layer)
+                    .layer(CompressionLayer::new())
+                    .layer(TimeoutLayer::new(Duration::from_secs(30)))
+                    .layer(CorsLayer::permissive())
+            }
+            #[cfg(test)]
+            {
+                ServiceBuilder::new()
+                    .layer(TraceLayer::new_for_http())
+                    .layer(CompressionLayer::new())
+                    .layer(TimeoutLayer::new(Duration::from_secs(30)))
+                    .layer(CorsLayer::permissive())
+            }
+        })
         .with_state(state)
 }
