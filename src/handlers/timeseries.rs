@@ -5,6 +5,7 @@ use axum::{
     http::StatusCode,
     response::Json,
 };
+use axum_valid::Valid;
 use common::AccountStateTimeseries;
 use compute::{account::AccountStateCalculator, default_compute};
 use model::entities::account;
@@ -28,7 +29,7 @@ use tracing::{instrument, error, warn, info, debug, trace};
 #[instrument]
 pub async fn get_account_timeseries(
     Path(account_id): Path<i32>,
-    Query(query): Query<TimeseriesQuery>,
+    Valid(Query(query)): Valid<Query<TimeseriesQuery>>,
     State(state): State<AppState>,
 ) -> Result<Json<ApiResponse<AccountStateTimeseries>>, StatusCode> {
     trace!("Entering get_account_timeseries function for account_id: {}", account_id);
@@ -137,7 +138,7 @@ pub async fn get_account_timeseries(
 )]
 #[instrument]
 pub async fn get_all_accounts_timeseries(
-    Query(query): Query<TimeseriesQuery>,
+    Valid(Query(query)): Valid<Query<TimeseriesQuery>>,
     State(state): State<AppState>,
 ) -> Result<Json<ApiResponse<AccountStateTimeseries>>, StatusCode> {
     trace!("Entering get_all_accounts_timeseries function");

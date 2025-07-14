@@ -22,6 +22,8 @@ common = { path = "workspace/common" }
 # Web framework and async runtime
 tokio = { version = "1.0", features = ["full"] }
 axum = { version = "0.7", features = ["macros"] }
+axum-valid = "0.20"
+validator = { version = "0.18", features = ["derive"] }
 tower = { version = "0.4", features = ["full"] }
 tower-http = { version = "0.5", features = ["cors", "trace", "compression-gzip", "timeout"] }
 

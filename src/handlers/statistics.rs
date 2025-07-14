@@ -5,6 +5,7 @@ use axum::{
     http::StatusCode,
     response::Json,
 };
+use axum_valid::Valid;
 use common::AccountStatisticsCollection;
 use model::entities::account;
 use sea_orm::EntityTrait;
@@ -27,7 +28,7 @@ use tracing::{instrument, error, warn, info, debug, trace};
 #[instrument]
 pub async fn get_account_statistics(
     Path(account_id): Path<i32>,
-    Query(query): Query<StatisticsQuery>,
+    Valid(Query(query)): Valid<Query<StatisticsQuery>>,
     State(state): State<AppState>,
 ) -> Result<Json<ApiResponse<AccountStatisticsCollection>>, StatusCode> {
     trace!("Entering get_account_statistics function for account_id: {}", account_id);
@@ -121,7 +122,7 @@ pub async fn get_account_statistics(
 )]
 #[instrument]
 pub async fn get_all_accounts_statistics(
-    Query(query): Query<StatisticsQuery>,
+    Valid(Query(query)): Valid<Query<StatisticsQuery>>,
     State(state): State<AppState>,
 ) -> Result<Json<ApiResponse<Vec<AccountStatisticsCollection>>>, StatusCode> {
     trace!("Entering get_all_accounts_statistics function");

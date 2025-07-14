@@ -4,6 +4,7 @@ use axum::{
     http::StatusCode,
     response::Json,
 };
+use axum_valid::Valid;
 use chrono::NaiveDate;
 use model::entities::{recurring_income, recurring_transaction};
 use rust_decimal::Decimal;
@@ -11,6 +12,7 @@ use sea_orm::{ActiveModelTrait, EntityTrait, Set, PaginatorTrait, QueryOrder, Qu
 use serde::{Deserialize, Serialize};
 use tracing::{instrument, error, warn, info, debug, trace};
 use utoipa::{ToSchema, IntoParams};
+use validator::Validate;
 
 /// Request body for creating a recurring income
 #[derive(Debug, Deserialize, Serialize, ToSchema)]
@@ -97,11 +99,13 @@ impl From<recurring_income::Model> for RecurringIncomeResponse {
 }
 
 /// Query parameters for listing recurring incomes
-#[derive(Debug, Deserialize, ToSchema, IntoParams)]
+#[derive(Debug, Deserialize, ToSchema, IntoParams, Validate)]
 pub struct RecurringIncomeQuery {
     /// Page number (default: 1)
+    #[validate(range(min = 1, max = 10000))]
     pub page: Option<u64>,
     /// Page size (default: 50)
+    #[validate(range(min = 1, max = 1000))]
     pub limit: Option<u64>,
     /// Filter by target account ID
     pub target_account_id: Option<i32>,
@@ -209,7 +213,7 @@ pub async fn create_recurring_income(
 )]
 #[instrument]
 pub async fn get_recurring_incomes(
-    Query(query): Query<RecurringIncomeQuery>,
+    Valid(Query(query)): Valid<Query<RecurringIncomeQuery>>,
     State(state): State<AppState>,
 ) -> Result<(StatusCode, Json<ApiResponse<Vec<RecurringIncomeResponse>>>), (StatusCode, Json<ErrorResponse>)> {
     trace!("Entering get_recurring_incomes function");

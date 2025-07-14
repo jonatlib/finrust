@@ -6,6 +6,7 @@ use moka::future::Cache;
 use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
 use utoipa::{OpenApi, ToSchema};
+use validator::Validate;
 
 /// Application state shared across handlers
 #[derive(Clone, Debug)]
@@ -24,11 +25,12 @@ pub enum CachedData {
 }
 
 /// Query parameters for statistics endpoints
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Deserialize, ToSchema, Validate)]
 pub struct StatisticsQuery {
     /// Year for statistics (e.g., 2024)
     pub year: Option<i32>,
     /// Month for statistics (1-12)
+    #[validate(range(min = 1, max = 12))]
     pub month: Option<u32>,
     /// Start date for custom range (YYYY-MM-DD)
     pub start_date: Option<NaiveDate>,
@@ -37,12 +39,20 @@ pub struct StatisticsQuery {
 }
 
 /// Query parameters for timeseries endpoints
-#[derive(Debug, Deserialize, Serialize, ToSchema)]
+#[derive(Debug, Deserialize, Serialize, ToSchema, Validate)]
+#[validate(schema(function = "validate_timeseries_dates"))]
 pub struct TimeseriesQuery {
     /// Start date for timeseries (YYYY-MM-DD)
     pub start_date: NaiveDate,
     /// End date for timeseries (YYYY-MM-DD)
     pub end_date: NaiveDate,
+}
+
+fn validate_timeseries_dates(query: &TimeseriesQuery) -> Result<(), validator::ValidationError> {
+    if query.start_date >= query.end_date {
+        return Err(validator::ValidationError::new("start_date must be before end_date"));
+    }
+    Ok(())
 }
 
 /// API response wrapper
