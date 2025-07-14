@@ -1155,4 +1155,465 @@ mod integration_tests {
         println!("✓ 4. Tested with custom amount override");
         println!("✓ 5. Tested error case (404 for non-existent recurring transaction)");
     }
+
+    #[tokio::test]
+    async fn test_create_manual_account_state() {
+        use crate::handlers::manual_account_states::CreateManualAccountStateRequest;
+        use chrono::NaiveDate;
+        use rust_decimal::Decimal;
+
+        // Setup test server
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // First create an account
+        let create_account_request = CreateAccountRequest {
+            name: "Test Account for Manual State".to_string(),
+            description: Some("Test account for manual state".to_string()),
+            currency_code: "USD".to_string(),
+            owner_id: 1,
+            include_in_statistics: Some(true),
+            ledger_name: Some("test_manual_state".to_string()),
+        };
+
+        let account_response = server
+            .post("/api/v1/accounts")
+            .json(&create_account_request)
+            .await;
+        account_response.assert_status(StatusCode::CREATED);
+        let account_body: ApiResponse<serde_json::Value> = account_response.json();
+        let account_id = account_body.data["id"].as_i64().unwrap();
+
+        // Create manual account state request
+        let create_request = CreateManualAccountStateRequest {
+            date: NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+            amount: Decimal::new(100000, 2), // $1000.00
+        };
+
+        // Send POST request to create manual account state
+        let response = server
+            .post(&format!("/api/v1/accounts/{}/manual-states", account_id))
+            .json(&create_request)
+            .await;
+
+        // Verify response
+        response.assert_status(StatusCode::CREATED);
+        let body: ApiResponse<serde_json::Value> = response.json();
+        assert!(body.success);
+        assert_eq!(body.message, "Manual account state created successfully");
+
+        // Verify manual account state data
+        let state_data = &body.data;
+        assert_eq!(state_data["account_id"], account_id);
+        assert_eq!(state_data["date"], "2024-01-01");
+        assert_eq!(state_data["amount"], "1000");
+        assert!(state_data["id"].as_i64().unwrap() > 0);
+    }
+
+    #[tokio::test]
+    async fn test_create_manual_account_state_invalid_account() {
+        use crate::handlers::manual_account_states::CreateManualAccountStateRequest;
+        use chrono::NaiveDate;
+        use rust_decimal::Decimal;
+
+        // Setup test server
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // Create manual account state request for non-existent account
+        let create_request = CreateManualAccountStateRequest {
+            date: NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+            amount: Decimal::new(100000, 2), // $1000.00
+        };
+
+        // Send POST request to create manual account state with invalid account_id
+        let response = server
+            .post("/api/v1/accounts/999/manual-states")
+            .json(&create_request)
+            .await;
+
+        // Verify response
+        response.assert_status(StatusCode::NOT_FOUND);
+        let error_body: serde_json::Value = response.json();
+        assert_eq!(error_body["success"], false);
+        assert_eq!(error_body["code"], "INVALID_ACCOUNT_ID");
+    }
+
+    #[tokio::test]
+    async fn test_get_manual_account_states() {
+        use crate::handlers::manual_account_states::CreateManualAccountStateRequest;
+        use chrono::NaiveDate;
+        use rust_decimal::Decimal;
+
+        // Setup test server
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // First create an account
+        let create_account_request = CreateAccountRequest {
+            name: "Test Account for Manual States".to_string(),
+            description: Some("Test account for manual states".to_string()),
+            currency_code: "EUR".to_string(),
+            owner_id: 1,
+            include_in_statistics: Some(true),
+            ledger_name: Some("test_manual_states".to_string()),
+        };
+
+        let account_response = server
+            .post("/api/v1/accounts")
+            .json(&create_account_request)
+            .await;
+        account_response.assert_status(StatusCode::CREATED);
+        let account_body: ApiResponse<serde_json::Value> = account_response.json();
+        let account_id = account_body.data["id"].as_i64().unwrap();
+
+        // Create two manual account states
+        let create_request1 = CreateManualAccountStateRequest {
+            date: NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+            amount: Decimal::new(100000, 2), // $1000.00
+        };
+
+        let create_request2 = CreateManualAccountStateRequest {
+            date: NaiveDate::from_ymd_opt(2024, 2, 1).unwrap(),
+            amount: Decimal::new(150000, 2), // $1500.00
+        };
+
+        server
+            .post(&format!("/api/v1/accounts/{}/manual-states", account_id))
+            .json(&create_request1)
+            .await
+            .assert_status(StatusCode::CREATED);
+
+        server
+            .post(&format!("/api/v1/accounts/{}/manual-states", account_id))
+            .json(&create_request2)
+            .await
+            .assert_status(StatusCode::CREATED);
+
+        // Get all manual account states
+        let response = server
+            .get(&format!("/api/v1/accounts/{}/manual-states", account_id))
+            .await;
+
+        // Verify response
+        response.assert_status(StatusCode::OK);
+        let body: ApiResponse<Vec<serde_json::Value>> = response.json();
+        assert!(body.success);
+        assert_eq!(body.message, "Manual account states retrieved successfully");
+        assert_eq!(body.data.len(), 2);
+
+        // Verify manual account state data
+        let states = &body.data;
+        assert_eq!(states[0]["account_id"], account_id);
+        assert_eq!(states[1]["account_id"], account_id);
+    }
+
+    #[tokio::test]
+    async fn test_get_manual_account_state_by_id() {
+        use crate::handlers::manual_account_states::CreateManualAccountStateRequest;
+        use chrono::NaiveDate;
+        use rust_decimal::Decimal;
+
+        // Setup test server
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // First create an account
+        let create_account_request = CreateAccountRequest {
+            name: "Test Account for Manual State".to_string(),
+            description: Some("Test account for manual state".to_string()),
+            currency_code: "USD".to_string(),
+            owner_id: 1,
+            include_in_statistics: Some(true),
+            ledger_name: Some("test_manual_state".to_string()),
+        };
+
+        let account_response = server
+            .post("/api/v1/accounts")
+            .json(&create_account_request)
+            .await;
+        account_response.assert_status(StatusCode::CREATED);
+        let account_body: ApiResponse<serde_json::Value> = account_response.json();
+        let account_id = account_body.data["id"].as_i64().unwrap();
+
+        // Create a manual account state
+        let create_request = CreateManualAccountStateRequest {
+            date: NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+            amount: Decimal::new(100000, 2), // $1000.00
+        };
+
+        let create_response = server
+            .post(&format!("/api/v1/accounts/{}/manual-states", account_id))
+            .json(&create_request)
+            .await;
+        create_response.assert_status(StatusCode::CREATED);
+        let create_body: ApiResponse<serde_json::Value> = create_response.json();
+        let state_id = create_body.data["id"].as_i64().unwrap();
+
+        // Get the manual account state by ID
+        let response = server
+            .get(&format!("/api/v1/accounts/{}/manual-states/{}", account_id, state_id))
+            .await;
+
+        // Verify response
+        response.assert_status(StatusCode::OK);
+        let body: ApiResponse<serde_json::Value> = response.json();
+        assert!(body.success);
+        assert_eq!(body.message, "Manual account state retrieved successfully");
+
+        // Verify manual account state data
+        let state_data = &body.data;
+        assert_eq!(state_data["id"], state_id);
+        assert_eq!(state_data["account_id"], account_id);
+        assert_eq!(state_data["date"], "2024-01-01");
+        assert_eq!(state_data["amount"], "1000");
+    }
+
+    #[tokio::test]
+    async fn test_get_manual_account_state_not_found() {
+        use crate::handlers::manual_account_states::CreateManualAccountStateRequest;
+
+        // Setup test server
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // First create an account
+        let create_account_request = CreateAccountRequest {
+            name: "Test Account for Manual State".to_string(),
+            description: Some("Test account for manual state".to_string()),
+            currency_code: "USD".to_string(),
+            owner_id: 1,
+            include_in_statistics: Some(true),
+            ledger_name: Some("test_manual_state".to_string()),
+        };
+
+        let account_response = server
+            .post("/api/v1/accounts")
+            .json(&create_account_request)
+            .await;
+        account_response.assert_status(StatusCode::CREATED);
+        let account_body: ApiResponse<serde_json::Value> = account_response.json();
+        let account_id = account_body.data["id"].as_i64().unwrap();
+
+        // Try to get non-existent manual account state
+        let response = server
+            .get(&format!("/api/v1/accounts/{}/manual-states/999", account_id))
+            .await;
+
+        // Verify response
+        response.assert_status(StatusCode::NOT_FOUND);
+        let error_body: serde_json::Value = response.json();
+        assert_eq!(error_body["success"], false);
+        assert_eq!(error_body["code"], "NOT_FOUND");
+    }
+
+    #[tokio::test]
+    async fn test_update_manual_account_state() {
+        use crate::handlers::manual_account_states::{CreateManualAccountStateRequest, UpdateManualAccountStateRequest};
+        use chrono::NaiveDate;
+        use rust_decimal::Decimal;
+
+        // Setup test server
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // First create an account
+        let create_account_request = CreateAccountRequest {
+            name: "Test Account for Manual State".to_string(),
+            description: Some("Test account for manual state".to_string()),
+            currency_code: "USD".to_string(),
+            owner_id: 1,
+            include_in_statistics: Some(true),
+            ledger_name: Some("test_manual_state".to_string()),
+        };
+
+        let account_response = server
+            .post("/api/v1/accounts")
+            .json(&create_account_request)
+            .await;
+        account_response.assert_status(StatusCode::CREATED);
+        let account_body: ApiResponse<serde_json::Value> = account_response.json();
+        let account_id = account_body.data["id"].as_i64().unwrap();
+
+        // Create a manual account state
+        let create_request = CreateManualAccountStateRequest {
+            date: NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+            amount: Decimal::new(100000, 2), // $1000.00
+        };
+
+        let create_response = server
+            .post(&format!("/api/v1/accounts/{}/manual-states", account_id))
+            .json(&create_request)
+            .await;
+        create_response.assert_status(StatusCode::CREATED);
+        let create_body: ApiResponse<serde_json::Value> = create_response.json();
+        let state_id = create_body.data["id"].as_i64().unwrap();
+
+        // Update the manual account state
+        let update_request = UpdateManualAccountStateRequest {
+            date: Some(NaiveDate::from_ymd_opt(2024, 2, 1).unwrap()),
+            amount: Some(Decimal::new(200000, 2)), // $2000.00
+        };
+
+        let response = server
+            .put(&format!("/api/v1/accounts/{}/manual-states/{}", account_id, state_id))
+            .json(&update_request)
+            .await;
+
+        // Verify response
+        response.assert_status(StatusCode::OK);
+        let body: ApiResponse<serde_json::Value> = response.json();
+        assert!(body.success);
+        assert_eq!(body.message, "Manual account state updated successfully");
+
+        // Verify updated manual account state data
+        let state_data = &body.data;
+        assert_eq!(state_data["id"], state_id);
+        assert_eq!(state_data["account_id"], account_id);
+        assert_eq!(state_data["date"], "2024-02-01");
+        assert_eq!(state_data["amount"], "2000");
+    }
+
+    #[tokio::test]
+    async fn test_update_manual_account_state_not_found() {
+        use crate::handlers::manual_account_states::UpdateManualAccountStateRequest;
+        use chrono::NaiveDate;
+        use rust_decimal::Decimal;
+
+        // Setup test server
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // First create an account
+        let create_account_request = CreateAccountRequest {
+            name: "Test Account for Manual State".to_string(),
+            description: Some("Test account for manual state".to_string()),
+            currency_code: "USD".to_string(),
+            owner_id: 1,
+            include_in_statistics: Some(true),
+            ledger_name: Some("test_manual_state".to_string()),
+        };
+
+        let account_response = server
+            .post("/api/v1/accounts")
+            .json(&create_account_request)
+            .await;
+        account_response.assert_status(StatusCode::CREATED);
+        let account_body: ApiResponse<serde_json::Value> = account_response.json();
+        let account_id = account_body.data["id"].as_i64().unwrap();
+
+        // Try to update non-existent manual account state
+        let update_request = UpdateManualAccountStateRequest {
+            date: Some(NaiveDate::from_ymd_opt(2024, 2, 1).unwrap()),
+            amount: Some(Decimal::new(200000, 2)), // $2000.00
+        };
+
+        let response = server
+            .put(&format!("/api/v1/accounts/{}/manual-states/999", account_id))
+            .json(&update_request)
+            .await;
+
+        // Verify response
+        response.assert_status(StatusCode::NOT_FOUND);
+        let error_body: serde_json::Value = response.json();
+        assert_eq!(error_body["success"], false);
+        assert_eq!(error_body["code"], "NOT_FOUND");
+    }
+
+    #[tokio::test]
+    async fn test_delete_manual_account_state() {
+        use crate::handlers::manual_account_states::CreateManualAccountStateRequest;
+        use chrono::NaiveDate;
+        use rust_decimal::Decimal;
+
+        // Setup test server
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // First create an account
+        let create_account_request = CreateAccountRequest {
+            name: "Test Account for Manual State".to_string(),
+            description: Some("Test account for manual state".to_string()),
+            currency_code: "USD".to_string(),
+            owner_id: 1,
+            include_in_statistics: Some(true),
+            ledger_name: Some("test_manual_state".to_string()),
+        };
+
+        let account_response = server
+            .post("/api/v1/accounts")
+            .json(&create_account_request)
+            .await;
+        account_response.assert_status(StatusCode::CREATED);
+        let account_body: ApiResponse<serde_json::Value> = account_response.json();
+        let account_id = account_body.data["id"].as_i64().unwrap();
+
+        // Create a manual account state
+        let create_request = CreateManualAccountStateRequest {
+            date: NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+            amount: Decimal::new(100000, 2), // $1000.00
+        };
+
+        let create_response = server
+            .post(&format!("/api/v1/accounts/{}/manual-states", account_id))
+            .json(&create_request)
+            .await;
+        create_response.assert_status(StatusCode::CREATED);
+        let create_body: ApiResponse<serde_json::Value> = create_response.json();
+        let state_id = create_body.data["id"].as_i64().unwrap();
+
+        // Delete the manual account state
+        let response = server
+            .delete(&format!("/api/v1/accounts/{}/manual-states/{}", account_id, state_id))
+            .await;
+
+        // Verify response
+        response.assert_status(StatusCode::OK);
+        let body: ApiResponse<String> = response.json();
+        assert!(body.success);
+        assert_eq!(body.message, "Manual account state deleted successfully");
+        assert!(body.data.contains(&format!("Manual account state with id {} deleted successfully", state_id)));
+
+        // Verify the manual account state is actually deleted
+        let get_response = server
+            .get(&format!("/api/v1/accounts/{}/manual-states/{}", account_id, state_id))
+            .await;
+        get_response.assert_status(StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_delete_manual_account_state_not_found() {
+        // Setup test server
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // First create an account
+        let create_account_request = CreateAccountRequest {
+            name: "Test Account for Manual State".to_string(),
+            description: Some("Test account for manual state".to_string()),
+            currency_code: "USD".to_string(),
+            owner_id: 1,
+            include_in_statistics: Some(true),
+            ledger_name: Some("test_manual_state".to_string()),
+        };
+
+        let account_response = server
+            .post("/api/v1/accounts")
+            .json(&create_account_request)
+            .await;
+        account_response.assert_status(StatusCode::CREATED);
+        let account_body: ApiResponse<serde_json::Value> = account_response.json();
+        let account_id = account_body.data["id"].as_i64().unwrap();
+
+        // Try to delete non-existent manual account state
+        let response = server
+            .delete(&format!("/api/v1/accounts/{}/manual-states/999", account_id))
+            .await;
+
+        // Verify response
+        response.assert_status(StatusCode::NOT_FOUND);
+        let error_body: serde_json::Value = response.json();
+        assert_eq!(error_body["success"], false);
+        assert_eq!(error_body["code"], "NOT_FOUND");
+    }
 }
