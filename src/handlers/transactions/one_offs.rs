@@ -1,13 +1,13 @@
-use crate::schemas::{ApiResponse, AppState};
+use crate::schemas::{ApiResponse, AppState, ErrorResponse};
 use axum::{
     extract::{Path, State},
     http::StatusCode,
     response::Json,
 };
 use chrono::NaiveDate;
-use model::entities::one_off_transaction;
+use model::entities::{one_off_transaction, account};
 use rust_decimal::Decimal;
-use sea_orm::{ActiveModelTrait, EntityTrait, Set};
+use sea_orm::{ActiveModelTrait, EntityTrait, Set, DbErr};
 use serde::{Deserialize, Serialize};
 use tracing::{instrument, error, warn, info, debug, trace};
 use utoipa::ToSchema;
@@ -106,10 +106,64 @@ impl From<one_off_transaction::Model> for TransactionResponse {
 pub async fn create_transaction(
     State(state): State<AppState>,
     Json(request): Json<CreateTransactionRequest>,
-) -> Result<(StatusCode, Json<ApiResponse<TransactionResponse>>), StatusCode> {
+) -> Result<(StatusCode, Json<ApiResponse<TransactionResponse>>), (StatusCode, Json<ErrorResponse>)> {
     trace!("Entering create_transaction function");
     debug!("Creating transaction with name: {}, amount: {}, target_account_id: {}", 
            request.name, request.amount, request.target_account_id);
+
+    // Validate that the target account exists
+    trace!("Validating target_account_id: {}", request.target_account_id);
+    match account::Entity::find_by_id(request.target_account_id).one(&state.db).await {
+        Ok(Some(_account)) => {
+            debug!("Target account with ID {} found", request.target_account_id);
+        }
+        Ok(None) => {
+            warn!("Attempted to create transaction with non-existent target_account_id: {}", request.target_account_id);
+            let error_response = ErrorResponse {
+                error: format!("Target account with id {} does not exist", request.target_account_id),
+                code: "INVALID_TARGET_ACCOUNT_ID".to_string(),
+                success: false,
+            };
+            return Err((StatusCode::BAD_REQUEST, Json(error_response)));
+        }
+        Err(db_error) => {
+            error!("Database error while validating target_account_id {}: {}", request.target_account_id, db_error);
+            let error_response = ErrorResponse {
+                error: "Internal server error while validating target account".to_string(),
+                code: "DATABASE_ERROR".to_string(),
+                success: false,
+            };
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)));
+        }
+    }
+
+    // Validate source account if provided
+    if let Some(source_account_id) = request.source_account_id {
+        trace!("Validating source_account_id: {}", source_account_id);
+        match account::Entity::find_by_id(source_account_id).one(&state.db).await {
+            Ok(Some(_account)) => {
+                debug!("Source account with ID {} found", source_account_id);
+            }
+            Ok(None) => {
+                warn!("Attempted to create transaction with non-existent source_account_id: {}", source_account_id);
+                let error_response = ErrorResponse {
+                    error: format!("Source account with id {} does not exist", source_account_id),
+                    code: "INVALID_SOURCE_ACCOUNT_ID".to_string(),
+                    success: false,
+                };
+                return Err((StatusCode::BAD_REQUEST, Json(error_response)));
+            }
+            Err(db_error) => {
+                error!("Database error while validating source_account_id {}: {}", source_account_id, db_error);
+                let error_response = ErrorResponse {
+                    error: "Internal server error while validating source account".to_string(),
+                    code: "DATABASE_ERROR".to_string(),
+                    success: false,
+                };
+                return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)));
+            }
+        }
+    }
 
     let new_transaction = one_off_transaction::ActiveModel {
         name: Set(request.name.clone()),
@@ -139,7 +193,34 @@ pub async fn create_transaction(
         Err(db_error) => {
             error!("Failed to create transaction '{}' for target account {}: {}", 
                    request.name, request.target_account_id, db_error);
-            Err(StatusCode::INTERNAL_SERVER_ERROR)
+
+            // Handle specific database errors
+            let error_response = match db_error {
+                DbErr::Exec(ref exec_err) => {
+                    // Check for foreign key constraint violations or other specific errors
+                    let error_msg = exec_err.to_string().to_lowercase();
+                    if error_msg.contains("foreign key") || error_msg.contains("constraint") {
+                        ErrorResponse {
+                            error: "Invalid account reference in transaction".to_string(),
+                            code: "FOREIGN_KEY_VIOLATION".to_string(),
+                            success: false,
+                        }
+                    } else {
+                        ErrorResponse {
+                            error: "Failed to create transaction due to database constraint".to_string(),
+                            code: "DATABASE_CONSTRAINT_ERROR".to_string(),
+                            success: false,
+                        }
+                    }
+                }
+                _ => ErrorResponse {
+                    error: "Internal server error while creating transaction".to_string(),
+                    code: "DATABASE_ERROR".to_string(),
+                    success: false,
+                }
+            };
+
+            Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)))
         }
     }
 }

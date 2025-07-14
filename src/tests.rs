@@ -106,6 +106,135 @@ mod integration_tests {
     }
 
     #[tokio::test]
+    async fn test_create_account_with_invalid_owner_id() {
+        // Setup test server
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // Create account request with non-existent owner_id
+        let create_request = CreateAccountRequest {
+            name: "Main account".to_string(),
+            description: Some("Main account".to_string()),
+            currency_code: "CZK".to_string(),
+            owner_id: 0, // This owner doesn't exist
+            include_in_statistics: Some(true),
+            ledger_name: Some("main_account".to_string()),
+        };
+
+        // Send POST request to create account
+        let response = server
+            .post("/api/v1/accounts")
+            .json(&create_request)
+            .await;
+
+        // Should now return 400 Bad Request instead of 500
+        println!("Response status: {}", response.status_code());
+        response.assert_status(StatusCode::BAD_REQUEST);
+
+        // Verify error response format
+        let error_body: serde_json::Value = response.json();
+        println!("Error response: {}", serde_json::to_string_pretty(&error_body).unwrap());
+
+        assert_eq!(error_body["success"], false);
+        assert_eq!(error_body["code"], "INVALID_OWNER_ID");
+        assert!(error_body["error"].as_str().unwrap().contains("Owner with id 0 does not exist"));
+    }
+
+    #[tokio::test]
+    async fn test_create_transaction_with_invalid_target_account_id() {
+        // Setup test server
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // Create transaction request with non-existent target_account_id
+        let create_request = CreateTransactionRequest {
+            name: "Test Transaction".to_string(),
+            description: Some("Test transaction description".to_string()),
+            amount: Decimal::new(-10000, 2), // -$100.00
+            date: NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
+            include_in_statistics: Some(true),
+            target_account_id: 999, // This account doesn't exist
+            source_account_id: None,
+            ledger_name: Some("test_ledger".to_string()),
+            linked_import_id: None,
+        };
+
+        // Send POST request to create transaction
+        let response = server
+            .post("/api/v1/transactions")
+            .json(&create_request)
+            .await;
+
+        // Should return 400 Bad Request
+        println!("Response status: {}", response.status_code());
+        response.assert_status(StatusCode::BAD_REQUEST);
+
+        // Verify error response format
+        let error_body: serde_json::Value = response.json();
+        println!("Error response: {}", serde_json::to_string_pretty(&error_body).unwrap());
+
+        assert_eq!(error_body["success"], false);
+        assert_eq!(error_body["code"], "INVALID_TARGET_ACCOUNT_ID");
+        assert!(error_body["error"].as_str().unwrap().contains("Target account with id 999 does not exist"));
+    }
+
+    #[tokio::test]
+    async fn test_create_transaction_with_invalid_source_account_id() {
+        // Setup test server
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // First create a valid target account
+        let account_request = CreateAccountRequest {
+            name: "Target Account".to_string(),
+            description: Some("Target account for transaction".to_string()),
+            currency_code: "USD".to_string(),
+            owner_id: 1,
+            include_in_statistics: Some(true),
+            ledger_name: Some("target_account".to_string()),
+        };
+
+        let account_response = server
+            .post("/api/v1/accounts")
+            .json(&account_request)
+            .await;
+        account_response.assert_status(StatusCode::CREATED);
+        let account_body: ApiResponse<serde_json::Value> = account_response.json();
+        let target_account_id = account_body.data["id"].as_i64().unwrap() as i32;
+
+        // Create transaction request with valid target but invalid source account
+        let create_request = CreateTransactionRequest {
+            name: "Test Transfer".to_string(),
+            description: Some("Test transfer transaction".to_string()),
+            amount: Decimal::new(-5000, 2), // -$50.00
+            date: NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
+            include_in_statistics: Some(true),
+            target_account_id,
+            source_account_id: Some(888), // This account doesn't exist
+            ledger_name: Some("test_ledger".to_string()),
+            linked_import_id: None,
+        };
+
+        // Send POST request to create transaction
+        let response = server
+            .post("/api/v1/transactions")
+            .json(&create_request)
+            .await;
+
+        // Should return 400 Bad Request
+        println!("Response status: {}", response.status_code());
+        response.assert_status(StatusCode::BAD_REQUEST);
+
+        // Verify error response format
+        let error_body: serde_json::Value = response.json();
+        println!("Error response: {}", serde_json::to_string_pretty(&error_body).unwrap());
+
+        assert_eq!(error_body["success"], false);
+        assert_eq!(error_body["code"], "INVALID_SOURCE_ACCOUNT_ID");
+        assert!(error_body["error"].as_str().unwrap().contains("Source account with id 888 does not exist"));
+    }
+
+    #[tokio::test]
     async fn test_get_account_by_id() {
         // Setup test server
         let app = setup_test_app().await;

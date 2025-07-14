@@ -1,11 +1,11 @@
-use crate::schemas::{ApiResponse, AppState};
+use crate::schemas::{ApiResponse, AppState, ErrorResponse};
 use axum::{
     extract::{Path, State},
     http::StatusCode,
     response::Json,
 };
-use model::entities::account;
-use sea_orm::{ActiveModelTrait, EntityTrait, Set};
+use model::entities::{account, user};
+use sea_orm::{ActiveModelTrait, EntityTrait, Set, DbErr};
 use serde::{Deserialize, Serialize};
 use tracing::{instrument, error, warn, info, debug, trace};
 use utoipa::ToSchema;
@@ -84,10 +84,36 @@ impl From<account::Model> for AccountResponse {
 pub async fn create_account(
     State(state): State<AppState>,
     Json(request): Json<CreateAccountRequest>,
-) -> Result<(StatusCode, Json<ApiResponse<AccountResponse>>), StatusCode> {
+) -> Result<(StatusCode, Json<ApiResponse<AccountResponse>>), (StatusCode, Json<ErrorResponse>)> {
     trace!("Entering create_account function");
     debug!("Creating account with name: {}, currency: {}, owner_id: {}", 
            request.name, request.currency_code, request.owner_id);
+
+    // Validate that the owner exists
+    trace!("Validating owner_id: {}", request.owner_id);
+    match user::Entity::find_by_id(request.owner_id).one(&state.db).await {
+        Ok(Some(_user)) => {
+            debug!("Owner with ID {} found, proceeding with account creation", request.owner_id);
+        }
+        Ok(None) => {
+            warn!("Attempted to create account with non-existent owner_id: {}", request.owner_id);
+            let error_response = ErrorResponse {
+                error: format!("Owner with id {} does not exist", request.owner_id),
+                code: "INVALID_OWNER_ID".to_string(),
+                success: false,
+            };
+            return Err((StatusCode::BAD_REQUEST, Json(error_response)));
+        }
+        Err(db_error) => {
+            error!("Database error while validating owner_id {}: {}", request.owner_id, db_error);
+            let error_response = ErrorResponse {
+                error: "Internal server error while validating owner".to_string(),
+                code: "DATABASE_ERROR".to_string(),
+                success: false,
+            };
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)));
+        }
+    }
 
     let new_account = account::ActiveModel {
         name: Set(request.name.clone()),
@@ -114,7 +140,34 @@ pub async fn create_account(
         Err(db_error) => {
             error!("Failed to create account '{}' for owner {}: {}", 
                    request.name, request.owner_id, db_error);
-            Err(StatusCode::INTERNAL_SERVER_ERROR)
+
+            // Handle specific database errors
+            let error_response = match db_error {
+                DbErr::Exec(ref exec_err) => {
+                    // Check for foreign key constraint violations or other specific errors
+                    let error_msg = exec_err.to_string().to_lowercase();
+                    if error_msg.contains("foreign key") || error_msg.contains("constraint") {
+                        ErrorResponse {
+                            error: format!("Invalid owner_id: {}", request.owner_id),
+                            code: "FOREIGN_KEY_VIOLATION".to_string(),
+                            success: false,
+                        }
+                    } else {
+                        ErrorResponse {
+                            error: "Failed to create account due to database constraint".to_string(),
+                            code: "DATABASE_CONSTRAINT_ERROR".to_string(),
+                            success: false,
+                        }
+                    }
+                }
+                _ => ErrorResponse {
+                    error: "Internal server error while creating account".to_string(),
+                    code: "DATABASE_ERROR".to_string(),
+                    success: false,
+                }
+            };
+
+            Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)))
         }
     }
 }
@@ -347,4 +400,3 @@ pub async fn delete_account(
         }
     }
 }
-
