@@ -5,7 +5,7 @@ use crate::handlers::{
     timeseries::{get_account_timeseries, get_all_accounts_timeseries},
     transactions::{
         create_transaction, delete_transaction, get_account_transactions, get_transaction,
-        get_transactions, update_transaction,
+        get_transactions, update_transaction, create_recurring_instance,
     },
 };
 use crate::schemas::{ApiDoc, AppState};
@@ -39,6 +39,8 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/transactions/:transaction_id", put(update_transaction))
         .route("/api/v1/transactions/:transaction_id", delete(delete_transaction))
         .route("/api/v1/accounts/:account_id/transactions", get(get_account_transactions))
+        // Recurring transaction routes
+        .route("/api/v1/recurring-transactions/:recurring_transaction_id/instances", post(create_recurring_instance))
         // API v1 routes (existing statistics and timeseries)
         .route(
             "/api/v1/accounts/:account_id/statistics",

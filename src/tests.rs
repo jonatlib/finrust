@@ -643,4 +643,138 @@ mod integration_tests {
 
         println!("Individual account timeseries test passed!");
     }
+
+    #[tokio::test]
+    async fn test_create_recurring_transaction_instance() {
+        use crate::handlers::transactions::{CreateRecurringInstanceRequest, RecurringInstanceResponse};
+        use crate::test_utils::test_utils::setup_test_app_state;
+        use crate::router::create_router;
+        use chrono::NaiveDate;
+        use rust_decimal::Decimal;
+        use sea_orm::{ActiveModelTrait, Set};
+        use model::entities::{recurring_transaction, account};
+
+        // Setup test server and get database connection
+        let app_state = setup_test_app_state().await;
+        let app = create_router(app_state.clone());
+        let server = TestServer::new(app).unwrap();
+
+        // Create an account directly in the database for testing
+        let test_account = account::ActiveModel {
+            name: Set("Test Account for Recurring".to_string()),
+            description: Set(Some("Account for testing recurring transactions".to_string())),
+            currency_code: Set("USD".to_string()),
+            owner_id: Set(1), // Use existing test user
+            include_in_statistics: Set(true),
+            ledger_name: Set(Some("test_recurring_ledger".to_string())),
+            ..Default::default()
+        };
+
+        let account = test_account.insert(&app_state.db).await.expect("Failed to create test account");
+
+        // 1. Create a recurring transaction in the database
+        let recurring_tx = recurring_transaction::ActiveModel {
+            name: Set("Monthly Rent".to_string()),
+            description: Set(Some("Monthly rent payment".to_string())),
+            amount: Set(Decimal::new(-150000, 2)), // -$1500.00
+            start_date: Set(NaiveDate::from_ymd_opt(2025, 1, 1).unwrap()),
+            end_date: Set(None), // Indefinite
+            period: Set(recurring_transaction::RecurrencePeriod::Monthly),
+            include_in_statistics: Set(true),
+            target_account_id: Set(account.id),
+            source_account_id: Set(None),
+            ledger_name: Set(Some("rent".to_string())),
+            ..Default::default()
+        };
+
+        let recurring_transaction = recurring_tx.insert(&app_state.db).await.expect("Failed to create recurring transaction");
+
+        // Test with non-existent recurring transaction ID first
+        let instance_request = CreateRecurringInstanceRequest {
+            date: NaiveDate::from_ymd_opt(2025, 1, 15).unwrap(),
+            amount: Some(Decimal::new(50000, 2)), // $500.00
+        };
+
+        let response = server
+            .post("/api/v1/recurring-transactions/999/instances")
+            .json(&instance_request)
+            .await;
+
+        // Should return 404 for non-existent recurring transaction
+        response.assert_status(StatusCode::NOT_FOUND);
+
+        // 2. Test successful instance creation with custom amount override
+        let instance_request_custom = CreateRecurringInstanceRequest {
+            date: NaiveDate::from_ymd_opt(2025, 1, 15).unwrap(),
+            amount: Some(Decimal::new(-160000, 2)), // -$1600.00 (custom amount)
+        };
+
+        let response = server
+            .post(&format!("/api/v1/recurring-transactions/{}/instances", recurring_transaction.id))
+            .json(&instance_request_custom)
+            .await;
+
+        response.assert_status(StatusCode::CREATED);
+        let response_body: ApiResponse<RecurringInstanceResponse> = response.json();
+        assert!(response_body.success);
+        assert_eq!(response_body.data.recurring_transaction_id, recurring_transaction.id);
+        assert_eq!(response_body.data.due_date, NaiveDate::from_ymd_opt(2025, 1, 15).unwrap());
+        assert_eq!(response_body.data.expected_amount, Decimal::new(-160000, 2)); // Custom amount
+        assert_eq!(response_body.data.status, "Pending");
+        assert!(response_body.data.paid_date.is_none());
+        assert!(response_body.data.paid_amount.is_none());
+
+        println!("✓ Test with custom amount override passed!");
+
+        // 3. Test with default amount (no amount override)
+        let instance_request_default = CreateRecurringInstanceRequest {
+            date: NaiveDate::from_ymd_opt(2025, 2, 15).unwrap(),
+            amount: None, // No amount override - should use original amount
+        };
+
+        let response = server
+            .post(&format!("/api/v1/recurring-transactions/{}/instances", recurring_transaction.id))
+            .json(&instance_request_default)
+            .await;
+
+        response.assert_status(StatusCode::CREATED);
+        let response_body: ApiResponse<RecurringInstanceResponse> = response.json();
+        assert!(response_body.success);
+        assert_eq!(response_body.data.recurring_transaction_id, recurring_transaction.id);
+        assert_eq!(response_body.data.due_date, NaiveDate::from_ymd_opt(2025, 2, 15).unwrap());
+        assert_eq!(response_body.data.expected_amount, Decimal::new(-150000, 2)); // Original amount
+        assert_eq!(response_body.data.status, "Pending");
+        assert!(response_body.data.paid_date.is_none());
+        assert!(response_body.data.paid_amount.is_none());
+
+        println!("✓ Test with default amount (no override) passed!");
+
+        // 4. Test another successful instance creation with different date
+        let instance_request_march = CreateRecurringInstanceRequest {
+            date: NaiveDate::from_ymd_opt(2025, 3, 15).unwrap(),
+            amount: Some(Decimal::new(-140000, 2)), // -$1400.00 (different custom amount)
+        };
+
+        let response = server
+            .post(&format!("/api/v1/recurring-transactions/{}/instances", recurring_transaction.id))
+            .json(&instance_request_march)
+            .await;
+
+        response.assert_status(StatusCode::CREATED);
+        let response_body: ApiResponse<RecurringInstanceResponse> = response.json();
+        assert!(response_body.success);
+        assert_eq!(response_body.data.recurring_transaction_id, recurring_transaction.id);
+        assert_eq!(response_body.data.due_date, NaiveDate::from_ymd_opt(2025, 3, 15).unwrap());
+        assert_eq!(response_body.data.expected_amount, Decimal::new(-140000, 2)); // Custom amount
+        assert_eq!(response_body.data.status, "Pending");
+
+        println!("✓ Test with another custom amount passed!");
+
+        println!("All recurring transaction instance creation tests completed successfully!");
+        println!("✓ 1. Created a recurring transaction in the database");
+        println!("✓ 2. Tested successful instance creation");
+        println!("✓ 3. Tested with default amount (no amount override)");
+        println!("✓ 4. Tested with custom amount override");
+        println!("✓ 5. Tested error case (404 for non-existent recurring transaction)");
+    }
 }
