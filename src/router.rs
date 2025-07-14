@@ -7,6 +7,7 @@ use crate::handlers::{
         create_transaction, delete_transaction, get_account_transactions, get_transaction,
         get_transactions, update_transaction, create_recurring_instance,
     },
+    users::{create_user, delete_user, get_user, get_users, update_user},
 };
 use crate::schemas::{ApiDoc, AppState};
 use axum::{
@@ -32,6 +33,12 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/accounts/:account_id", get(get_account))
         .route("/api/v1/accounts/:account_id", put(update_account))
         .route("/api/v1/accounts/:account_id", delete(delete_account))
+        // User CRUD routes
+        .route("/api/v1/users", post(create_user))
+        .route("/api/v1/users", get(get_users))
+        .route("/api/v1/users/:user_id", get(get_user))
+        .route("/api/v1/users/:user_id", put(update_user))
+        .route("/api/v1/users/:user_id", delete(delete_user))
         // Transaction CRUD routes
         .route("/api/v1/transactions", post(create_transaction))
         .route("/api/v1/transactions", get(get_transactions))

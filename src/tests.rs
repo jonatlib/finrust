@@ -3,6 +3,7 @@ mod integration_tests {
     use crate::test_utils::test_utils::setup_test_app;
     use crate::handlers::accounts::{CreateAccountRequest, UpdateAccountRequest};
     use crate::handlers::transactions::CreateTransactionRequest;
+    use crate::handlers::users::{CreateUserRequest, UpdateUserRequest};
     use crate::schemas::{ApiResponse, TimeseriesQuery};
     use axum_test::TestServer;
     use axum::http::StatusCode;
@@ -21,6 +22,254 @@ mod integration_tests {
 
         // Verify response
         response.assert_status(StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_create_user() {
+        // Setup test server
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // Create user request
+        let create_request = CreateUserRequest {
+            username: "testuser".to_string(),
+        };
+
+        // Send POST request to create user
+        let response = server
+            .post("/api/v1/users")
+            .json(&create_request)
+            .await;
+
+        // Verify response
+        if response.status_code() != StatusCode::CREATED {
+            let error_body = response.text();
+            println!("Error response: {}", error_body);
+            panic!("Expected 201 Created, got {}", response.status_code());
+        }
+        let body: ApiResponse<serde_json::Value> = response.json();
+        assert!(body.success);
+        assert_eq!(body.message, "User created successfully");
+
+        // Verify user data
+        let user_data = &body.data;
+        assert_eq!(user_data["username"], "testuser");
+        assert!(user_data["id"].as_i64().unwrap() > 0);
+    }
+
+    #[tokio::test]
+    async fn test_get_users() {
+        // Setup test server
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // First create a user
+        let create_request = CreateUserRequest {
+            username: "testuser2".to_string(),
+        };
+
+        let create_response = server
+            .post("/api/v1/users")
+            .json(&create_request)
+            .await;
+        create_response.assert_status(StatusCode::CREATED);
+
+        // Get all users
+        let response = server.get("/api/v1/users").await;
+
+        // Verify response
+        response.assert_status(StatusCode::OK);
+        let body: ApiResponse<Vec<serde_json::Value>> = response.json();
+        assert!(body.success);
+        assert_eq!(body.message, "Users retrieved successfully");
+        assert!(body.data.len() >= 1);
+
+        // Verify user data (find our created user)
+        let user = body.data.iter().find(|u| u["username"] == "testuser2").unwrap();
+        assert_eq!(user["username"], "testuser2");
+        assert!(user["id"].as_i64().unwrap() > 0);
+    }
+
+    #[tokio::test]
+    async fn test_get_user_by_id() {
+        // Setup test server
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // First create a user
+        let create_request = CreateUserRequest {
+            username: "testuser3".to_string(),
+        };
+
+        let create_response = server
+            .post("/api/v1/users")
+            .json(&create_request)
+            .await;
+        create_response.assert_status(StatusCode::CREATED);
+        let create_body: ApiResponse<serde_json::Value> = create_response.json();
+        let user_id = create_body.data["id"].as_i64().unwrap();
+
+        // Get user by ID
+        let response = server.get(&format!("/api/v1/users/{}", user_id)).await;
+
+        // Verify response
+        response.assert_status(StatusCode::OK);
+        let body: ApiResponse<serde_json::Value> = response.json();
+        assert!(body.success);
+        assert_eq!(body.message, "User retrieved successfully");
+
+        // Verify user data
+        let user_data = &body.data;
+        assert_eq!(user_data["username"], "testuser3");
+        assert_eq!(user_data["id"], user_id);
+    }
+
+    #[tokio::test]
+    async fn test_get_user_not_found() {
+        // Setup test server
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // Try to get non-existent user
+        let response = server.get("/api/v1/users/99999").await;
+
+        // Verify response
+        response.assert_status(StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_update_user() {
+        // Setup test server
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // First create a user
+        let create_request = CreateUserRequest {
+            username: "testuser4".to_string(),
+        };
+
+        let create_response = server
+            .post("/api/v1/users")
+            .json(&create_request)
+            .await;
+        create_response.assert_status(StatusCode::CREATED);
+        let create_body: ApiResponse<serde_json::Value> = create_response.json();
+        let user_id = create_body.data["id"].as_i64().unwrap();
+
+        // Update user
+        let update_request = UpdateUserRequest {
+            username: Some("updateduser".to_string()),
+        };
+
+        let response = server
+            .put(&format!("/api/v1/users/{}", user_id))
+            .json(&update_request)
+            .await;
+
+        // Verify response
+        response.assert_status(StatusCode::OK);
+        let body: ApiResponse<serde_json::Value> = response.json();
+        assert!(body.success);
+        assert_eq!(body.message, "User updated successfully");
+
+        // Verify updated user data
+        let user_data = &body.data;
+        assert_eq!(user_data["username"], "updateduser");
+        assert_eq!(user_data["id"], user_id);
+    }
+
+    #[tokio::test]
+    async fn test_update_user_not_found() {
+        // Setup test server
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // Try to update non-existent user
+        let update_request = UpdateUserRequest {
+            username: Some("newusername".to_string()),
+        };
+
+        let response = server
+            .put("/api/v1/users/99999")
+            .json(&update_request)
+            .await;
+
+        // Verify response
+        response.assert_status(StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_delete_user() {
+        // Setup test server
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // First create a user
+        let create_request = CreateUserRequest {
+            username: "testuser5".to_string(),
+        };
+
+        let create_response = server
+            .post("/api/v1/users")
+            .json(&create_request)
+            .await;
+        create_response.assert_status(StatusCode::CREATED);
+        let create_body: ApiResponse<serde_json::Value> = create_response.json();
+        let user_id = create_body.data["id"].as_i64().unwrap();
+
+        // Delete user
+        let response = server.delete(&format!("/api/v1/users/{}", user_id)).await;
+
+        // Verify response
+        response.assert_status(StatusCode::OK);
+        let body: ApiResponse<String> = response.json();
+        assert!(body.success);
+        assert_eq!(body.message, "User deleted successfully");
+        assert_eq!(body.data, format!("User {} deleted", user_id));
+
+        // Verify user is actually deleted
+        let get_response = server.get(&format!("/api/v1/users/{}", user_id)).await;
+        get_response.assert_status(StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_delete_user_not_found() {
+        // Setup test server
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // Try to delete non-existent user
+        let response = server.delete("/api/v1/users/99999").await;
+
+        // Verify response
+        response.assert_status(StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_create_user_duplicate_username() {
+        // Setup test server
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // Create first user
+        let create_request = CreateUserRequest {
+            username: "duplicateuser".to_string(),
+        };
+
+        let response1 = server
+            .post("/api/v1/users")
+            .json(&create_request)
+            .await;
+        response1.assert_status(StatusCode::CREATED);
+
+        // Try to create user with same username
+        let response2 = server
+            .post("/api/v1/users")
+            .json(&create_request)
+            .await;
+
+        // Verify response (should fail due to unique constraint)
+        response2.assert_status(StatusCode::INTERNAL_SERVER_ERROR);
     }
 
     #[tokio::test]
