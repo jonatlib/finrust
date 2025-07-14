@@ -37,7 +37,7 @@ pub struct StatisticsQuery {
 }
 
 /// Query parameters for timeseries endpoints
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Deserialize, Serialize, ToSchema)]
 pub struct TimeseriesQuery {
     /// Start date for timeseries (YYYY-MM-DD)
     pub start_date: NaiveDate,

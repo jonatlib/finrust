@@ -13,7 +13,7 @@ use tracing::{instrument, error, warn, info, debug, trace};
 use utoipa::ToSchema;
 
 /// Request body for creating a new one-off transaction
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Deserialize, Serialize, ToSchema)]
 pub struct CreateTransactionRequest {
     /// Transaction name
     pub name: String,
