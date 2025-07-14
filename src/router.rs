@@ -1,11 +1,17 @@
 use crate::handlers::{
     accounts::{create_account, delete_account, get_account, get_accounts, update_account},
     health::health_check,
+    recurring_income::{
+        create_recurring_income, delete_recurring_income, get_recurring_income,
+        get_recurring_incomes, update_recurring_income,
+    },
     statistics::{get_account_statistics, get_all_accounts_statistics},
     timeseries::{get_account_timeseries, get_all_accounts_timeseries},
     transactions::{
         create_transaction, delete_transaction, get_account_transactions, get_transaction,
         get_transactions, update_transaction, create_recurring_instance,
+        create_recurring_transaction, get_recurring_transactions, get_recurring_transaction,
+        update_recurring_transaction, delete_recurring_transaction,
     },
     users::{create_user, delete_user, get_user, get_users, update_user},
 };
@@ -47,7 +53,18 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/transactions/:transaction_id", delete(delete_transaction))
         .route("/api/v1/accounts/:account_id/transactions", get(get_account_transactions))
         // Recurring transaction routes
+        .route("/api/v1/recurring-transactions", post(create_recurring_transaction))
+        .route("/api/v1/recurring-transactions", get(get_recurring_transactions))
+        .route("/api/v1/recurring-transactions/:recurring_transaction_id", get(get_recurring_transaction))
+        .route("/api/v1/recurring-transactions/:recurring_transaction_id", put(update_recurring_transaction))
+        .route("/api/v1/recurring-transactions/:recurring_transaction_id", delete(delete_recurring_transaction))
         .route("/api/v1/recurring-transactions/:recurring_transaction_id/instances", post(create_recurring_instance))
+        // Recurring income routes
+        .route("/api/v1/recurring-incomes", post(create_recurring_income))
+        .route("/api/v1/recurring-incomes", get(get_recurring_incomes))
+        .route("/api/v1/recurring-incomes/:recurring_income_id", get(get_recurring_income))
+        .route("/api/v1/recurring-incomes/:recurring_income_id", put(update_recurring_income))
+        .route("/api/v1/recurring-incomes/:recurring_income_id", delete(delete_recurring_income))
         // API v1 routes (existing statistics and timeseries)
         .route(
             "/api/v1/accounts/:account_id/statistics",
