@@ -16,6 +16,9 @@ use crate::handlers::{
         get_transactions, update_transaction, create_recurring_instance,
         create_recurring_transaction, get_recurring_transactions, get_recurring_transaction,
         update_recurring_transaction, delete_recurring_transaction,
+        create_imported_transaction, get_imported_transactions, get_account_imported_transactions,
+        get_imported_transaction, update_imported_transaction, delete_imported_transaction,
+        reconcile_imported_transaction, clear_imported_transaction_reconciliation,
     },
     users::{create_user, delete_user, get_user, get_users, update_user},
 };
@@ -85,6 +88,15 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/recurring-transactions/:recurring_transaction_id", put(update_recurring_transaction))
         .route("/api/v1/recurring-transactions/:recurring_transaction_id", delete(delete_recurring_transaction))
         .route("/api/v1/recurring-transactions/:recurring_transaction_id/instances", post(create_recurring_instance))
+        // Imported transaction routes
+        .route("/api/v1/imported-transactions", post(create_imported_transaction))
+        .route("/api/v1/imported-transactions", get(get_imported_transactions))
+        .route("/api/v1/imported-transactions/:transaction_id", get(get_imported_transaction))
+        .route("/api/v1/imported-transactions/:transaction_id", put(update_imported_transaction))
+        .route("/api/v1/imported-transactions/:transaction_id", delete(delete_imported_transaction))
+        .route("/api/v1/accounts/:account_id/imported-transactions", get(get_account_imported_transactions))
+        .route("/api/v1/imported-transactions/:transaction_id/reconcile", post(reconcile_imported_transaction))
+        .route("/api/v1/imported-transactions/:transaction_id/reconcile", delete(clear_imported_transaction_reconciliation))
         // Recurring income routes
         .route("/api/v1/recurring-incomes", post(create_recurring_income))
         .route("/api/v1/recurring-incomes", get(get_recurring_incomes))

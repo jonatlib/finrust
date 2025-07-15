@@ -1659,4 +1659,1018 @@ mod integration_tests {
         assert_eq!(error_body["success"], false);
         assert_eq!(error_body["code"], "NOT_FOUND");
     }
+
+    // ===== IMPORTED TRANSACTION TESTS =====
+
+    #[tokio::test]
+    async fn test_create_imported_transaction() {
+        use crate::handlers::transactions::CreateImportedTransactionRequest;
+        use chrono::NaiveDate;
+        use rust_decimal::Decimal;
+
+        // Setup test server
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // First create an account
+        let create_account_request = CreateAccountRequest {
+            name: "Test Account for Imported Transaction".to_string(),
+            description: Some("Test account for imported transaction".to_string()),
+            currency_code: "USD".to_string(),
+            owner_id: 1,
+            include_in_statistics: Some(true),
+            ledger_name: Some("test_imported".to_string()),
+        };
+
+        let account_response = server
+            .post("/api/v1/accounts")
+            .json(&create_account_request)
+            .await;
+        account_response.assert_status(StatusCode::CREATED);
+        let account_body: ApiResponse<serde_json::Value> = account_response.json();
+        let account_id = account_body.data["id"].as_i64().unwrap() as i32;
+
+        // Create imported transaction
+        let create_request = CreateImportedTransactionRequest {
+            account_id,
+            date: NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
+            description: "GROCERY STORE XYZ".to_string(),
+            amount: Decimal::new(-2550, 2), // -$25.50
+            import_hash: "test_hash_123".to_string(),
+            raw_data: Some(serde_json::json!({
+                "original_description": "GROCERY STORE XYZ",
+                "category": "Food",
+                "merchant_id": "12345"
+            })),
+        };
+
+        let response = server
+            .post("/api/v1/imported-transactions")
+            .json(&create_request)
+            .await;
+
+        // Verify response
+        response.assert_status(StatusCode::CREATED);
+        let body: ApiResponse<serde_json::Value> = response.json();
+        assert!(body.success);
+        assert_eq!(body.message, "Imported transaction created successfully");
+
+        let imported_transaction = &body.data;
+        assert_eq!(imported_transaction["account_id"], account_id);
+        assert_eq!(imported_transaction["description"], "GROCERY STORE XYZ");
+        // Handle amount field which can be either string or f64
+        let amount_value = if let Some(amount_str) = imported_transaction["amount"].as_str() {
+            amount_str.parse::<f64>().unwrap()
+        } else if let Some(amount_f64) = imported_transaction["amount"].as_f64() {
+            amount_f64
+        } else {
+            panic!("Amount field is neither string nor f64: {:?}", imported_transaction["amount"]);
+        };
+        assert_eq!(amount_value, -25.50);
+        assert_eq!(imported_transaction["import_hash"], "test_hash_123");
+        assert!(imported_transaction["raw_data"].is_object());
+        assert!(imported_transaction["reconciled_transaction_type"].is_null());
+        assert!(imported_transaction["reconciled_transaction_id"].is_null());
+    }
+
+    #[tokio::test]
+    async fn test_create_imported_transaction_duplicate_hash() {
+        use crate::handlers::transactions::CreateImportedTransactionRequest;
+        use chrono::NaiveDate;
+        use rust_decimal::Decimal;
+
+        // Setup test server
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // First create an account
+        let create_account_request = CreateAccountRequest {
+            name: "Test Account for Imported Transaction".to_string(),
+            description: Some("Test account for imported transaction".to_string()),
+            currency_code: "USD".to_string(),
+            owner_id: 1,
+            include_in_statistics: Some(true),
+            ledger_name: Some("test_imported".to_string()),
+        };
+
+        let account_response = server
+            .post("/api/v1/accounts")
+            .json(&create_account_request)
+            .await;
+        account_response.assert_status(StatusCode::CREATED);
+        let account_body: ApiResponse<serde_json::Value> = account_response.json();
+        let account_id = account_body.data["id"].as_i64().unwrap() as i32;
+
+        // Create first imported transaction
+        let create_request = CreateImportedTransactionRequest {
+            account_id,
+            date: NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
+            description: "GROCERY STORE XYZ".to_string(),
+            amount: Decimal::new(-2550, 2), // -$25.50
+            import_hash: "duplicate_hash_123".to_string(),
+            raw_data: None,
+        };
+
+        let response1 = server
+            .post("/api/v1/imported-transactions")
+            .json(&create_request)
+            .await;
+        response1.assert_status(StatusCode::CREATED);
+
+        // Try to create second imported transaction with same hash
+        let response2 = server
+            .post("/api/v1/imported-transactions")
+            .json(&create_request)
+            .await;
+
+        // Should return 409 Conflict
+        response2.assert_status(StatusCode::CONFLICT);
+        let error_body: serde_json::Value = response2.json();
+        assert_eq!(error_body["success"], false);
+        assert_eq!(error_body["code"], "DUPLICATE_IMPORT_HASH");
+        assert!(error_body["error"].as_str().unwrap().contains("duplicate_hash_123"));
+    }
+
+    #[tokio::test]
+    async fn test_get_imported_transactions() {
+        use crate::handlers::transactions::CreateImportedTransactionRequest;
+        use chrono::NaiveDate;
+        use rust_decimal::Decimal;
+
+        // Setup test server
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // First create an account
+        let create_account_request = CreateAccountRequest {
+            name: "Test Account for Imported Transaction".to_string(),
+            description: Some("Test account for imported transaction".to_string()),
+            currency_code: "USD".to_string(),
+            owner_id: 1,
+            include_in_statistics: Some(true),
+            ledger_name: Some("test_imported".to_string()),
+        };
+
+        let account_response = server
+            .post("/api/v1/accounts")
+            .json(&create_account_request)
+            .await;
+        account_response.assert_status(StatusCode::CREATED);
+        let account_body: ApiResponse<serde_json::Value> = account_response.json();
+        let account_id = account_body.data["id"].as_i64().unwrap() as i32;
+
+        // Create multiple imported transactions
+        for i in 1..=3 {
+            let create_request = CreateImportedTransactionRequest {
+                account_id,
+                date: NaiveDate::from_ymd_opt(2024, 1, i as u32).unwrap(),
+                description: format!("Transaction {}", i),
+                amount: Decimal::new(-1000 * i, 2),
+                import_hash: format!("hash_{}", i),
+                raw_data: None,
+            };
+
+            let response = server
+                .post("/api/v1/imported-transactions")
+                .json(&create_request)
+                .await;
+            response.assert_status(StatusCode::CREATED);
+        }
+
+        // Get all imported transactions
+        let response = server.get("/api/v1/imported-transactions").await;
+        response.assert_status(StatusCode::OK);
+
+        let body: ApiResponse<Vec<serde_json::Value>> = response.json();
+        assert!(body.success);
+        assert_eq!(body.message, "Imported transactions retrieved successfully");
+        assert!(body.data.len() >= 3); // At least the 3 we created
+    }
+
+    #[tokio::test]
+    async fn test_get_imported_transactions_with_filters() {
+        use crate::handlers::transactions::CreateImportedTransactionRequest;
+        use chrono::NaiveDate;
+        use rust_decimal::Decimal;
+
+        // Setup test server
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // First create an account
+        let create_account_request = CreateAccountRequest {
+            name: "Test Account for Imported Transaction".to_string(),
+            description: Some("Test account for imported transaction".to_string()),
+            currency_code: "USD".to_string(),
+            owner_id: 1,
+            include_in_statistics: Some(true),
+            ledger_name: Some("test_imported".to_string()),
+        };
+
+        let account_response = server
+            .post("/api/v1/accounts")
+            .json(&create_account_request)
+            .await;
+        account_response.assert_status(StatusCode::CREATED);
+        let account_body: ApiResponse<serde_json::Value> = account_response.json();
+        let account_id = account_body.data["id"].as_i64().unwrap() as i32;
+
+        // Create imported transaction
+        let create_request = CreateImportedTransactionRequest {
+            account_id,
+            date: NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
+            description: "Test Transaction".to_string(),
+            amount: Decimal::new(-2550, 2),
+            import_hash: "filter_test_hash".to_string(),
+            raw_data: None,
+        };
+
+        let response = server
+            .post("/api/v1/imported-transactions")
+            .json(&create_request)
+            .await;
+        response.assert_status(StatusCode::CREATED);
+
+        // Test filtering by account_id
+        let response = server
+            .get(&format!("/api/v1/imported-transactions?account_id={}", account_id))
+            .await;
+        response.assert_status(StatusCode::OK);
+
+        let body: ApiResponse<Vec<serde_json::Value>> = response.json();
+        assert!(body.success);
+        assert!(body.data.len() >= 1);
+        assert!(body.data.iter().all(|tx| tx["account_id"] == account_id));
+
+        // Test filtering by reconciled status (should be false for new transactions)
+        let response = server
+            .get("/api/v1/imported-transactions?reconciled=false")
+            .await;
+        response.assert_status(StatusCode::OK);
+
+        let body: ApiResponse<Vec<serde_json::Value>> = response.json();
+        assert!(body.success);
+        assert!(body.data.iter().all(|tx| tx["reconciled_transaction_id"].is_null()));
+    }
+
+    #[tokio::test]
+    async fn test_get_account_imported_transactions() {
+        use crate::handlers::transactions::CreateImportedTransactionRequest;
+        use chrono::NaiveDate;
+        use rust_decimal::Decimal;
+
+        // Setup test server
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // First create an account
+        let create_account_request = CreateAccountRequest {
+            name: "Test Account for Imported Transaction".to_string(),
+            description: Some("Test account for imported transaction".to_string()),
+            currency_code: "USD".to_string(),
+            owner_id: 1,
+            include_in_statistics: Some(true),
+            ledger_name: Some("test_imported".to_string()),
+        };
+
+        let account_response = server
+            .post("/api/v1/accounts")
+            .json(&create_account_request)
+            .await;
+        account_response.assert_status(StatusCode::CREATED);
+        let account_body: ApiResponse<serde_json::Value> = account_response.json();
+        let account_id = account_body.data["id"].as_i64().unwrap() as i32;
+
+        // Create imported transactions for this account
+        for i in 1..=2 {
+            let create_request = CreateImportedTransactionRequest {
+                account_id,
+                date: NaiveDate::from_ymd_opt(2024, 1, i as u32).unwrap(),
+                description: format!("Account Transaction {}", i),
+                amount: Decimal::new(-1000 * i, 2),
+                import_hash: format!("account_hash_{}", i),
+                raw_data: None,
+            };
+
+            let response = server
+                .post("/api/v1/imported-transactions")
+                .json(&create_request)
+                .await;
+            response.assert_status(StatusCode::CREATED);
+        }
+
+        // Get imported transactions for this account
+        let response = server
+            .get(&format!("/api/v1/accounts/{}/imported-transactions", account_id))
+            .await;
+        response.assert_status(StatusCode::OK);
+
+        let body: ApiResponse<Vec<serde_json::Value>> = response.json();
+        assert!(body.success);
+        assert_eq!(body.message, "Account imported transactions retrieved successfully");
+        assert!(body.data.len() >= 2);
+        assert!(body.data.iter().all(|tx| tx["account_id"] == account_id));
+    }
+
+    #[tokio::test]
+    async fn test_get_imported_transaction() {
+        use crate::handlers::transactions::CreateImportedTransactionRequest;
+        use chrono::NaiveDate;
+        use rust_decimal::Decimal;
+
+        // Setup test server
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // First create an account
+        let create_account_request = CreateAccountRequest {
+            name: "Test Account for Imported Transaction".to_string(),
+            description: Some("Test account for imported transaction".to_string()),
+            currency_code: "USD".to_string(),
+            owner_id: 1,
+            include_in_statistics: Some(true),
+            ledger_name: Some("test_imported".to_string()),
+        };
+
+        let account_response = server
+            .post("/api/v1/accounts")
+            .json(&create_account_request)
+            .await;
+        account_response.assert_status(StatusCode::CREATED);
+        let account_body: ApiResponse<serde_json::Value> = account_response.json();
+        let account_id = account_body.data["id"].as_i64().unwrap() as i32;
+
+        // Create imported transaction
+        let create_request = CreateImportedTransactionRequest {
+            account_id,
+            date: NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
+            description: "Get Test Transaction".to_string(),
+            amount: Decimal::new(-2550, 2),
+            import_hash: "get_test_hash".to_string(),
+            raw_data: Some(serde_json::json!({"test": "data"})),
+        };
+
+        let create_response = server
+            .post("/api/v1/imported-transactions")
+            .json(&create_request)
+            .await;
+        create_response.assert_status(StatusCode::CREATED);
+
+        let create_body: ApiResponse<serde_json::Value> = create_response.json();
+        let transaction_id = create_body.data["id"].as_i64().unwrap();
+
+        // Get the specific imported transaction
+        let response = server
+            .get(&format!("/api/v1/imported-transactions/{}", transaction_id))
+            .await;
+        response.assert_status(StatusCode::OK);
+
+        let body: ApiResponse<serde_json::Value> = response.json();
+        assert!(body.success);
+        assert_eq!(body.message, "Imported transaction retrieved successfully");
+
+        let transaction = &body.data;
+        assert_eq!(transaction["id"], transaction_id);
+        assert_eq!(transaction["account_id"], account_id);
+        assert_eq!(transaction["description"], "Get Test Transaction");
+        // Handle amount field which can be either string or f64
+        let amount_value = if let Some(amount_str) = transaction["amount"].as_str() {
+            amount_str.parse::<f64>().unwrap()
+        } else if let Some(amount_f64) = transaction["amount"].as_f64() {
+            amount_f64
+        } else {
+            panic!("Amount field is neither string nor f64: {:?}", transaction["amount"]);
+        };
+        assert_eq!(amount_value, -25.50);
+        assert_eq!(transaction["import_hash"], "get_test_hash");
+        assert!(transaction["raw_data"].is_object());
+    }
+
+    #[tokio::test]
+    async fn test_get_nonexistent_imported_transaction() {
+        // Setup test server
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // Try to get a non-existent imported transaction
+        let response = server.get("/api/v1/imported-transactions/999").await;
+
+        // Should return 404
+        response.assert_status(StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_update_imported_transaction() {
+        use crate::handlers::transactions::{CreateImportedTransactionRequest, UpdateImportedTransactionRequest};
+        use chrono::NaiveDate;
+        use rust_decimal::Decimal;
+
+        // Setup test server
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // First create an account
+        let create_account_request = CreateAccountRequest {
+            name: "Test Account for Imported Transaction".to_string(),
+            description: Some("Test account for imported transaction".to_string()),
+            currency_code: "USD".to_string(),
+            owner_id: 1,
+            include_in_statistics: Some(true),
+            ledger_name: Some("test_imported".to_string()),
+        };
+
+        let account_response = server
+            .post("/api/v1/accounts")
+            .json(&create_account_request)
+            .await;
+        account_response.assert_status(StatusCode::CREATED);
+        let account_body: ApiResponse<serde_json::Value> = account_response.json();
+        let account_id = account_body.data["id"].as_i64().unwrap() as i32;
+
+        // Create imported transaction
+        let create_request = CreateImportedTransactionRequest {
+            account_id,
+            date: NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
+            description: "Original Description".to_string(),
+            amount: Decimal::new(-2550, 2),
+            import_hash: "update_test_hash".to_string(),
+            raw_data: None,
+        };
+
+        let create_response = server
+            .post("/api/v1/imported-transactions")
+            .json(&create_request)
+            .await;
+        create_response.assert_status(StatusCode::CREATED);
+
+        let create_body: ApiResponse<serde_json::Value> = create_response.json();
+        let transaction_id = create_body.data["id"].as_i64().unwrap();
+
+        // Update the imported transaction
+        let update_request = UpdateImportedTransactionRequest {
+            date: Some(NaiveDate::from_ymd_opt(2024, 2, 1).unwrap()),
+            description: Some("Updated Description".to_string()),
+            amount: Some(Decimal::new(-3000, 2)), // -$30.00
+            raw_data: Some(serde_json::json!({"updated": "data"})),
+        };
+
+        let response = server
+            .put(&format!("/api/v1/imported-transactions/{}", transaction_id))
+            .json(&update_request)
+            .await;
+
+        // Verify response
+        response.assert_status(StatusCode::OK);
+        let body: ApiResponse<serde_json::Value> = response.json();
+        assert!(body.success);
+        assert_eq!(body.message, "Imported transaction updated successfully");
+
+        let transaction = &body.data;
+        assert_eq!(transaction["id"], transaction_id);
+        assert_eq!(transaction["description"], "Updated Description");
+        // Handle amount field which can be either string or f64
+        let amount_value = if let Some(amount_str) = transaction["amount"].as_str() {
+            amount_str.parse::<f64>().unwrap()
+        } else if let Some(amount_f64) = transaction["amount"].as_f64() {
+            amount_f64
+        } else {
+            panic!("Amount field is neither string nor f64: {:?}", transaction["amount"]);
+        };
+        assert_eq!(amount_value, -30.00);
+        assert_eq!(transaction["date"], "2024-02-01");
+        assert!(transaction["raw_data"].is_object());
+        assert_eq!(transaction["raw_data"]["updated"], "data");
+    }
+
+    #[tokio::test]
+    async fn test_update_nonexistent_imported_transaction() {
+        use crate::handlers::transactions::UpdateImportedTransactionRequest;
+        use chrono::NaiveDate;
+        use rust_decimal::Decimal;
+
+        // Setup test server
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // Try to update non-existent imported transaction
+        let update_request = UpdateImportedTransactionRequest {
+            date: Some(NaiveDate::from_ymd_opt(2024, 2, 1).unwrap()),
+            description: Some("Updated Description".to_string()),
+            amount: Some(Decimal::new(-3000, 2)),
+            raw_data: None,
+        };
+
+        let response = server
+            .put("/api/v1/imported-transactions/999")
+            .json(&update_request)
+            .await;
+
+        // Should return 404
+        response.assert_status(StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_delete_imported_transaction() {
+        use crate::handlers::transactions::CreateImportedTransactionRequest;
+        use chrono::NaiveDate;
+        use rust_decimal::Decimal;
+
+        // Setup test server
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // First create an account
+        let create_account_request = CreateAccountRequest {
+            name: "Test Account for Imported Transaction".to_string(),
+            description: Some("Test account for imported transaction".to_string()),
+            currency_code: "USD".to_string(),
+            owner_id: 1,
+            include_in_statistics: Some(true),
+            ledger_name: Some("test_imported".to_string()),
+        };
+
+        let account_response = server
+            .post("/api/v1/accounts")
+            .json(&create_account_request)
+            .await;
+        account_response.assert_status(StatusCode::CREATED);
+        let account_body: ApiResponse<serde_json::Value> = account_response.json();
+        let account_id = account_body.data["id"].as_i64().unwrap() as i32;
+
+        // Create imported transaction
+        let create_request = CreateImportedTransactionRequest {
+            account_id,
+            date: NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
+            description: "Transaction to Delete".to_string(),
+            amount: Decimal::new(-2550, 2),
+            import_hash: "delete_test_hash".to_string(),
+            raw_data: None,
+        };
+
+        let create_response = server
+            .post("/api/v1/imported-transactions")
+            .json(&create_request)
+            .await;
+        create_response.assert_status(StatusCode::CREATED);
+
+        let create_body: ApiResponse<serde_json::Value> = create_response.json();
+        let transaction_id = create_body.data["id"].as_i64().unwrap();
+
+        // Delete the imported transaction
+        let response = server
+            .delete(&format!("/api/v1/imported-transactions/{}", transaction_id))
+            .await;
+
+        // Verify response
+        response.assert_status(StatusCode::OK);
+        let body: ApiResponse<String> = response.json();
+        assert!(body.success);
+        assert_eq!(body.message, "Imported transaction deleted successfully");
+        assert!(body.data.contains(&format!("Imported transaction with id {} deleted successfully", transaction_id)));
+
+        // Verify the imported transaction is actually deleted
+        let get_response = server
+            .get(&format!("/api/v1/imported-transactions/{}", transaction_id))
+            .await;
+        get_response.assert_status(StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_delete_nonexistent_imported_transaction() {
+        // Setup test server
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // Try to delete non-existent imported transaction
+        let response = server.delete("/api/v1/imported-transactions/999").await;
+
+        // Should return 404
+        response.assert_status(StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_reconcile_imported_transaction() {
+        use crate::handlers::transactions::{CreateImportedTransactionRequest, ReconcileImportedTransactionRequest, CreateTransactionRequest};
+        use chrono::NaiveDate;
+        use rust_decimal::Decimal;
+
+        // Setup test server
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // First create an account
+        let create_account_request = CreateAccountRequest {
+            name: "Test Account for Reconciliation".to_string(),
+            description: Some("Test account for reconciliation".to_string()),
+            currency_code: "USD".to_string(),
+            owner_id: 1,
+            include_in_statistics: Some(true),
+            ledger_name: Some("test_reconcile".to_string()),
+        };
+
+        let account_response = server
+            .post("/api/v1/accounts")
+            .json(&create_account_request)
+            .await;
+        account_response.assert_status(StatusCode::CREATED);
+        let account_body: ApiResponse<serde_json::Value> = account_response.json();
+        let account_id = account_body.data["id"].as_i64().unwrap() as i32;
+
+        // Create a regular transaction to reconcile with
+        let transaction_request = CreateTransactionRequest {
+            name: "Regular Transaction".to_string(),
+            description: Some("Regular transaction for reconciliation".to_string()),
+            amount: Decimal::new(-2550, 2), // -$25.50
+            date: NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
+            include_in_statistics: Some(true),
+            target_account_id: account_id,
+            source_account_id: None,
+            ledger_name: Some("test_reconcile".to_string()),
+            linked_import_id: None,
+        };
+
+        let transaction_response = server
+            .post("/api/v1/transactions")
+            .json(&transaction_request)
+            .await;
+        transaction_response.assert_status(StatusCode::CREATED);
+        let transaction_body: ApiResponse<serde_json::Value> = transaction_response.json();
+        let real_transaction_id = transaction_body.data["id"].as_i64().unwrap() as i32;
+
+        // Create imported transaction
+        let create_request = CreateImportedTransactionRequest {
+            account_id,
+            date: NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
+            description: "GROCERY STORE XYZ".to_string(),
+            amount: Decimal::new(-2550, 2), // -$25.50
+            import_hash: "reconcile_test_hash".to_string(),
+            raw_data: Some(serde_json::json!({
+                "original_description": "GROCERY STORE XYZ",
+                "category": "Food"
+            })),
+        };
+
+        let create_response = server
+            .post("/api/v1/imported-transactions")
+            .json(&create_request)
+            .await;
+        create_response.assert_status(StatusCode::CREATED);
+
+        let create_body: ApiResponse<serde_json::Value> = create_response.json();
+        let imported_transaction_id = create_body.data["id"].as_i64().unwrap();
+
+        // Reconcile the imported transaction with the real transaction
+        let reconcile_request = ReconcileImportedTransactionRequest {
+            transaction_type: "OneOff".to_string(),
+            transaction_id: real_transaction_id,
+        };
+
+        let response = server
+            .post(&format!("/api/v1/imported-transactions/{}/reconcile", imported_transaction_id))
+            .json(&reconcile_request)
+            .await;
+
+        // Verify response
+        response.assert_status(StatusCode::OK);
+        let body: ApiResponse<serde_json::Value> = response.json();
+        assert!(body.success);
+        assert_eq!(body.message, "Imported transaction reconciled successfully");
+
+        let transaction = &body.data;
+        assert_eq!(transaction["id"], imported_transaction_id);
+        assert_eq!(transaction["reconciled_transaction_type"], "OneOff");
+        assert_eq!(transaction["reconciled_transaction_id"], real_transaction_id);
+        assert!(transaction["reconciled_transaction_info"].is_object());
+        assert_eq!(transaction["reconciled_transaction_info"]["transaction_type"], "OneOff");
+        assert_eq!(transaction["reconciled_transaction_info"]["transaction_id"], real_transaction_id);
+
+        // Verify the reconciliation persisted by getting the transaction again
+        let get_response = server
+            .get(&format!("/api/v1/imported-transactions/{}", imported_transaction_id))
+            .await;
+        get_response.assert_status(StatusCode::OK);
+
+        let get_body: ApiResponse<serde_json::Value> = get_response.json();
+        let retrieved_transaction = &get_body.data;
+        assert_eq!(retrieved_transaction["reconciled_transaction_type"], "OneOff");
+        assert_eq!(retrieved_transaction["reconciled_transaction_id"], real_transaction_id);
+    }
+
+    #[tokio::test]
+    async fn test_reconcile_imported_transaction_invalid_type() {
+        use crate::handlers::transactions::{CreateImportedTransactionRequest, ReconcileImportedTransactionRequest};
+        use chrono::NaiveDate;
+        use rust_decimal::Decimal;
+
+        // Setup test server
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // First create an account
+        let create_account_request = CreateAccountRequest {
+            name: "Test Account for Reconciliation".to_string(),
+            description: Some("Test account for reconciliation".to_string()),
+            currency_code: "USD".to_string(),
+            owner_id: 1,
+            include_in_statistics: Some(true),
+            ledger_name: Some("test_reconcile".to_string()),
+        };
+
+        let account_response = server
+            .post("/api/v1/accounts")
+            .json(&create_account_request)
+            .await;
+        account_response.assert_status(StatusCode::CREATED);
+        let account_body: ApiResponse<serde_json::Value> = account_response.json();
+        let account_id = account_body.data["id"].as_i64().unwrap() as i32;
+
+        // Create imported transaction
+        let create_request = CreateImportedTransactionRequest {
+            account_id,
+            date: NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
+            description: "Test Transaction".to_string(),
+            amount: Decimal::new(-2550, 2),
+            import_hash: "invalid_type_test_hash".to_string(),
+            raw_data: None,
+        };
+
+        let create_response = server
+            .post("/api/v1/imported-transactions")
+            .json(&create_request)
+            .await;
+        create_response.assert_status(StatusCode::CREATED);
+
+        let create_body: ApiResponse<serde_json::Value> = create_response.json();
+        let imported_transaction_id = create_body.data["id"].as_i64().unwrap();
+
+        // Try to reconcile with invalid transaction type
+        let reconcile_request = ReconcileImportedTransactionRequest {
+            transaction_type: "InvalidType".to_string(),
+            transaction_id: 123,
+        };
+
+        let response = server
+            .post(&format!("/api/v1/imported-transactions/{}/reconcile", imported_transaction_id))
+            .json(&reconcile_request)
+            .await;
+
+        // Should return 400 Bad Request
+        response.assert_status(StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn test_clear_imported_transaction_reconciliation() {
+        use crate::handlers::transactions::{CreateImportedTransactionRequest, ReconcileImportedTransactionRequest, CreateTransactionRequest};
+        use chrono::NaiveDate;
+        use rust_decimal::Decimal;
+
+        // Setup test server
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // First create an account
+        let create_account_request = CreateAccountRequest {
+            name: "Test Account for Reconciliation".to_string(),
+            description: Some("Test account for reconciliation".to_string()),
+            currency_code: "USD".to_string(),
+            owner_id: 1,
+            include_in_statistics: Some(true),
+            ledger_name: Some("test_reconcile".to_string()),
+        };
+
+        let account_response = server
+            .post("/api/v1/accounts")
+            .json(&create_account_request)
+            .await;
+        account_response.assert_status(StatusCode::CREATED);
+        let account_body: ApiResponse<serde_json::Value> = account_response.json();
+        let account_id = account_body.data["id"].as_i64().unwrap() as i32;
+
+        // Create a regular transaction to reconcile with
+        let transaction_request = CreateTransactionRequest {
+            name: "Regular Transaction".to_string(),
+            description: Some("Regular transaction for reconciliation".to_string()),
+            amount: Decimal::new(-2550, 2), // -$25.50
+            date: NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
+            include_in_statistics: Some(true),
+            target_account_id: account_id,
+            source_account_id: None,
+            ledger_name: Some("test_reconcile".to_string()),
+            linked_import_id: None,
+        };
+
+        let transaction_response = server
+            .post("/api/v1/transactions")
+            .json(&transaction_request)
+            .await;
+        transaction_response.assert_status(StatusCode::CREATED);
+        let transaction_body: ApiResponse<serde_json::Value> = transaction_response.json();
+        let real_transaction_id = transaction_body.data["id"].as_i64().unwrap() as i32;
+
+        // Create imported transaction
+        let create_request = CreateImportedTransactionRequest {
+            account_id,
+            date: NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
+            description: "GROCERY STORE XYZ".to_string(),
+            amount: Decimal::new(-2550, 2), // -$25.50
+            import_hash: "clear_reconcile_test_hash".to_string(),
+            raw_data: None,
+        };
+
+        let create_response = server
+            .post("/api/v1/imported-transactions")
+            .json(&create_request)
+            .await;
+        create_response.assert_status(StatusCode::CREATED);
+
+        let create_body: ApiResponse<serde_json::Value> = create_response.json();
+        let imported_transaction_id = create_body.data["id"].as_i64().unwrap();
+
+        // First reconcile the imported transaction
+        let reconcile_request = ReconcileImportedTransactionRequest {
+            transaction_type: "OneOff".to_string(),
+            transaction_id: real_transaction_id,
+        };
+
+        let reconcile_response = server
+            .post(&format!("/api/v1/imported-transactions/{}/reconcile", imported_transaction_id))
+            .json(&reconcile_request)
+            .await;
+        reconcile_response.assert_status(StatusCode::OK);
+
+        // Verify it's reconciled
+        let get_response = server
+            .get(&format!("/api/v1/imported-transactions/{}", imported_transaction_id))
+            .await;
+        get_response.assert_status(StatusCode::OK);
+        let get_body: ApiResponse<serde_json::Value> = get_response.json();
+        assert!(!get_body.data["reconciled_transaction_id"].is_null());
+
+        // Now clear the reconciliation
+        let clear_response = server
+            .delete(&format!("/api/v1/imported-transactions/{}/reconcile", imported_transaction_id))
+            .await;
+
+        // Verify response
+        clear_response.assert_status(StatusCode::OK);
+        let clear_body: ApiResponse<serde_json::Value> = clear_response.json();
+        assert!(clear_body.success);
+        assert_eq!(clear_body.message, "Reconciliation cleared successfully");
+
+        let transaction = &clear_body.data;
+        assert_eq!(transaction["id"], imported_transaction_id);
+        assert!(transaction["reconciled_transaction_type"].is_null());
+        assert!(transaction["reconciled_transaction_id"].is_null());
+        assert!(transaction["reconciled_transaction_info"].is_null());
+
+        // Verify the reconciliation clearing persisted
+        let final_get_response = server
+            .get(&format!("/api/v1/imported-transactions/{}", imported_transaction_id))
+            .await;
+        final_get_response.assert_status(StatusCode::OK);
+
+        let final_get_body: ApiResponse<serde_json::Value> = final_get_response.json();
+        let final_transaction = &final_get_body.data;
+        assert!(final_transaction["reconciled_transaction_type"].is_null());
+        assert!(final_transaction["reconciled_transaction_id"].is_null());
+        assert!(final_transaction["reconciled_transaction_info"].is_null());
+    }
+
+    #[tokio::test]
+    async fn test_clear_reconciliation_nonexistent_imported_transaction() {
+        // Setup test server
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // Try to clear reconciliation for non-existent imported transaction
+        let response = server
+            .delete("/api/v1/imported-transactions/999/reconcile")
+            .await;
+
+        // Should return 404
+        response.assert_status(StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_imported_transaction_filtering_by_reconciliation_status() {
+        use crate::handlers::transactions::{CreateImportedTransactionRequest, ReconcileImportedTransactionRequest, CreateTransactionRequest};
+        use chrono::NaiveDate;
+        use rust_decimal::Decimal;
+
+        // Setup test server
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // First create an account
+        let create_account_request = CreateAccountRequest {
+            name: "Test Account for Filtering".to_string(),
+            description: Some("Test account for filtering".to_string()),
+            currency_code: "USD".to_string(),
+            owner_id: 1,
+            include_in_statistics: Some(true),
+            ledger_name: Some("test_filter".to_string()),
+        };
+
+        let account_response = server
+            .post("/api/v1/accounts")
+            .json(&create_account_request)
+            .await;
+        account_response.assert_status(StatusCode::CREATED);
+        let account_body: ApiResponse<serde_json::Value> = account_response.json();
+        let account_id = account_body.data["id"].as_i64().unwrap() as i32;
+
+        // Create a regular transaction to reconcile with
+        let transaction_request = CreateTransactionRequest {
+            name: "Regular Transaction".to_string(),
+            description: Some("Regular transaction for reconciliation".to_string()),
+            amount: Decimal::new(-2550, 2), // -$25.50
+            date: NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
+            include_in_statistics: Some(true),
+            target_account_id: account_id,
+            source_account_id: None,
+            ledger_name: Some("test_filter".to_string()),
+            linked_import_id: None,
+        };
+
+        let transaction_response = server
+            .post("/api/v1/transactions")
+            .json(&transaction_request)
+            .await;
+        transaction_response.assert_status(StatusCode::CREATED);
+        let transaction_body: ApiResponse<serde_json::Value> = transaction_response.json();
+        let real_transaction_id = transaction_body.data["id"].as_i64().unwrap() as i32;
+
+        // Create two imported transactions
+        let create_request1 = CreateImportedTransactionRequest {
+            account_id,
+            date: NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
+            description: "Reconciled Transaction".to_string(),
+            amount: Decimal::new(-2550, 2),
+            import_hash: "filter_reconciled_hash".to_string(),
+            raw_data: None,
+        };
+
+        let create_response1 = server
+            .post("/api/v1/imported-transactions")
+            .json(&create_request1)
+            .await;
+        create_response1.assert_status(StatusCode::CREATED);
+        let create_body1: ApiResponse<serde_json::Value> = create_response1.json();
+        let reconciled_transaction_id = create_body1.data["id"].as_i64().unwrap();
+
+        let create_request2 = CreateImportedTransactionRequest {
+            account_id,
+            date: NaiveDate::from_ymd_opt(2024, 1, 16).unwrap(),
+            description: "Unreconciled Transaction".to_string(),
+            amount: Decimal::new(-1000, 2),
+            import_hash: "filter_unreconciled_hash".to_string(),
+            raw_data: None,
+        };
+
+        let create_response2 = server
+            .post("/api/v1/imported-transactions")
+            .json(&create_request2)
+            .await;
+        create_response2.assert_status(StatusCode::CREATED);
+
+        // Reconcile the first transaction
+        let reconcile_request = ReconcileImportedTransactionRequest {
+            transaction_type: "OneOff".to_string(),
+            transaction_id: real_transaction_id,
+        };
+
+        let reconcile_response = server
+            .post(&format!("/api/v1/imported-transactions/{}/reconcile", reconciled_transaction_id))
+            .json(&reconcile_request)
+            .await;
+        reconcile_response.assert_status(StatusCode::OK);
+
+        // Test filtering by reconciled=true
+        let reconciled_response = server
+            .get("/api/v1/imported-transactions?reconciled=true")
+            .await;
+        reconciled_response.assert_status(StatusCode::OK);
+
+        let reconciled_body: ApiResponse<Vec<serde_json::Value>> = reconciled_response.json();
+        assert!(reconciled_body.success);
+        // Should contain at least our reconciled transaction
+        let reconciled_transactions: Vec<_> = reconciled_body.data.iter()
+            .filter(|tx| !tx["reconciled_transaction_id"].is_null())
+            .collect();
+        assert!(reconciled_transactions.len() >= 1);
+
+        // Test filtering by reconciled=false
+        let unreconciled_response = server
+            .get("/api/v1/imported-transactions?reconciled=false")
+            .await;
+        unreconciled_response.assert_status(StatusCode::OK);
+
+        let unreconciled_body: ApiResponse<Vec<serde_json::Value>> = unreconciled_response.json();
+        assert!(unreconciled_body.success);
+        // Should contain at least our unreconciled transaction
+        let unreconciled_transactions: Vec<_> = unreconciled_body.data.iter()
+            .filter(|tx| tx["reconciled_transaction_id"].is_null())
+            .collect();
+        assert!(unreconciled_transactions.len() >= 1);
+    }
 }
