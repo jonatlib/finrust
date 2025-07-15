@@ -1,4 +1,4 @@
-use crate::schemas::{AppState, HealthResponse};
+use crate::schemas::{AppState, HealthResponse, ErrorResponse};
 use axum::{extract::State, http::StatusCode, response::Json};
 use tracing::{instrument, error, warn, info, debug, trace};
 
@@ -9,7 +9,7 @@ use tracing::{instrument, error, warn, info, debug, trace};
     tag = "health",
     responses(
         (status = 200, description = "Service is healthy", body = HealthResponse),
-        (status = 500, description = "Service is unhealthy", body = crate::schemas::ErrorResponse)
+        (status = 500, description = "Service is unhealthy", body = ErrorResponse)
     )
 )]
 #[instrument]

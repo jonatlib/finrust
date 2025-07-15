@@ -15,6 +15,9 @@ mod test_utils;
 #[cfg(test)]
 mod tests;
 
+#[cfg(test)]
+mod openapi_tests;
+
 use cli::Cli;
 
 /// Main entry point for the FinRust application.

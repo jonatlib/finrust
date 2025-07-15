@@ -1,5 +1,5 @@
 use crate::helpers::converters::convert_dataframe_to_timeseries;
-use crate::schemas::{ApiResponse, AppState, CachedData, TimeseriesQuery};
+use crate::schemas::{ApiResponse, AppState, CachedData, TimeseriesQuery, ErrorResponse};
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
@@ -22,8 +22,8 @@ use tracing::{instrument, error, warn, info, debug, trace};
     ),
     responses(
         (status = 200, description = "Account timeseries retrieved successfully", body = ApiResponse<AccountStateTimeseries>),
-        (status = 404, description = "Account not found", body = crate::schemas::ErrorResponse),
-        (status = 500, description = "Internal server error", body = crate::schemas::ErrorResponse)
+        (status = 404, description = "Account not found", body = ErrorResponse),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
     )
 )]
 #[instrument]
@@ -133,7 +133,7 @@ pub async fn get_account_timeseries(
     tag = "timeseries",
     responses(
         (status = 200, description = "All accounts timeseries retrieved successfully", body = ApiResponse<AccountStateTimeseries>),
-        (status = 500, description = "Internal server error", body = crate::schemas::ErrorResponse)
+        (status = 500, description = "Internal server error", body = ErrorResponse)
     )
 )]
 #[instrument]

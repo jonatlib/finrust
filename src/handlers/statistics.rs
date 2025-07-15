@@ -1,5 +1,5 @@
 use crate::helpers::stats::{compute_account_statistics, determine_time_period};
-use crate::schemas::{ApiResponse, AppState, CachedData, StatisticsQuery};
+use crate::schemas::{ApiResponse, AppState, CachedData, StatisticsQuery, ErrorResponse};
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
@@ -21,8 +21,8 @@ use tracing::{instrument, error, warn, info, debug, trace};
     ),
     responses(
         (status = 200, description = "Account statistics retrieved successfully", body = ApiResponse<AccountStatisticsCollection>),
-        (status = 404, description = "Account not found", body = crate::schemas::ErrorResponse),
-        (status = 500, description = "Internal server error", body = crate::schemas::ErrorResponse)
+        (status = 404, description = "Account not found", body = ErrorResponse),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
     )
 )]
 #[instrument]
@@ -117,7 +117,7 @@ pub async fn get_account_statistics(
     tag = "statistics",
     responses(
         (status = 200, description = "All accounts statistics retrieved successfully", body = ApiResponse<Vec<AccountStatisticsCollection>>),
-        (status = 500, description = "Internal server error", body = crate::schemas::ErrorResponse)
+        (status = 500, description = "Internal server error", body = ErrorResponse)
     )
 )]
 #[instrument]
