@@ -21,6 +21,9 @@ recurring transactions—and then use that model to gain insights and forecast w
     - [Prerequisites](#prerequisites)
     - [Installation](#installation)
     - [Running the Application](#running-the-application)
+- [API Documentation](#api-documentation)
+    - [Available Endpoints](#available-endpoints)
+    - [Interactive Documentation](#interactive-documentation)
 - [Project Structure](#project-structure)
 - [Development](#development)
     - [Setting Up Development Environment](#setting-up-development-environment)
@@ -80,16 +83,35 @@ The main goals of this project are:
 This project is built using the following technologies:
 
 * **Backend**:
-    * [Rust](https://www.rust-lang.org/) - Programming language
+    * [Rust](https://www.rust-lang.org/) - Programming language (Edition 2024)
     * [Axum](https://github.com/tokio-rs/axum) - Web framework for building REST APIs
     * [SeaORM](https://www.sea-ql.org/SeaORM/) - Async ORM for Rust
-    * [PolaRS](https://pola.rs/) - Data manipulation and analysis library
-    * [rusty_money](https://github.com/varunsrin/rusty_money) - Currency handling library
-    * [Ledger](https://www.ledger-cli.org/) - Double-entry accounting system integration
+    * [Polars](https://pola.rs/) - Data manipulation and analysis library
+    * [Tokio](https://tokio.rs/) - Async runtime
+    * [Tower](https://github.com/tower-rs/tower) - Middleware and service abstractions
+
+* **API Documentation**:
+    * [utoipa](https://github.com/juhaku/utoipa) - OpenAPI 3.0 specification generation
+    * [utoipa-swagger-ui](https://github.com/juhaku/utoipa) - Interactive Swagger UI
+
+* **Monitoring & Observability**:
+    * [tracing](https://github.com/tokio-rs/tracing) - Structured logging and diagnostics
+    * [axum-prometheus](https://github.com/Ptrskay3/axum-prometheus) - Prometheus metrics integration
+
+* **Data Handling**:
+    * [serde](https://serde.rs/) - Serialization/deserialization
+    * [chrono](https://github.com/chronotope/chrono) - Date and time handling
+    * [rust_decimal](https://github.com/paupino/rust-decimal) - Precise decimal arithmetic
+    * [validator](https://github.com/Keats/validator) - Input validation
 
 * **Database**:
     * SQLite (development)
     * PostgreSQL (production)
+
+* **CLI & Configuration**:
+    * [clap](https://github.com/clap-rs/clap) - Command-line argument parsing
+    * [config](https://github.com/mehcode/config-rs) - Configuration management
+    * [dotenvy](https://github.com/allan2/dotenvy) - Environment variable loading
 
 * **Frontend**:
     * Separate application (not included in this repository)
@@ -117,15 +139,48 @@ This project is built using the following technologies:
 
 ### Running the Application
 
-1. Run the migrations to set up the database:
+1. Initialize the database:
    ```bash
-   cargo run --bin migration -- up
+   cargo run init-db --database-url "sqlite://finrust.db"
    ```
 
 2. Start the server:
    ```bash
-   cargo run
+   cargo run serve
    ```
+
+   Or with custom configuration:
+   ```bash
+   cargo run serve --database-url "sqlite://finrust.db" --bind-address "0.0.0.0:3000"
+   ```
+
+3. Access the application:
+   - **API Base URL**: `http://localhost:3000/api/v1/`
+   - **Swagger UI Documentation**: `http://localhost:3000/swagger-ui`
+   - **Health Check**: `http://localhost:3000/health`
+   - **Prometheus Metrics**: `http://localhost:3000/metrics`
+
+## API Documentation
+
+The application provides a comprehensive REST API with full OpenAPI 3.0 specification and interactive Swagger UI documentation.
+
+### Available Endpoints
+
+- **Accounts**: CRUD operations for financial accounts
+- **Transactions**: Manage one-off, recurring, and imported transactions
+- **Recurring Income**: Handle recurring income streams
+- **Users**: User management functionality
+- **Statistics**: Account performance metrics and analytics
+- **Timeseries**: Historical and forecasted account balance data
+- **Manual Account States**: Override account balances at specific points in time
+
+### Interactive Documentation
+
+Once the server is running, visit `http://localhost:3000/swagger-ui` to explore the complete API documentation with:
+- Interactive endpoint testing
+- Request/response schemas
+- Authentication requirements
+- Example payloads
 
 ## Project Structure
 
@@ -133,12 +188,20 @@ This project is built using the following technologies:
 finrust/
 ├── Cargo.toml              # Main workspace configuration
 ├── src/                    # Main application code
+│   ├── handlers/           # API endpoint handlers
+│   ├── cli.rs             # Command-line interface
+│   ├── router.rs          # API routing configuration
+│   └── main.rs            # Application entry point
 └── workspace/
     ├── model/              # Database models and entities
     │   └── src/
     │       └── entities/   # Entity definitions
-    └── migration/          # Database migrations
-        └── src/            # Migration scripts
+    ├── migration/          # Database migrations
+    │   └── src/            # Migration scripts
+    ├── compute/            # Financial computation logic
+    │   └── src/
+    └── common/             # Shared utilities and types
+        └── src/
 ```
 
 ## Development

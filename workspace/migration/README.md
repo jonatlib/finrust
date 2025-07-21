@@ -1,4 +1,19 @@
-# Running Migrator CLI
+# Migration Workspace
+
+This workspace contains database migration scripts for the FinRust application using SeaORM migrations.
+
+## For Application Users
+
+To initialize the database for the main FinRust application, use:
+
+```sh
+# From the project root
+cargo run init-db --database-url "sqlite://finrust.db"
+```
+
+## For Developers - Running Migrator CLI
+
+The following commands are for migration development and testing within this workspace:
 
 - Generate a new migration file
     ```sh
