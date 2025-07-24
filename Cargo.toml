@@ -10,6 +10,7 @@ members = [
     "workspace/migration",
     "workspace/compute",
     "workspace/common",
+    "workspace/frontend",
 ]
 
 
