@@ -5,7 +5,7 @@ use axum::{
     response::Json,
 };
 use model::entities::tag;
-use sea_orm::{ActiveModelTrait, EntityTrait, Set, DbErr, ColumnTrait, QueryFilter, RelationTrait, JoinType};
+use sea_orm::{ActiveModelTrait, EntityTrait, Set, DbErr, ColumnTrait, QueryFilter, RelationTrait, JoinType, PaginatorTrait};
 use serde::{Deserialize, Serialize};
 use tracing::{instrument, error, warn, info, debug, trace};
 use utoipa::ToSchema;
@@ -97,6 +97,8 @@ pub async fn create_tag(
                     StatusCode::BAD_REQUEST,
                     Json(ErrorResponse {
                         error: format!("Parent tag with ID {} not found", parent_id),
+                        code: "ERROR".to_string(),
+                        success: false,
                     }),
                 ));
             }
@@ -105,8 +107,10 @@ pub async fn create_tag(
                 return Err((
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse {
-                        error: "Failed to validate parent tag".to_string(),
-                    }),
+                    error: "Failed to validate parent tag".to_string(),
+                    code: "ERROR".to_string(),
+                    success: false,
+                }),
                 ));
             }
         }
@@ -127,17 +131,19 @@ pub async fn create_tag(
                 StatusCode::CREATED,
                 Json(ApiResponse {
                     data: TagResponse::from(tag_model),
+                    message: "Success".to_string(),
+                    success: true,
                 }),
             ))
         }
-        Err(DbErr::Exec(sea_orm::RuntimeErr::SqlxError(sqlx::Error::Database(db_err))))
-            if db_err.message().contains("UNIQUE constraint failed") =>
-        {
+        Err(e) if e.to_string().contains("UNIQUE constraint failed") => {
             warn!("Tag name '{}' already exists", request.name);
             Err((
                 StatusCode::CONFLICT,
                 Json(ErrorResponse {
                     error: format!("Tag with name '{}' already exists", request.name),
+                    code: "CONFLICT".to_string(),
+                    success: false,
                 }),
             ))
         }
@@ -147,6 +153,8 @@ pub async fn create_tag(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
                     error: "Failed to create tag".to_string(),
+                    code: "ERROR".to_string(),
+                    success: false,
                 }),
             ))
         }
@@ -173,7 +181,11 @@ pub async fn get_tags(
         Ok(tags) => {
             let tag_responses: Vec<TagResponse> = tags.into_iter().map(TagResponse::from).collect();
             info!("Successfully fetched {} tags", tag_responses.len());
-            Ok(Json(ApiResponse { data: tag_responses }))
+            Ok(Json(ApiResponse {
+                    data: tag_responses ,
+                    message: "Success".to_string(),
+                    success: true,
+                }))
         }
         Err(e) => {
             error!("Failed to fetch tags: {}", e);
@@ -207,8 +219,10 @@ pub async fn get_tag(
         Ok(Some(tag_model)) => {
             info!("Successfully found tag with ID: {}", tag_id);
             Ok(Json(ApiResponse {
-                data: TagResponse::from(tag_model),
-            }))
+                    data: TagResponse::from(tag_model),
+                    message: "Success".to_string(),
+                    success: true,
+                }))
         }
         Ok(None) => {
             warn!("Tag with ID {} not found", tag_id);
@@ -255,6 +269,8 @@ pub async fn update_tag(
                 StatusCode::NOT_FOUND,
                 Json(ErrorResponse {
                     error: "Tag not found".to_string(),
+                    code: "ERROR".to_string(),
+                    success: false,
                 }),
             ));
         }
@@ -264,6 +280,8 @@ pub async fn update_tag(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
                     error: "Failed to fetch tag".to_string(),
+                    code: "ERROR".to_string(),
+                    success: false,
                 }),
             ));
         }
@@ -277,6 +295,8 @@ pub async fn update_tag(
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
                     error: "Tag cannot be its own parent".to_string(),
+                    code: "ERROR".to_string(),
+                    success: false,
                 }),
             ));
         }
@@ -291,6 +311,8 @@ pub async fn update_tag(
                     StatusCode::BAD_REQUEST,
                     Json(ErrorResponse {
                         error: format!("Parent tag with ID {} not found", parent_id),
+                        code: "ERROR".to_string(),
+                        success: false,
                     }),
                 ));
             }
@@ -299,8 +321,10 @@ pub async fn update_tag(
                 return Err((
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse {
-                        error: "Failed to validate parent tag".to_string(),
-                    }),
+                    error: "Failed to validate parent tag".to_string(),
+                    code: "ERROR".to_string(),
+                    success: false,
+                }),
                 ));
             }
         }
@@ -326,17 +350,19 @@ pub async fn update_tag(
         Ok(updated_tag) => {
             info!("Successfully updated tag with ID: {}", tag_id);
             Ok(Json(ApiResponse {
-                data: TagResponse::from(updated_tag),
-            }))
+                    data: TagResponse::from(updated_tag),
+                    message: "Success".to_string(),
+                    success: true,
+                }))
         }
-        Err(DbErr::Exec(sea_orm::RuntimeErr::SqlxError(sqlx::Error::Database(db_err))))
-            if db_err.message().contains("UNIQUE constraint failed") =>
-        {
+        Err(e) if e.to_string().contains("UNIQUE constraint failed") => {
             warn!("Tag name already exists");
             Err((
                 StatusCode::CONFLICT,
                 Json(ErrorResponse {
                     error: "Tag with this name already exists".to_string(),
+                    code: "CONFLICT".to_string(),
+                    success: false,
                 }),
             ))
         }
@@ -346,6 +372,8 @@ pub async fn update_tag(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
                     error: "Failed to update tag".to_string(),
+                    code: "ERROR".to_string(),
+                    success: false,
                 }),
             ))
         }
@@ -383,6 +411,8 @@ pub async fn delete_tag(
                 StatusCode::NOT_FOUND,
                 Json(ErrorResponse {
                     error: "Tag not found".to_string(),
+                    code: "ERROR".to_string(),
+                    success: false,
                 }),
             ));
         }
@@ -392,6 +422,8 @@ pub async fn delete_tag(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
                     error: "Failed to fetch tag".to_string(),
+                    code: "ERROR".to_string(),
+                    success: false,
                 }),
             ));
         }
@@ -410,6 +442,8 @@ pub async fn delete_tag(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
                     error: "Failed to check for child tags".to_string(),
+                    code: "ERROR".to_string(),
+                    success: false,
                 }),
             ));
         }
@@ -421,6 +455,8 @@ pub async fn delete_tag(
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse {
                 error: format!("Cannot delete tag as it has {} child tags. Delete or move child tags first.", children_count),
+                code: "ERROR".to_string(),
+                success: false,
             }),
         ));
     }
@@ -431,14 +467,18 @@ pub async fn delete_tag(
                 info!("Successfully deleted tag with ID: {}", tag_id);
                 Ok(Json(ApiResponse {
                     data: format!("Tag with ID {} deleted successfully", tag_id),
+                    message: "Success".to_string(),
+                    success: true,
                 }))
             } else {
                 warn!("No tag was deleted with ID: {}", tag_id);
                 Err((
                     StatusCode::NOT_FOUND,
                     Json(ErrorResponse {
-                        error: "Tag not found".to_string(),
-                    }),
+                    error: "Tag not found".to_string(),
+                    code: "ERROR".to_string(),
+                    success: false,
+                }),
                 ))
             }
         }
@@ -448,6 +488,8 @@ pub async fn delete_tag(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
                     error: "Failed to delete tag".to_string(),
+                    code: "ERROR".to_string(),
+                    success: false,
                 }),
             ))
         }
@@ -498,7 +540,11 @@ pub async fn get_tag_children(
             Ok(children) => {
                 let tag_responses: Vec<TagResponse> = children.into_iter().map(TagResponse::from).collect();
                 info!("Successfully fetched {} nested children for tag {}", tag_responses.len(), tag_id);
-                Ok(Json(ApiResponse { data: tag_responses }))
+                Ok(Json(ApiResponse {
+                    data: tag_responses ,
+                    message: "Success".to_string(),
+                    success: true,
+                }))
             }
             Err(e) => {
                 error!("Failed to fetch nested children: {}", e);
@@ -515,7 +561,11 @@ pub async fn get_tag_children(
             Ok(children) => {
                 let tag_responses: Vec<TagResponse> = children.into_iter().map(TagResponse::from).collect();
                 info!("Successfully fetched {} direct children for tag {}", tag_responses.len(), tag_id);
-                Ok(Json(ApiResponse { data: tag_responses }))
+                Ok(Json(ApiResponse {
+                    data: tag_responses ,
+                    message: "Success".to_string(),
+                    success: true,
+                }))
             }
             Err(e) => {
                 error!("Failed to fetch direct children: {}", e);
@@ -553,8 +603,10 @@ pub async fn link_tag_to_parent(
         return Err((
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse {
-                error: "Tag cannot be its own parent".to_string(),
-            }),
+                    error: "Tag cannot be its own parent".to_string(),
+                    code: "ERROR".to_string(),
+                    success: false,
+                }),
         ));
     }
 
@@ -567,6 +619,8 @@ pub async fn link_tag_to_parent(
                 StatusCode::NOT_FOUND,
                 Json(ErrorResponse {
                     error: "Tag not found".to_string(),
+                    code: "ERROR".to_string(),
+                    success: false,
                 }),
             ));
         }
@@ -576,6 +630,8 @@ pub async fn link_tag_to_parent(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
                     error: "Failed to fetch tag".to_string(),
+                    code: "ERROR".to_string(),
+                    success: false,
                 }),
             ));
         }
@@ -589,6 +645,8 @@ pub async fn link_tag_to_parent(
                 StatusCode::NOT_FOUND,
                 Json(ErrorResponse {
                     error: "Parent tag not found".to_string(),
+                    code: "ERROR".to_string(),
+                    success: false,
                 }),
             ));
         }
@@ -598,6 +656,8 @@ pub async fn link_tag_to_parent(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
                     error: "Failed to fetch parent tag".to_string(),
+                    code: "ERROR".to_string(),
+                    success: false,
                 }),
             ));
         }
@@ -611,6 +671,8 @@ pub async fn link_tag_to_parent(
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
                     error: "Cannot create circular reference in tag hierarchy".to_string(),
+                    code: "ERROR".to_string(),
+                    success: false,
                 }),
             ));
         }
@@ -621,6 +683,8 @@ pub async fn link_tag_to_parent(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
                     error: "Failed to validate tag hierarchy".to_string(),
+                    code: "ERROR".to_string(),
+                    success: false,
                 }),
             ));
         }
@@ -633,8 +697,10 @@ pub async fn link_tag_to_parent(
         Ok(updated_tag) => {
             info!("Successfully linked tag {} to parent {}", tag_id, parent_id);
             Ok(Json(ApiResponse {
-                data: TagResponse::from(updated_tag),
-            }))
+                    data: TagResponse::from(updated_tag),
+                    message: "Success".to_string(),
+                    success: true,
+                }))
         }
         Err(e) => {
             error!("Failed to link tag to parent: {}", e);
@@ -642,6 +708,8 @@ pub async fn link_tag_to_parent(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
                     error: "Failed to link tag to parent".to_string(),
+                    code: "ERROR".to_string(),
+                    success: false,
                 }),
             ))
         }
@@ -677,6 +745,8 @@ pub async fn unlink_tag_from_parent(
                 StatusCode::NOT_FOUND,
                 Json(ErrorResponse {
                     error: "Tag not found".to_string(),
+                    code: "ERROR".to_string(),
+                    success: false,
                 }),
             ));
         }
@@ -686,6 +756,8 @@ pub async fn unlink_tag_from_parent(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
                     error: "Failed to fetch tag".to_string(),
+                    code: "ERROR".to_string(),
+                    success: false,
                 }),
             ));
         }
@@ -698,8 +770,10 @@ pub async fn unlink_tag_from_parent(
         Ok(updated_tag) => {
             info!("Successfully unlinked tag {} from its parent", tag_id);
             Ok(Json(ApiResponse {
-                data: TagResponse::from(updated_tag),
-            }))
+                    data: TagResponse::from(updated_tag),
+                    message: "Success".to_string(),
+                    success: true,
+                }))
         }
         Err(e) => {
             error!("Failed to unlink tag from parent: {}", e);
@@ -707,6 +781,8 @@ pub async fn unlink_tag_from_parent(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
                     error: "Failed to unlink tag from parent".to_string(),
+                    code: "ERROR".to_string(),
+                    success: false,
                 }),
             ))
         }
