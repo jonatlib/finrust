@@ -6,6 +6,7 @@ use axum::{
 };
 use chrono::NaiveDate;
 use model::entities::{one_off_transaction, account};
+use model::transaction::{Tag, Transaction, TransactionGenerator};
 use rust_decimal::Decimal;
 use sea_orm::{ActiveModelTrait, EntityTrait, Set, DbErr};
 use serde::{Deserialize, Serialize};
@@ -58,6 +59,24 @@ pub struct UpdateTransactionRequest {
     pub linked_import_id: Option<String>,
 }
 
+/// Tag information for API responses
+#[derive(Debug, Serialize, ToSchema)]
+pub struct TagInfo {
+    pub id: i32,
+    pub name: String,
+    pub description: Option<String>,
+}
+
+impl From<Tag> for TagInfo {
+    fn from(tag: Tag) -> Self {
+        Self {
+            id: tag.id,
+            name: tag.name,
+            description: tag.description,
+        }
+    }
+}
+
 /// Transaction response model
 #[derive(Debug, Serialize, ToSchema)]
 pub struct TransactionResponse {
@@ -71,6 +90,7 @@ pub struct TransactionResponse {
     pub source_account_id: Option<i32>,
     pub ledger_name: Option<String>,
     pub linked_import_id: Option<String>,
+    pub tags: Vec<TagInfo>,
 }
 
 impl From<one_off_transaction::Model> for TransactionResponse {
@@ -86,7 +106,24 @@ impl From<one_off_transaction::Model> for TransactionResponse {
             source_account_id: model.source_account_id,
             ledger_name: model.ledger_name,
             linked_import_id: model.linked_import_id,
+            tags: Vec::new(), // Will be populated by with_tags method
         }
+    }
+}
+
+impl TransactionResponse {
+    /// Create a TransactionResponse with tags fetched from the database
+    pub async fn with_tags(
+        model: one_off_transaction::Model,
+        db: &sea_orm::DatabaseConnection,
+    ) -> Result<Self, DbErr> {
+        // Use the get_tag_for_transaction method from the Transaction trait
+        let tags = model.get_tag_for_transaction(db, true).await;
+        let tag_infos: Vec<TagInfo> = tags.into_iter().map(TagInfo::from).collect();
+        
+        let mut response = Self::from(model);
+        response.tags = tag_infos;
+        Ok(response)
     }
 }
 
@@ -183,12 +220,27 @@ pub async fn create_transaction(
         Ok(transaction_model) => {
             info!("Transaction created successfully with ID: {}, name: {}, amount: {}", 
                   transaction_model.id, transaction_model.name, transaction_model.amount);
-            let response = ApiResponse {
-                data: TransactionResponse::from(transaction_model),
-                message: "Transaction created successfully".to_string(),
-                success: true,
-            };
-            Ok((StatusCode::CREATED, Json(response)))
+            
+            match TransactionResponse::with_tags(transaction_model.clone(), &state.db).await {
+                Ok(transaction_response) => {
+                    let response = ApiResponse {
+                        data: transaction_response,
+                        message: "Transaction created successfully".to_string(),
+                        success: true,
+                    };
+                    Ok((StatusCode::CREATED, Json(response)))
+                }
+                Err(tag_error) => {
+                    error!("Failed to fetch tags for transaction: {}", tag_error);
+                    // Fall back to response without tags
+                    let response = ApiResponse {
+                        data: TransactionResponse::from(transaction_model),
+                        message: "Transaction created successfully".to_string(),
+                        success: true,
+                    };
+                    Ok((StatusCode::CREATED, Json(response)))
+                }
+            }
         }
         Err(db_error) => {
             error!("Failed to create transaction '{}' for target account {}: {}", 
@@ -247,10 +299,16 @@ pub async fn get_transactions(
             let transaction_count = transactions.len();
             debug!("Retrieved {} transactions from database", transaction_count);
 
-            let transaction_responses: Vec<TransactionResponse> = transactions
-                .into_iter()
-                .map(TransactionResponse::from)
-                .collect();
+            let mut transaction_responses = Vec::new();
+            for transaction in transactions {
+                match TransactionResponse::with_tags(transaction.clone(), &state.db).await {
+                    Ok(response) => transaction_responses.push(response),
+                    Err(tag_error) => {
+                        warn!("Failed to fetch tags for transaction {}: {}", transaction.id, tag_error);
+                        transaction_responses.push(TransactionResponse::from(transaction));
+                    }
+                }
+            }
 
             info!("Successfully retrieved {} transactions", transaction_count);
             let response = ApiResponse {
@@ -305,10 +363,16 @@ pub async fn get_account_transactions(
             let transaction_count = transactions.len();
             debug!("Retrieved {} transactions for account ID: {}", transaction_count, account_id);
 
-            let transaction_responses: Vec<TransactionResponse> = transactions
-                .into_iter()
-                .map(TransactionResponse::from)
-                .collect();
+            let mut transaction_responses = Vec::new();
+            for transaction in transactions {
+                match TransactionResponse::with_tags(transaction.clone(), &state.db).await {
+                    Ok(response) => transaction_responses.push(response),
+                    Err(tag_error) => {
+                        warn!("Failed to fetch tags for transaction {}: {}", transaction.id, tag_error);
+                        transaction_responses.push(TransactionResponse::from(transaction));
+                    }
+                }
+            }
 
             info!("Successfully retrieved {} transactions for account ID: {}", transaction_count, account_id);
             let response = ApiResponse {
@@ -354,12 +418,26 @@ pub async fn get_transaction(
         Ok(Some(transaction_model)) => {
             info!("Successfully retrieved transaction with ID: {}, name: {}", 
                   transaction_model.id, transaction_model.name);
-            let response = ApiResponse {
-                data: TransactionResponse::from(transaction_model),
-                message: "Transaction retrieved successfully".to_string(),
-                success: true,
-            };
-            Ok(Json(response))
+            
+            match TransactionResponse::with_tags(transaction_model.clone(), &state.db).await {
+                Ok(transaction_response) => {
+                    let response = ApiResponse {
+                        data: transaction_response,
+                        message: "Transaction retrieved successfully".to_string(),
+                        success: true,
+                    };
+                    Ok(Json(response))
+                }
+                Err(tag_error) => {
+                    warn!("Failed to fetch tags for transaction {}: {}", transaction_model.id, tag_error);
+                    let response = ApiResponse {
+                        data: TransactionResponse::from(transaction_model),
+                        message: "Transaction retrieved successfully".to_string(),
+                        success: true,
+                    };
+                    Ok(Json(response))
+                }
+            }
         }
         Ok(None) => {
             warn!("Transaction with ID {} not found", transaction_id);
@@ -479,12 +557,26 @@ pub async fn update_transaction(
         Ok(updated_transaction) => {
             info!("Transaction with ID {} updated successfully. Updated fields: {}", 
                   transaction_id, if updated_fields.is_empty() { "none".to_string() } else { updated_fields.join(", ") });
-            let response = ApiResponse {
-                data: TransactionResponse::from(updated_transaction),
-                message: "Transaction updated successfully".to_string(),
-                success: true,
-            };
-            Ok(Json(response))
+            
+            match TransactionResponse::with_tags(updated_transaction.clone(), &state.db).await {
+                Ok(transaction_response) => {
+                    let response = ApiResponse {
+                        data: transaction_response,
+                        message: "Transaction updated successfully".to_string(),
+                        success: true,
+                    };
+                    Ok(Json(response))
+                }
+                Err(tag_error) => {
+                    warn!("Failed to fetch tags for updated transaction {}: {}", updated_transaction.id, tag_error);
+                    let response = ApiResponse {
+                        data: TransactionResponse::from(updated_transaction),
+                        message: "Transaction updated successfully".to_string(),
+                        success: true,
+                    };
+                    Ok(Json(response))
+                }
+            }
         }
         Err(db_error) => {
             error!("Failed to update transaction with ID {}: {}", transaction_id, db_error);

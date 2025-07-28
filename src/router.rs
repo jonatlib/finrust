@@ -10,6 +10,10 @@ use crate::handlers::{
         get_recurring_incomes, update_recurring_income,
     },
     statistics::{get_account_statistics, get_all_accounts_statistics},
+    tags::{
+        create_tag, delete_tag, get_tag, get_tags, update_tag,
+        get_tag_children, link_tag_to_parent, unlink_tag_from_parent,
+    },
     timeseries::{get_account_timeseries, get_all_accounts_timeseries},
     transactions::{
         create_transaction, delete_transaction, get_account_transactions, get_transaction,
@@ -74,6 +78,16 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/users/:user_id", get(get_user))
         .route("/api/v1/users/:user_id", put(update_user))
         .route("/api/v1/users/:user_id", delete(delete_user))
+        // Tag CRUD routes
+        .route("/api/v1/tags", post(create_tag))
+        .route("/api/v1/tags", get(get_tags))
+        .route("/api/v1/tags/:tag_id", get(get_tag))
+        .route("/api/v1/tags/:tag_id", put(update_tag))
+        .route("/api/v1/tags/:tag_id", delete(delete_tag))
+        // Tag tree structure routes
+        .route("/api/v1/tags/:tag_id/children", get(get_tag_children))
+        .route("/api/v1/tags/:tag_id/parent/:parent_id", put(link_tag_to_parent))
+        .route("/api/v1/tags/:tag_id/parent", delete(unlink_tag_from_parent))
         // Transaction CRUD routes
         .route("/api/v1/transactions", post(create_transaction))
         .route("/api/v1/transactions", get(get_transactions))

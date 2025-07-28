@@ -6,8 +6,9 @@ use axum::{
 };
 use chrono::NaiveDate;
 use model::entities::{imported_transaction, account};
+use model::transaction::{Tag, TransactionGenerator};
 use rust_decimal::Decimal;
-use sea_orm::{ActiveModelTrait, EntityTrait, Set, ColumnTrait, QueryFilter};
+use sea_orm::{ActiveModelTrait, EntityTrait, Set, ColumnTrait, QueryFilter, DbErr};
 use serde::{Deserialize, Serialize};
 use tracing::{instrument, error, warn, info, debug, trace};
 use utoipa::{ToSchema, IntoParams};
@@ -51,6 +52,24 @@ pub struct ReconcileImportedTransactionRequest {
     pub transaction_id: i32,
 }
 
+/// Tag information for API responses
+#[derive(Debug, Serialize, ToSchema)]
+pub struct TagInfo {
+    pub id: i32,
+    pub name: String,
+    pub description: Option<String>,
+}
+
+impl From<Tag> for TagInfo {
+    fn from(tag: Tag) -> Self {
+        Self {
+            id: tag.id,
+            name: tag.name,
+            description: tag.description,
+        }
+    }
+}
+
 /// Imported transaction response model
 #[derive(Debug, Serialize, ToSchema)]
 pub struct ImportedTransactionResponse {
@@ -64,6 +83,7 @@ pub struct ImportedTransactionResponse {
     pub reconciled_transaction_type: Option<String>,
     pub reconciled_transaction_id: Option<i32>,
     pub reconciled_transaction_info: Option<ReconciledTransactionInfo>,
+    pub tags: Vec<TagInfo>,
 }
 
 /// Information about the reconciled transaction
@@ -125,7 +145,24 @@ impl From<imported_transaction::Model> for ImportedTransactionResponse {
             reconciled_transaction_type,
             reconciled_transaction_id: model.reconciled_transaction_id,
             reconciled_transaction_info,
+            tags: Vec::new(), // Will be populated by with_tags method
         }
+    }
+}
+
+impl ImportedTransactionResponse {
+    /// Create an ImportedTransactionResponse with tags fetched from the database
+    pub async fn with_tags(
+        model: imported_transaction::Model,
+        db: &sea_orm::DatabaseConnection,
+    ) -> Result<Self, DbErr> {
+        // Use the get_tag_for_transaction method from the TransactionGenerator trait
+        let tags = model.get_tag_for_transaction(db, true).await;
+        let tag_infos: Vec<TagInfo> = tags.into_iter().map(TagInfo::from).collect();
+        
+        let mut response = Self::from(model);
+        response.tags = tag_infos;
+        Ok(response)
     }
 }
 
@@ -224,15 +261,31 @@ pub async fn create_imported_transaction(
     match new_imported_transaction.insert(&state.db).await {
         Ok(imported_transaction) => {
             info!("Successfully created imported transaction with id: {}", imported_transaction.id);
-            let response = ImportedTransactionResponse::from(imported_transaction);
-            Ok((
-                StatusCode::CREATED,
-                Json(ApiResponse {
-                    data: response,
-                    message: "Imported transaction created successfully".to_string(),
-                    success: true,
-                }),
-            ))
+            
+            match ImportedTransactionResponse::with_tags(imported_transaction.clone(), &state.db).await {
+                Ok(response) => {
+                    Ok((
+                        StatusCode::CREATED,
+                        Json(ApiResponse {
+                            data: response,
+                            message: "Imported transaction created successfully".to_string(),
+                            success: true,
+                        }),
+                    ))
+                }
+                Err(tag_error) => {
+                    warn!("Failed to fetch tags for imported transaction {}: {}", imported_transaction.id, tag_error);
+                    let response = ImportedTransactionResponse::from(imported_transaction);
+                    Ok((
+                        StatusCode::CREATED,
+                        Json(ApiResponse {
+                            data: response,
+                            message: "Imported transaction created successfully".to_string(),
+                            success: true,
+                        }),
+                    ))
+                }
+            }
         }
         Err(e) => {
             error!("Failed to create imported transaction: {}", e);
@@ -292,10 +345,18 @@ pub async fn get_imported_transactions(
     match query_builder.all(&state.db).await {
         Ok(imported_transactions) => {
             info!("Successfully retrieved {} imported transactions", imported_transactions.len());
-            let responses: Vec<ImportedTransactionResponse> = imported_transactions
-                .into_iter()
-                .map(ImportedTransactionResponse::from)
-                .collect();
+            
+            let mut responses = Vec::new();
+            for transaction in imported_transactions {
+                match ImportedTransactionResponse::with_tags(transaction.clone(), &state.db).await {
+                    Ok(response) => responses.push(response),
+                    Err(tag_error) => {
+                        warn!("Failed to fetch tags for imported transaction {}: {}", transaction.id, tag_error);
+                        responses.push(ImportedTransactionResponse::from(transaction));
+                    }
+                }
+            }
+            
             Ok(Json(ApiResponse {
                 data: responses,
                 message: "Imported transactions retrieved successfully".to_string(),
@@ -338,10 +399,18 @@ pub async fn get_account_imported_transactions(
         Ok(imported_transactions) => {
             info!("Successfully retrieved {} imported transactions for account {}", 
                   imported_transactions.len(), account_id);
-            let responses: Vec<ImportedTransactionResponse> = imported_transactions
-                .into_iter()
-                .map(ImportedTransactionResponse::from)
-                .collect();
+            
+            let mut responses = Vec::new();
+            for transaction in imported_transactions {
+                match ImportedTransactionResponse::with_tags(transaction.clone(), &state.db).await {
+                    Ok(response) => responses.push(response),
+                    Err(tag_error) => {
+                        warn!("Failed to fetch tags for imported transaction {}: {}", transaction.id, tag_error);
+                        responses.push(ImportedTransactionResponse::from(transaction));
+                    }
+                }
+            }
+            
             Ok(Json(ApiResponse {
                 data: responses,
                 message: "Account imported transactions retrieved successfully".to_string(),
@@ -380,12 +449,25 @@ pub async fn get_imported_transaction(
     match imported_transaction::Entity::find_by_id(transaction_id).one(&state.db).await {
         Ok(Some(imported_transaction)) => {
             info!("Successfully retrieved imported transaction with id: {}", transaction_id);
-            let response = ImportedTransactionResponse::from(imported_transaction);
-            Ok(Json(ApiResponse {
-                data: response,
-                message: "Imported transaction retrieved successfully".to_string(),
-                success: true,
-            }))
+            
+            match ImportedTransactionResponse::with_tags(imported_transaction.clone(), &state.db).await {
+                Ok(response) => {
+                    Ok(Json(ApiResponse {
+                        data: response,
+                        message: "Imported transaction retrieved successfully".to_string(),
+                        success: true,
+                    }))
+                }
+                Err(tag_error) => {
+                    warn!("Failed to fetch tags for imported transaction {}: {}", imported_transaction.id, tag_error);
+                    let response = ImportedTransactionResponse::from(imported_transaction);
+                    Ok(Json(ApiResponse {
+                        data: response,
+                        message: "Imported transaction retrieved successfully".to_string(),
+                        success: true,
+                    }))
+                }
+            }
         }
         Ok(None) => {
             warn!("Imported transaction with id {} not found", transaction_id);
@@ -456,12 +538,25 @@ pub async fn update_imported_transaction(
     match imported_transaction_update.update(&state.db).await {
         Ok(updated_imported_transaction) => {
             info!("Successfully updated imported transaction with id: {}", transaction_id);
-            let response = ImportedTransactionResponse::from(updated_imported_transaction);
-            Ok(Json(ApiResponse {
-                data: response,
-                message: "Imported transaction updated successfully".to_string(),
-                success: true,
-            }))
+            
+            match ImportedTransactionResponse::with_tags(updated_imported_transaction.clone(), &state.db).await {
+                Ok(response) => {
+                    Ok(Json(ApiResponse {
+                        data: response,
+                        message: "Imported transaction updated successfully".to_string(),
+                        success: true,
+                    }))
+                }
+                Err(tag_error) => {
+                    warn!("Failed to fetch tags for updated imported transaction {}: {}", updated_imported_transaction.id, tag_error);
+                    let response = ImportedTransactionResponse::from(updated_imported_transaction);
+                    Ok(Json(ApiResponse {
+                        data: response,
+                        message: "Imported transaction updated successfully".to_string(),
+                        success: true,
+                    }))
+                }
+            }
         }
         Err(e) => {
             error!("Failed to update imported transaction with id {}: {}", transaction_id, e);
@@ -582,12 +677,25 @@ pub async fn reconcile_imported_transaction(
     match imported_transaction_update.update(&state.db).await {
         Ok(updated_imported_transaction) => {
             info!("Successfully reconciled imported transaction with id: {}", transaction_id);
-            let response = ImportedTransactionResponse::from(updated_imported_transaction);
-            Ok(Json(ApiResponse {
-                data: response,
-                message: "Imported transaction reconciled successfully".to_string(),
-                success: true,
-            }))
+            
+            match ImportedTransactionResponse::with_tags(updated_imported_transaction.clone(), &state.db).await {
+                Ok(response) => {
+                    Ok(Json(ApiResponse {
+                        data: response,
+                        message: "Imported transaction reconciled successfully".to_string(),
+                        success: true,
+                    }))
+                }
+                Err(tag_error) => {
+                    warn!("Failed to fetch tags for reconciled imported transaction {}: {}", updated_imported_transaction.id, tag_error);
+                    let response = ImportedTransactionResponse::from(updated_imported_transaction);
+                    Ok(Json(ApiResponse {
+                        data: response,
+                        message: "Imported transaction reconciled successfully".to_string(),
+                        success: true,
+                    }))
+                }
+            }
         }
         Err(e) => {
             error!("Failed to reconcile imported transaction with id {}: {}", transaction_id, e);
@@ -640,12 +748,25 @@ pub async fn clear_imported_transaction_reconciliation(
     match imported_transaction_update.update(&state.db).await {
         Ok(updated_imported_transaction) => {
             info!("Successfully cleared reconciliation for imported transaction with id: {}", transaction_id);
-            let response = ImportedTransactionResponse::from(updated_imported_transaction);
-            Ok(Json(ApiResponse {
-                data: response,
-                message: "Reconciliation cleared successfully".to_string(),
-                success: true,
-            }))
+            
+            match ImportedTransactionResponse::with_tags(updated_imported_transaction.clone(), &state.db).await {
+                Ok(response) => {
+                    Ok(Json(ApiResponse {
+                        data: response,
+                        message: "Reconciliation cleared successfully".to_string(),
+                        success: true,
+                    }))
+                }
+                Err(tag_error) => {
+                    warn!("Failed to fetch tags for imported transaction {}: {}", updated_imported_transaction.id, tag_error);
+                    let response = ImportedTransactionResponse::from(updated_imported_transaction);
+                    Ok(Json(ApiResponse {
+                        data: response,
+                        message: "Reconciliation cleared successfully".to_string(),
+                        success: true,
+                    }))
+                }
+            }
         }
         Err(e) => {
             error!("Failed to clear reconciliation for imported transaction with id {}: {}", transaction_id, e);

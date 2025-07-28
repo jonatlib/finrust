@@ -7,12 +7,31 @@ use axum::{
 use axum_valid::Valid;
 use chrono::NaiveDate;
 use model::entities::{recurring_transaction, recurring_transaction_instance};
+use model::transaction::{Tag, TransactionGenerator};
 use rust_decimal::Decimal;
 use sea_orm::{ActiveModelTrait, EntityTrait, Set, PaginatorTrait, QueryOrder, QueryFilter, ColumnTrait};
 use serde::{Deserialize, Serialize};
 use tracing::{instrument, error, warn, info, debug, trace};
 use utoipa::{ToSchema, IntoParams};
 use validator::Validate;
+
+/// Tag information for API responses
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct TagInfo {
+    pub id: i32,
+    pub name: String,
+    pub description: Option<String>,
+}
+
+impl From<Tag> for TagInfo {
+    fn from(tag: Tag) -> Self {
+        Self {
+            id: tag.id,
+            name: tag.name,
+            description: tag.description,
+        }
+    }
+}
 
 /// Request body for creating a recurring transaction
 #[derive(Debug, Deserialize, Serialize, ToSchema)]
@@ -78,6 +97,7 @@ pub struct RecurringTransactionResponse {
     pub target_account_id: i32,
     pub source_account_id: Option<i32>,
     pub ledger_name: Option<String>,
+    pub tags: Vec<TagInfo>,
 }
 
 impl From<recurring_transaction::Model> for RecurringTransactionResponse {
@@ -94,7 +114,24 @@ impl From<recurring_transaction::Model> for RecurringTransactionResponse {
             target_account_id: model.target_account_id,
             source_account_id: model.source_account_id,
             ledger_name: model.ledger_name,
+            tags: Vec::new(), // Will be populated by with_tags method
         }
+    }
+}
+
+impl RecurringTransactionResponse {
+    /// Create a RecurringTransactionResponse with tags fetched from the database
+    pub async fn with_tags(
+        model: recurring_transaction::Model,
+        db: &sea_orm::DatabaseConnection,
+    ) -> Result<Self, sea_orm::DbErr> {
+        // Use the get_tag_for_transaction method from the TransactionGenerator trait
+        let tags = model.get_tag_for_transaction(db, true).await;
+        let tag_infos: Vec<TagInfo> = tags.into_iter().map(TagInfo::from).collect();
+        
+        let mut response = Self::from(model);
+        response.tags = tag_infos;
+        Ok(response)
     }
 }
 
@@ -133,6 +170,7 @@ pub struct RecurringInstanceResponse {
     pub paid_date: Option<NaiveDate>,
     pub paid_amount: Option<Decimal>,
     pub reconciled_imported_transaction_id: Option<i32>,
+    pub tags: Vec<TagInfo>,
 }
 
 impl From<recurring_transaction_instance::Model> for RecurringInstanceResponse {
@@ -146,7 +184,33 @@ impl From<recurring_transaction_instance::Model> for RecurringInstanceResponse {
             paid_date: model.paid_date,
             paid_amount: model.paid_amount,
             reconciled_imported_transaction_id: model.reconciled_imported_transaction_id,
+            tags: Vec::new(), // Will be populated by with_tags method
         }
+    }
+}
+
+impl RecurringInstanceResponse {
+    /// Create a RecurringInstanceResponse with tags fetched from the parent recurring transaction
+    pub async fn with_tags(
+        model: recurring_transaction_instance::Model,
+        db: &sea_orm::DatabaseConnection,
+    ) -> Result<Self, sea_orm::DbErr> {
+        // Fetch the parent recurring transaction to get its tags
+        let parent_transaction = recurring_transaction::Entity::find_by_id(model.recurring_transaction_id)
+            .one(db)
+            .await?;
+        
+        let tag_infos = if let Some(parent) = parent_transaction {
+            // Use the get_tag_for_transaction method from the TransactionGenerator trait
+            let tags = parent.get_tag_for_transaction(db, true).await;
+            tags.into_iter().map(TagInfo::from).collect()
+        } else {
+            Vec::new()
+        };
+        
+        let mut response = Self::from(model);
+        response.tags = tag_infos;
+        Ok(response)
     }
 }
 
@@ -210,12 +274,27 @@ pub async fn create_recurring_instance(
     match new_instance.insert(&state.db).await {
         Ok(instance) => {
             info!("Successfully created recurring transaction instance with ID: {}", instance.id);
-            let response = ApiResponse {
-                data: RecurringInstanceResponse::from(instance),
-                message: "Recurring transaction instance created successfully".to_string(),
-                success: true,
-            };
-            Ok((StatusCode::CREATED, Json(response)))
+            
+            match RecurringInstanceResponse::with_tags(instance.clone(), &state.db).await {
+                Ok(instance_response) => {
+                    let response = ApiResponse {
+                        data: instance_response,
+                        message: "Recurring transaction instance created successfully".to_string(),
+                        success: true,
+                    };
+                    Ok((StatusCode::CREATED, Json(response)))
+                }
+                Err(tag_error) => {
+                    error!("Failed to fetch tags for recurring transaction instance: {}", tag_error);
+                    // Fall back to response without tags
+                    let response = ApiResponse {
+                        data: RecurringInstanceResponse::from(instance),
+                        message: "Recurring transaction instance created successfully".to_string(),
+                        success: true,
+                    };
+                    Ok((StatusCode::CREATED, Json(response)))
+                }
+            }
         }
         Err(e) => {
             error!("Failed to create recurring transaction instance: {}", e);
@@ -292,12 +371,27 @@ pub async fn create_recurring_transaction(
     match new_transaction.insert(&state.db).await {
         Ok(transaction) => {
             info!("Successfully created recurring transaction with ID: {}", transaction.id);
-            let response = ApiResponse {
-                data: RecurringTransactionResponse::from(transaction),
-                message: "Recurring transaction created successfully".to_string(),
-                success: true,
-            };
-            Ok((StatusCode::CREATED, Json(response)))
+            
+            match RecurringTransactionResponse::with_tags(transaction.clone(), &state.db).await {
+                Ok(transaction_response) => {
+                    let response = ApiResponse {
+                        data: transaction_response,
+                        message: "Recurring transaction created successfully".to_string(),
+                        success: true,
+                    };
+                    Ok((StatusCode::CREATED, Json(response)))
+                }
+                Err(tag_error) => {
+                    error!("Failed to fetch tags for recurring transaction: {}", tag_error);
+                    // Fall back to response without tags
+                    let response = ApiResponse {
+                        data: RecurringTransactionResponse::from(transaction),
+                        message: "Recurring transaction created successfully".to_string(),
+                        success: true,
+                    };
+                    Ok((StatusCode::CREATED, Json(response)))
+                }
+            }
         }
         Err(e) => {
             error!("Failed to create recurring transaction: {}", e);
@@ -355,10 +449,17 @@ pub async fn get_recurring_transactions(
     {
         Ok(transactions) => {
             info!("Successfully retrieved {} recurring transactions", transactions.len());
-            let response_data: Vec<RecurringTransactionResponse> = transactions
-                .into_iter()
-                .map(RecurringTransactionResponse::from)
-                .collect();
+            
+            let mut response_data = Vec::new();
+            for transaction in transactions {
+                match RecurringTransactionResponse::with_tags(transaction.clone(), &state.db).await {
+                    Ok(response) => response_data.push(response),
+                    Err(tag_error) => {
+                        warn!("Failed to fetch tags for recurring transaction {}: {}", transaction.id, tag_error);
+                        response_data.push(RecurringTransactionResponse::from(transaction));
+                    }
+                }
+            }
 
             let response = ApiResponse {
                 data: response_data,
@@ -406,12 +507,26 @@ pub async fn get_recurring_transaction(
     {
         Ok(Some(transaction)) => {
             info!("Successfully retrieved recurring transaction: {}", transaction.name);
-            let response = ApiResponse {
-                data: RecurringTransactionResponse::from(transaction),
-                message: "Recurring transaction retrieved successfully".to_string(),
-                success: true,
-            };
-            Ok((StatusCode::OK, Json(response)))
+            
+            match RecurringTransactionResponse::with_tags(transaction.clone(), &state.db).await {
+                Ok(transaction_response) => {
+                    let response = ApiResponse {
+                        data: transaction_response,
+                        message: "Recurring transaction retrieved successfully".to_string(),
+                        success: true,
+                    };
+                    Ok((StatusCode::OK, Json(response)))
+                }
+                Err(tag_error) => {
+                    warn!("Failed to fetch tags for recurring transaction {}: {}", transaction.id, tag_error);
+                    let response = ApiResponse {
+                        data: RecurringTransactionResponse::from(transaction),
+                        message: "Recurring transaction retrieved successfully".to_string(),
+                        success: true,
+                    };
+                    Ok((StatusCode::OK, Json(response)))
+                }
+            }
         }
         Ok(None) => {
             warn!("Recurring transaction with ID {} not found", recurring_transaction_id);
@@ -547,12 +662,26 @@ pub async fn update_recurring_transaction(
     match update_model.update(&state.db).await {
         Ok(updated_transaction) => {
             info!("Successfully updated recurring transaction with ID: {}", updated_transaction.id);
-            let response = ApiResponse {
-                data: RecurringTransactionResponse::from(updated_transaction),
-                message: "Recurring transaction updated successfully".to_string(),
-                success: true,
-            };
-            Ok((StatusCode::OK, Json(response)))
+            
+            match RecurringTransactionResponse::with_tags(updated_transaction.clone(), &state.db).await {
+                Ok(transaction_response) => {
+                    let response = ApiResponse {
+                        data: transaction_response,
+                        message: "Recurring transaction updated successfully".to_string(),
+                        success: true,
+                    };
+                    Ok((StatusCode::OK, Json(response)))
+                }
+                Err(tag_error) => {
+                    warn!("Failed to fetch tags for updated recurring transaction {}: {}", updated_transaction.id, tag_error);
+                    let response = ApiResponse {
+                        data: RecurringTransactionResponse::from(updated_transaction),
+                        message: "Recurring transaction updated successfully".to_string(),
+                        success: true,
+                    };
+                    Ok((StatusCode::OK, Json(response)))
+                }
+            }
         }
         Err(e) => {
             error!("Failed to update recurring transaction: {}", e);
