@@ -4,9 +4,11 @@
 //! such as minimum and maximum states, average expenses and income, upcoming expenses,
 //! and end-of-period states.
 
-use chrono::NaiveDate;
+use chrono::{NaiveDate, Datelike};
 use polars::prelude::*;
 use rust_decimal::Decimal;
+use std::str::FromStr;
+use std::collections::HashMap;
 use sea_orm::DatabaseConnection;
 use tracing::instrument;
 
@@ -247,14 +249,50 @@ enum StatType {
 }
 
 fn compute_min_state_from_dataframe(df: DataFrame) -> Result<Vec<AccountStats>> {
-    let mut stats = Vec::new();
+    // Map each account_id to its minimum Decimal balance found in the frame
+    let account_col = df
+        .column("account_id")
+        .or_else(|_| df.column("account"))
+        .map_err(|e| crate::error::ComputeError::DataFrame(format!("Missing account column: {e}")))?;
+    let balance_col = df
+        .column("balance")
+        .map_err(|e| crate::error::ComputeError::DataFrame(format!("Missing balance column: {e}")))?;
 
-    // For now, return empty stats to avoid compilation errors
-    // TODO: Implement proper DataFrame processing when Polars API is better understood
-    for account in get_unique_account_ids(&df)? {
+    let mut mins: HashMap<i32, Decimal> = HashMap::new();
+
+    for i in 0..df.height() {
+        let account_id = account_col
+            .get(i)
+            .map_err(|e| crate::error::ComputeError::Series(format!("Error getting account at row {i}: {e}")))?
+            .try_extract::<i32>()
+            .map_err(|e| crate::error::ComputeError::Series(format!("Error extracting account as i32 at row {i}: {e}")))?;
+
+        let bal_any = balance_col
+            .get(i)
+            .map_err(|e| crate::error::ComputeError::Series(format!("Error getting balance at row {i}: {e}")))?;
+        let bal_str = match bal_any {
+            AnyValue::String(s) => s.to_string(),
+            AnyValue::StringOwned(s) => s.to_string(),
+            other => other.to_string(),
+        };
+        let bal = Decimal::from_str(&bal_str)
+            .map_err(|e| crate::error::ComputeError::Decimal(format!("Invalid balance '{bal_str}' at row {i}: {e}")))?;
+
+        mins
+            .entry(account_id)
+            .and_modify(|m| {
+                if bal < *m {
+                    *m = bal;
+                }
+            })
+            .or_insert(bal);
+    }
+
+    let mut stats = Vec::with_capacity(mins.len());
+    for (account_id, min_state) in mins.into_iter() {
         stats.push(AccountStats {
-            account_id: account,
-            min_state: Some(Decimal::ZERO), // Placeholder
+            account_id,
+            min_state: Some(min_state),
             max_state: None,
             average_expense: None,
             average_income: None,
@@ -262,27 +300,60 @@ fn compute_min_state_from_dataframe(df: DataFrame) -> Result<Vec<AccountStats>> 
             end_of_period_state: None,
         });
     }
-
     Ok(stats)
 }
 
 fn compute_max_state_from_dataframe(df: DataFrame) -> Result<Vec<AccountStats>> {
-    let mut stats = Vec::new();
+    let account_col = df
+        .column("account_id")
+        .or_else(|_| df.column("account"))
+        .map_err(|e| crate::error::ComputeError::DataFrame(format!("Missing account column: {e}")))?;
+    let balance_col = df
+        .column("balance")
+        .map_err(|e| crate::error::ComputeError::DataFrame(format!("Missing balance column: {e}")))?;
 
-    // For now, return empty stats to avoid compilation errors
-    // TODO: Implement proper DataFrame processing when Polars API is better understood
-    for account in get_unique_account_ids(&df)? {
+    let mut maxs: HashMap<i32, Decimal> = HashMap::new();
+
+    for i in 0..df.height() {
+        let account_id = account_col
+            .get(i)
+            .map_err(|e| crate::error::ComputeError::Series(format!("Error getting account at row {i}: {e}")))?
+            .try_extract::<i32>()
+            .map_err(|e| crate::error::ComputeError::Series(format!("Error extracting account as i32 at row {i}: {e}")))?;
+
+        let bal_any = balance_col
+            .get(i)
+            .map_err(|e| crate::error::ComputeError::Series(format!("Error getting balance at row {i}: {e}")))?;
+        let bal_str = match bal_any {
+            AnyValue::String(s) => s.to_string(),
+            AnyValue::StringOwned(s) => s.to_string(),
+            other => other.to_string(),
+        };
+        let bal = Decimal::from_str(&bal_str)
+            .map_err(|e| crate::error::ComputeError::Decimal(format!("Invalid balance '{bal_str}' at row {i}: {e}")))?;
+
+        maxs
+            .entry(account_id)
+            .and_modify(|m| {
+                if bal > *m {
+                    *m = bal;
+                }
+            })
+            .or_insert(bal);
+    }
+
+    let mut stats = Vec::with_capacity(maxs.len());
+    for (account_id, max_state) in maxs.into_iter() {
         stats.push(AccountStats {
-            account_id: account,
+            account_id,
             min_state: None,
-            max_state: Some(Decimal::ZERO), // Placeholder
+            max_state: Some(max_state),
             average_expense: None,
             average_income: None,
             upcoming_expenses: None,
             end_of_period_state: None,
         });
     }
-
     Ok(stats)
 }
 
@@ -290,13 +361,73 @@ fn compute_basic_stats_from_dataframe(
     df: DataFrame,
     stat_type: StatType,
 ) -> Result<Vec<AccountStats>> {
-    let mut stats = Vec::new();
+    // Extract required columns
+    let account_col = df
+        .column("account_id")
+        .or_else(|_| df.column("account"))
+        .map_err(|e| crate::error::ComputeError::DataFrame(format!("Missing account column: {e}")))?;
+    let date_col = df
+        .column("date")
+        .map_err(|e| crate::error::ComputeError::DataFrame(format!("Missing date column: {e}")))?;
+    let balance_col = df
+        .column("balance")
+        .map_err(|e| crate::error::ComputeError::DataFrame(format!("Missing balance column: {e}")))?;
 
-    // For now, return empty stats to avoid compilation errors
-    // TODO: Implement proper DataFrame processing when Polars API is better understood
-    for account in get_unique_account_ids(&df)? {
+    // Build per-account time series of (date, balance)
+    let mut series_map: HashMap<i32, Vec<(i64, Decimal)>> = HashMap::new();
+
+    for i in 0..df.height() {
+        let account_id = account_col
+            .get(i)
+            .map_err(|e| crate::error::ComputeError::Series(format!("Error getting account at row {i}: {e}")))?
+            .try_extract::<i32>()
+            .map_err(|e| crate::error::ComputeError::Series(format!("Error extracting account as i32 at row {i}: {e}")))?;
+
+        let date = date_col
+            .get(i)
+            .map_err(|e| crate::error::ComputeError::Series(format!("Error getting date at row {i}: {e}")))?
+            .try_extract::<i64>()
+            .map_err(|e| crate::error::ComputeError::Series(format!("Error extracting date as i64 at row {i}: {e}")))?;
+
+        let bal_any = balance_col
+            .get(i)
+            .map_err(|e| crate::error::ComputeError::Series(format!("Error getting balance at row {i}: {e}")))?;
+        let bal_str = match bal_any {
+            AnyValue::String(s) => s.to_string(),
+            AnyValue::StringOwned(s) => s.to_string(),
+            other => other.to_string(),
+        };
+        let bal = Decimal::from_str(&bal_str)
+            .map_err(|e| crate::error::ComputeError::Decimal(format!("Invalid balance '{bal_str}' at row {i}: {e}")))?;
+
+        series_map.entry(account_id).or_default().push((date, bal));
+    }
+
+    // Compute stats per account
+    let mut out: Vec<AccountStats> = Vec::with_capacity(series_map.len());
+    for (account_id, mut points) in series_map {
+        points.sort_by_key(|(d, _)| *d);
+
+        let mut sum_pos = Decimal::ZERO;
+        let mut cnt_pos: u32 = 0;
+        let mut sum_neg_abs = Decimal::ZERO;
+        let mut cnt_neg: u32 = 0;
+
+        for w in points.windows(2) {
+            let (_, prev) = w[0];
+            let (_, curr) = w[1];
+            let delta = curr - prev;
+            if delta > Decimal::ZERO {
+                sum_pos += delta;
+                cnt_pos += 1;
+            } else if delta < Decimal::ZERO {
+                sum_neg_abs += -delta;
+                cnt_neg += 1;
+            }
+        }
+
         let mut stat = AccountStats {
-            account_id: account,
+            account_id,
             min_state: None,
             max_state: None,
             average_expense: None,
@@ -306,44 +437,126 @@ fn compute_basic_stats_from_dataframe(
         };
 
         match stat_type {
-            StatType::AverageExpense => stat.average_expense = Some(Decimal::ZERO),
-            StatType::AverageIncome => stat.average_income = Some(Decimal::ZERO),
-            StatType::UpcomingExpenses => stat.upcoming_expenses = Some(Decimal::ZERO),
+            StatType::AverageExpense => {
+                let avg = if cnt_neg > 0 {
+                    sum_neg_abs / Decimal::from(cnt_neg as i64)
+                } else {
+                    Decimal::ZERO
+                };
+                stat.average_expense = Some(avg);
+            }
+            StatType::AverageIncome => {
+                let avg = if cnt_pos > 0 {
+                    sum_pos / Decimal::from(cnt_pos as i64)
+                } else {
+                    Decimal::ZERO
+                };
+                stat.average_income = Some(avg);
+            }
+            StatType::UpcomingExpenses => {
+                // We interpret the provided df as the future window (from_date..=end_date)
+                // Sum all negative deltas (as positive amounts) as upcoming expenses.
+                stat.upcoming_expenses = Some(sum_neg_abs);
+            }
         }
 
-        stats.push(stat);
+        out.push(stat);
     }
 
-    Ok(stats)
+    Ok(out)
 }
 
 fn compute_end_of_period_state_from_dataframe(
     df: DataFrame,
-    _end_date: NaiveDate,
+    end_date: NaiveDate,
 ) -> Result<Vec<AccountStats>> {
-    let mut stats = Vec::new();
+    let account_col = df
+        .column("account_id")
+        .or_else(|_| df.column("account"))
+        .map_err(|e| crate::error::ComputeError::DataFrame(format!("Missing account column: {e}")))?;
+    let date_col = df
+        .column("date")
+        .map_err(|e| crate::error::ComputeError::DataFrame(format!("Missing date column: {e}")))?;
+    let balance_col = df
+        .column("balance")
+        .map_err(|e| crate::error::ComputeError::DataFrame(format!("Missing balance column: {e}")))?;
 
-    // For now, return empty stats to avoid compilation errors
-    // TODO: Implement proper DataFrame processing when Polars API is better understood
-    for account in get_unique_account_ids(&df)? {
-        stats.push(AccountStats {
-            account_id: account,
+    let end_num: i64 = end_date.num_days_from_ce() as i64;
+
+    // Build per-account points filtered by end_date
+    let mut latest_map: HashMap<i32, (i64, Decimal)> = HashMap::new();
+
+    for i in 0..df.height() {
+        let account_id = account_col
+            .get(i)
+            .map_err(|e| crate::error::ComputeError::Series(format!("Error getting account at row {i}: {e}")))?
+            .try_extract::<i32>()
+            .map_err(|e| crate::error::ComputeError::Series(format!("Error extracting account as i32 at row {i}: {e}")))?;
+
+        let date = date_col
+            .get(i)
+            .map_err(|e| crate::error::ComputeError::Series(format!("Error getting date at row {i}: {e}")))?
+            .try_extract::<i64>()
+            .map_err(|e| crate::error::ComputeError::Series(format!("Error extracting date as i64 at row {i}: {e}")))?;
+
+        if date > end_num {
+            continue;
+        }
+
+        let bal_any = balance_col
+            .get(i)
+            .map_err(|e| crate::error::ComputeError::Series(format!("Error getting balance at row {i}: {e}")))?;
+        let bal_str = match bal_any {
+            AnyValue::String(s) => s.to_string(),
+            AnyValue::StringOwned(s) => s.to_string(),
+            other => other.to_string(),
+        };
+        let bal = Decimal::from_str(&bal_str)
+            .map_err(|e| crate::error::ComputeError::Decimal(format!("Invalid balance '{bal_str}' at row {i}: {e}")))?;
+
+        latest_map
+            .entry(account_id)
+            .and_modify(|(d, b)| {
+                if date >= *d {
+                    *d = date;
+                    *b = bal;
+                }
+            })
+            .or_insert((date, bal));
+    }
+
+    let mut out = Vec::with_capacity(latest_map.len());
+    for (account_id, (_, bal)) in latest_map {
+        out.push(AccountStats {
+            account_id,
             min_state: None,
             max_state: None,
             average_expense: None,
             average_income: None,
             upcoming_expenses: None,
-            end_of_period_state: Some(Decimal::ZERO), // Placeholder
+            end_of_period_state: Some(bal),
         });
     }
 
-    Ok(stats)
+    Ok(out)
 }
 
+/// Extract unique account IDs from a Polars DataFrame.
+///
+/// This helper expects a column with account identifiers. It prefers the
+/// canonical "account_id" column and falls back to "account" to be
+/// compatible with some intermediate DataFrames.
 fn get_unique_account_ids(df: &DataFrame) -> Result<Vec<i32>> {
-    // Simple implementation that returns a placeholder
-    // TODO: Implement proper unique account ID extraction
-    Ok(vec![1]) // Placeholder
+    // Prefer the canonical "account_id" column; fall back to "account".
+    let series = match df.column("account_id") {
+        Ok(s) => s.clone(),
+        Err(_) => df.column("account")?.clone(),
+    };
+
+    // Obtain unique values and collect all non-null i32 IDs.
+    let uniques = series.unique()?;
+    let ids = uniques.i32()?;
+    Ok(ids.into_no_null_iter().collect())
 }
 
 fn get_last_day_of_month(year: i32, month: u32) -> NaiveDate {
@@ -360,6 +573,7 @@ fn get_last_day_of_month(year: i32, month: u32) -> NaiveDate {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use polars::prelude::*;
 
     #[test]
     fn test_get_last_day_of_month() {
@@ -379,5 +593,29 @@ mod tests {
             get_last_day_of_month(2023, 12),
             NaiveDate::from_ymd_opt(2023, 12, 31).unwrap()
         );
+    }
+
+    #[test]
+    fn test_get_unique_account_ids_prefers_account_id() {
+        let df = df! {
+            "account_id" => &[1i32, 2, 1, 3],
+            "balance" => &[10i32, 20, 15, 30],
+        }
+        .unwrap();
+        let mut ids = get_unique_account_ids(&df).unwrap();
+        ids.sort();
+        assert_eq!(ids, vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn test_get_unique_account_ids_fallback_to_account() {
+        let df = df! {
+            "account" => &[7i32, 7, 8],
+            "balance" => &[1i32, 2, 3],
+        }
+        .unwrap();
+        let mut ids = get_unique_account_ids(&df).unwrap();
+        ids.sort();
+        assert_eq!(ids, vec![7, 8]);
     }
 }
