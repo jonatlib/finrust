@@ -80,6 +80,57 @@ The core mission of this project is to provide a comprehensive and accurate view
 and future. It allows you to model your entire financial ecosystem—from various bank accounts and currencies to complex
 recurring transactions—and then use that model to gain insights and forecast with precision.
 
+## Workspace layout and build guide
+
+This repository is a Cargo workspace composed of multiple crates. Here’s what lives where and how to build/run each part.
+
+- Root crate: finrust (backend API and CLI)
+  - Purpose: Axum 0.7 web server, router, handlers, OpenAPI (utoipa + Swagger UI), tracing, CORS/gzip/timeout (tower-http), configuration, and CLI (serve, init-db).
+  - Database: SeaORM with SQLite and Postgres drivers enabled. Default local dev uses SQLite (e.g., sqlite://finrust.db).
+  - OpenAPI/Swagger UI: exposed at /swagger-ui (served by utoipa-swagger-ui). See src/router.rs for integration.
+  - Run (server):
+    - Env vars (or CLI flags): DATABASE_URL (default sqlite://finrust.db), BIND_ADDRESS (default 0.0.0.0:3000).
+    - Example: cargo run -- serve --database-url "sqlite://finrust.db" --bind-address "0.0.0.0:3000".
+  - Init DB: cargo run -- init-db --database-url "sqlite://finrust.db".
+
+- workspace/frontend: Yew SPA (WebAssembly) built with Trunk
+  - Framework: Yew 0.21 (csr feature) + yew-router for SPA routing.
+  - Styling: Tailwind CSS + DaisyUI via CDN in index.html.
+  - Prerequisites:
+    - rustup target add wasm32-unknown-unknown
+    - cargo install trunk
+    - cargo install wasm-bindgen-cli
+  - Dev: cd workspace/frontend && trunk serve (opens http://localhost:8080).
+  - Production build: trunk build --release (outputs to dist/).
+  - API access: use gloo-net/reqwest in WASM; backend typically runs on 3000 (configure CORS in backend if domains differ).
+  - See workspace/frontend/README.md for details.
+
+- workspace/compute: computation and analytics
+  - Purpose: Converts model domain to Polars DataFrames; calculates balances, recurring items, merges; provides account statistics.
+  - Key crates: polars (lazy, cum_agg), chrono, rust_decimal, rusty-money, SeaORM (where needed), async-trait.
+  - Integration: Produces data that is converted to transport-friendly structs in common.
+  - See workspace/compute/README.md.
+
+- workspace/common: transport-layer types (no Polars)
+  - Purpose: Lightweight, serializable wrappers for stats and time series, plus converters to/from compute outputs.
+  - Designed to be used by the API without pulling Polars.
+  - See workspace/common/README.md.
+
+- workspace/model: core domain models and entities
+  - Purpose: Transaction and related entities; SeaORM entities; traits like TransactionGenerator.
+  - Used by compute and backend.
+  - See workspace/model/README.md.
+
+- workspace/migration: database migrations (SeaORM Migrator CLI)
+  - For app users: cargo run init-db --database-url "sqlite://finrust.db" (from project root).
+  - For developers: use cargo run in this crate for generate/up/down/fresh/status (see workspace/migration/README.md for exact commands).
+
+Notes and conventions:
+- Web framework: Axum 0.7 with tower/tower-http; OpenAPI via utoipa + utoipa-swagger-ui.
+- Data/analytics: Polars used only in compute; API should expose common transport types, not Polars.
+- Kani proofs: only in libraries under workspace/*; gate with cfg(kani). Prefer src/verification.rs or colocated proofs.
+- Modern modules: avoid mod.rs unless structure requires it.
+
 # LLM guidelines
 
 If the project can't be compiled use `cargo check --message-format=json` to verify what are the compilation errors.
