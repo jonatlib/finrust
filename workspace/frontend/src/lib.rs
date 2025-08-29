@@ -5,7 +5,7 @@ mod components;
 mod pages;
 
 use components::navbar::Navbar;
-use pages::{home::Home, about::About};
+use pages::{home::Home, about::About, admin::Admin};
 
 #[derive(Clone, Routable, PartialEq)]
 enum Route {
@@ -13,12 +13,15 @@ enum Route {
     Home,
     #[at("/about")]
     About,
+    #[at("/admin")]
+    Admin,
 }
 
 fn switch(routes: Route) -> Html {
     match routes {
         Route::Home => html! { <Home /> },
         Route::About => html! { <About /> },
+        Route::Admin => html! { <Admin /> },
     }
 }
 

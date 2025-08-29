@@ -1,24 +1,90 @@
-//! Common module for transport layer structures
-//!
-//! This module provides polars-free wrapper structures for data generated
-//! by the compute module. It serves as a transport layer between different
-//! components (e.g., API, compute module) without requiring polars dependencies.
-//!
-//! The module includes:
-//! - Statistics wrappers for account statistics
-//! - Timeseries wrappers for account state data over time
-//! - Converter utilities for bridging with compute module
+//! Common transport-layer types shared between backend and frontend.
+//! These structs mirror the backend handlers' request/response payloads
+//! so the frontend can deserialize API responses without duplicating shapes.
 
-pub mod converters;
-pub mod statistics;
-pub mod timeseries;
+mod statistics;
+mod timeseries;
 
-// Re-export main types for convenience
-pub use converters::{
-    DataFrameConverter, compute_stats_to_common_stats, compute_stats_vec_to_collection,
-    create_account_state_point, create_account_state_points, create_date_range_period,
-    create_month_period, create_year_period, dataframe_to_timeseries, statistics_to_raw_data,
-    timeseries_to_raw_data,
-};
 pub use statistics::{AccountStatistics, AccountStatisticsCollection, TimePeriod};
 pub use timeseries::{AccountStatePoint, AccountStateTimeseries, DateRange};
+
+use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
+
+/// Generic API response wrapper used by the backend.
+/// Note: The backend has its own definition in finrust/src/schemas.rs with the
+/// same field names. We mirror it here for the frontend to reuse.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct ApiResponse<T> {
+    /// Response data
+    pub data: T,
+    /// Response message
+    pub message: String,
+    /// Success flag
+    pub success: bool,
+}
+
+// ===================== Accounts =====================
+
+/// Request body for creating a new account (mirrors backend).
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq)]
+pub struct CreateAccountRequest {
+    pub name: String,
+    pub description: Option<String>,
+    pub currency_code: String,
+    pub owner_id: i32,
+    pub include_in_statistics: Option<bool>,
+    pub ledger_name: Option<String>,
+}
+
+/// Request body for updating an account (mirrors backend).
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq, Default)]
+pub struct UpdateAccountRequest {
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub currency_code: Option<String>,
+    pub include_in_statistics: Option<bool>,
+    pub ledger_name: Option<String>,
+}
+
+/// Account response model (mirrors backend AccountResponse).
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq)]
+pub struct AccountDto {
+    pub id: i32,
+    pub name: String,
+    pub description: Option<String>,
+    pub currency_code: String,
+    pub owner_id: i32,
+    pub include_in_statistics: bool,
+    pub ledger_name: Option<String>,
+}
+
+// ===================== Tags =====================
+
+/// Request for creating a tag (mirrors backend).
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq)]
+pub struct CreateTagRequest {
+    pub name: String,
+    pub description: Option<String>,
+    pub parent_id: Option<i32>,
+    pub ledger_name: Option<String>,
+}
+
+/// Request for updating a tag (mirrors backend).
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq, Default)]
+pub struct UpdateTagRequest {
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub parent_id: Option<i32>,
+    pub ledger_name: Option<String>,
+}
+
+/// Tag response model (mirrors backend TagResponse).
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq)]
+pub struct TagDto {
+    pub id: i32,
+    pub name: String,
+    pub description: Option<String>,
+    pub parent_id: Option<i32>,
+    pub ledger_name: Option<String>,
+}
