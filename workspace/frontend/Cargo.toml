@@ -17,7 +17,7 @@ js-sys = "0.3"
 wasm-bindgen-futures = "0.4"
 
 # HTTP client for API calls
-reqwest = { version = "0.11", features = ["json"] }
+
 gloo-net = { version = "0.5", features = ["http"] }
 
 # Serialization
@@ -33,14 +33,13 @@ wasm-logger = "0.2"
 
 # Common workspace dependencies
 common = { path = "../common" }
-model = { path = "../model" }
 
 [dependencies.web-sys]
 version = "0.3"
 features = [
-  "console",
-  "Document",
-  "Element",
-  "HtmlElement",
-  "Window",
+    "console",
+    "Document",
+    "Element",
+    "HtmlElement",
+    "Window",
 ]
