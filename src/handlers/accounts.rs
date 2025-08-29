@@ -4,8 +4,8 @@ use axum::{
     http::StatusCode,
     response::Json,
 };
-use model::entities::{account, user};
-use sea_orm::{ActiveModelTrait, EntityTrait, Set, DbErr};
+use model::entities::{account, user, tag, account_tag, account_allowed_user};
+use sea_orm::{ActiveModelTrait, EntityTrait, Set, DbErr, ColumnTrait, QueryFilter, PaginatorTrait};
 use serde::{Deserialize, Serialize};
 use tracing::{instrument, error, warn, info, debug, trace};
 use utoipa::ToSchema;
@@ -399,4 +399,334 @@ pub async fn delete_account(
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
+}
+
+
+// ----- Account ↔ Tag and Allowed User relations -----
+use crate::handlers::tags::TagResponse as TagDto;
+use crate::handlers::users::UserResponse as UserDto;
+use sea_orm::{DeleteResult};
+
+/// Response when linking a tag to an account
+#[derive(Debug, Serialize, ToSchema)]
+pub struct AccountTagLinkResponse {
+    pub account_id: i32,
+    pub tag_id: i32,
+}
+
+/// Response when linking an allowed user to an account
+#[derive(Debug, Serialize, ToSchema)]
+pub struct AllowedUserLinkResponse {
+    pub account_id: i32,
+    pub user_id: i32,
+}
+
+#[utoipa::path(
+    put,
+    path = "/api/v1/accounts/{account_id}/tags/{tag_id}",
+    tag = "accounts",
+    params(
+        ("account_id" = i32, Path, description = "Account ID"),
+        ("tag_id" = i32, Path, description = "Tag ID"),
+    ),
+    responses(
+        (status = 200, description = "Tag linked to account", body = ApiResponse<AccountTagLinkResponse>),
+        (status = 404, description = "Account or Tag not found", body = ErrorResponse),
+        (status = 409, description = "Link already exists", body = ErrorResponse),
+        (status = 500, description = "Database error", body = ErrorResponse),
+    )
+)]
+#[instrument]
+pub async fn link_account_tag(
+    State(state): State<AppState>,
+    Path((account_id, tag_id)): Path<(i32, i32)>,
+) -> Result<(StatusCode, Json<ApiResponse<AccountTagLinkResponse>>), (StatusCode, Json<ErrorResponse>)> {
+    trace!(account_id, tag_id, "link_account_tag");
+    // Validate existence
+    if account::Entity::find_by_id(account_id).one(&state.db).await.map_err(|e| {
+        error!(%e, "DB error while checking account");
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse{ error: "Database error".into(), code: "DATABASE_ERROR".into(), success: false }))
+    })?.is_none() {
+        warn!(account_id, "Account not found");
+        return Err((StatusCode::NOT_FOUND, Json(ErrorResponse{ error: format!("Account {} not found", account_id), code: "NOT_FOUND".into(), success: false })));
+    }
+    if tag::Entity::find_by_id(tag_id).one(&state.db).await.map_err(|e| {
+        error!(%e, "DB error while checking tag");
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse{ error: "Database error".into(), code: "DATABASE_ERROR".into(), success: false }))
+    })?.is_none() {
+        warn!(tag_id, "Tag not found");
+        return Err((StatusCode::NOT_FOUND, Json(ErrorResponse{ error: format!("Tag {} not found", tag_id), code: "NOT_FOUND".into(), success: false })));
+    }
+
+    let am = account_tag::ActiveModel { account_id: Set(account_id), tag_id: Set(tag_id) };
+    match am.insert(&state.db).await {
+        Ok(_) => {
+            info!(account_id, tag_id, "Linked tag to account");
+            Ok((StatusCode::OK, Json(ApiResponse{ data: AccountTagLinkResponse{ account_id, tag_id }, message: "Linked".into(), success: true })))
+        }
+        Err(DbErr::Exec(e)) => {
+            let msg = e.to_string();
+            if msg.to_lowercase().contains("unique") { 
+                warn!("Link already exists");
+                Err((StatusCode::CONFLICT, Json(ErrorResponse{ error: "Link already exists".into(), code: "CONFLICT".into(), success: false })))
+            } else if msg.to_lowercase().contains("foreign key") {
+                Err((StatusCode::BAD_REQUEST, Json(ErrorResponse{ error: "Foreign key violation".into(), code: "FOREIGN_KEY_VIOLATION".into(), success: false })))
+            } else {
+                error!(%msg, "Database constraint error");
+                Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse{ error: "Database error".into(), code: "DATABASE_ERROR".into(), success: false })))
+            }
+        }
+        Err(e) => {
+            error!(%e, "Database error inserting link");
+            Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse{ error: "Database error".into(), code: "DATABASE_ERROR".into(), success: false })))
+        }
+    }
+}
+
+#[utoipa::path(
+    delete,
+    path = "/api/v1/accounts/{account_id}/tags/{tag_id}",
+    tag = "accounts",
+    params(
+        ("account_id" = i32, Path, description = "Account ID"),
+        ("tag_id" = i32, Path, description = "Tag ID"),
+    ),
+    responses(
+        (status = 200, description = "Tag unlinked from account", body = ApiResponse<AccountTagLinkResponse>),
+        (status = 404, description = "Account or Tag not found", body = ErrorResponse),
+        (status = 500, description = "Database error", body = ErrorResponse),
+    )
+)]
+#[instrument]
+pub async fn unlink_account_tag(
+    State(state): State<AppState>,
+    Path((account_id, tag_id)): Path<(i32, i32)>,
+) -> Result<(StatusCode, Json<ApiResponse<AccountTagLinkResponse>>), (StatusCode, Json<ErrorResponse>)> {
+    trace!(account_id, tag_id, "unlink_account_tag");
+    // Validate account exists
+    let account_exists = account::Entity::find_by_id(account_id)
+        .one(&state.db)
+        .await
+        .map_err(|e| {
+            error!(%e, "DB err");
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse{ error: "Database error".into(), code: "DATABASE_ERROR".into(), success: false }))
+        })?;
+    if account_exists.is_none() {
+        return Err((StatusCode::NOT_FOUND, Json(ErrorResponse{ error: "Account not found".into(), code: "NOT_FOUND".into(), success: false })));
+    }
+    // Validate tag exists
+    let tag_exists = tag::Entity::find_by_id(tag_id)
+        .one(&state.db)
+        .await
+        .map_err(|e| {
+            error!(%e, "DB err");
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse{ error: "Database error".into(), code: "DATABASE_ERROR".into(), success: false }))
+        })?;
+    if tag_exists.is_none() {
+        return Err((StatusCode::NOT_FOUND, Json(ErrorResponse{ error: "Tag not found".into(), code: "NOT_FOUND".into(), success: false })));
+    }
+
+    let res: DeleteResult = account_tag::Entity::delete_many()
+        .filter(account_tag::Column::AccountId.eq(account_id))
+        .filter(account_tag::Column::TagId.eq(tag_id))
+        .exec(&state.db).await.map_err(|e| {
+            error!(%e, "DB error deleting link");
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse{ error: "Database error".into(), code: "DATABASE_ERROR".into(), success: false }))
+        })?;
+    debug!(rows = res.rows_affected, "Unlink rows affected");
+    Ok((StatusCode::OK, Json(ApiResponse{ data: AccountTagLinkResponse{ account_id, tag_id }, message: "Unlinked".into(), success: true })))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/accounts/{account_id}/tags",
+    tag = "accounts",
+    params(("account_id" = i32, Path, description = "Account ID")),
+    responses(
+        (status = 200, description = "List of tags for account", body = ApiResponse<Vec<crate::handlers::tags::TagResponse>>),
+        (status = 404, description = "Account not found", body = ErrorResponse),
+        (status = 500, description = "Database error", body = ErrorResponse),
+    )
+)]
+#[instrument]
+pub async fn get_account_tags(
+    State(state): State<AppState>,
+    Path(account_id): Path<i32>,
+) -> Result<(StatusCode, Json<ApiResponse<Vec<TagDto>>>), (StatusCode, Json<ErrorResponse>)> {
+    // Ensure account exists
+    if account::Entity::find_by_id(account_id).one(&state.db).await.map_err(|e| {
+        error!(%e, "DB error while checking account");
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse{ error: "Database error".into(), code: "DATABASE_ERROR".into(), success: false }))
+    })?.is_none() {
+        return Err((StatusCode::NOT_FOUND, Json(ErrorResponse{ error: "Account not found".into(), code: "NOT_FOUND".into(), success: false })));
+    }
+
+    // Fetch link rows, then load tags by IDs to avoid requiring Related<Tag> impl on link entity
+    let tag_ids: Vec<i32> = account_tag::Entity::find()
+        .filter(account_tag::Column::AccountId.eq(account_id))
+        .all(&state.db)
+        .await
+        .map_err(|e| {
+            error!(%e, "DB error listing account tag links");
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse{ error: "Database error".into(), code: "DATABASE_ERROR".into(), success: false }))
+        })?
+        .into_iter()
+        .map(|link| link.tag_id)
+        .collect();
+
+    if tag_ids.is_empty() {
+        return Ok((StatusCode::OK, Json(ApiResponse{ data: Vec::new(), message: "Success".into(), success: true })));
+    }
+
+    let tag_models = tag::Entity::find()
+        .filter(tag::Column::Id.is_in(tag_ids))
+        .all(&state.db)
+        .await
+        .map_err(|e| {
+            error!(%e, "DB error loading tags by IDs");
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse{ error: "Database error".into(), code: "DATABASE_ERROR".into(), success: false }))
+        })?;
+
+    let tags: Vec<TagDto> = tag_models.into_iter().map(TagDto::from).collect();
+    Ok((StatusCode::OK, Json(ApiResponse{ data: tags, message: "Success".into(), success: true })))
+}
+
+#[utoipa::path(
+    put,
+    path = "/api/v1/accounts/{account_id}/allowed-users/{user_id}",
+    tag = "accounts",
+    params(
+        ("account_id" = i32, Path, description = "Account ID"),
+        ("user_id" = i32, Path, description = "User ID"),
+    ),
+    responses(
+        (status = 200, description = "User granted access", body = ApiResponse<AllowedUserLinkResponse>),
+        (status = 404, description = "Account or User not found", body = ErrorResponse),
+        (status = 409, description = "Access already granted", body = ErrorResponse),
+        (status = 500, description = "Database error", body = ErrorResponse),
+    )
+)]
+#[instrument]
+pub async fn link_account_allowed_user(
+    State(state): State<AppState>,
+    Path((account_id, user_id)): Path<(i32, i32)>,
+) -> Result<(StatusCode, Json<ApiResponse<AllowedUserLinkResponse>>), (StatusCode, Json<ErrorResponse>)> {
+    // Validate existence
+    if account::Entity::find_by_id(account_id).one(&state.db).await.map_err(|e| {
+        error!(%e, "DB error");
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse{ error: "Database error".into(), code: "DATABASE_ERROR".into(), success: false }))
+    })?.is_none() {
+        return Err((StatusCode::NOT_FOUND, Json(ErrorResponse{ error: "Account not found".into(), code: "NOT_FOUND".into(), success: false })));
+    }
+    if user::Entity::find_by_id(user_id).one(&state.db).await.map_err(|e| {
+        error!(%e, "DB error");
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse{ error: "Database error".into(), code: "DATABASE_ERROR".into(), success: false }))
+    })?.is_none() {
+        return Err((StatusCode::NOT_FOUND, Json(ErrorResponse{ error: "User not found".into(), code: "NOT_FOUND".into(), success: false })));
+    }
+
+    let am = account_allowed_user::ActiveModel { account_id: Set(account_id), user_id: Set(user_id) };
+    match am.insert(&state.db).await {
+        Ok(_) => Ok((StatusCode::OK, Json(ApiResponse{ data: AllowedUserLinkResponse{ account_id, user_id }, message: "Linked".into(), success: true }))),
+        Err(DbErr::Exec(e)) => {
+            let msg = e.to_string().to_lowercase();
+            if msg.contains("unique") { Err((StatusCode::CONFLICT, Json(ErrorResponse{ error: "Already granted".into(), code: "CONFLICT".into(), success: false }))) }
+            else if msg.contains("foreign key") { Err((StatusCode::BAD_REQUEST, Json(ErrorResponse{ error: "Foreign key violation".into(), code: "FOREIGN_KEY_VIOLATION".into(), success: false }))) }
+            else { Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse{ error: "Database error".into(), code: "DATABASE_ERROR".into(), success: false }))) }
+        }
+        Err(e) => { error!(%e, "DB error"); Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse{ error: "Database error".into(), code: "DATABASE_ERROR".into(), success: false }))) }
+    }
+}
+
+#[utoipa::path(
+    delete,
+    path = "/api/v1/accounts/{account_id}/allowed-users/{user_id}",
+    tag = "accounts",
+    params(
+        ("account_id" = i32, Path, description = "Account ID"),
+        ("user_id" = i32, Path, description = "User ID"),
+    ),
+    responses(
+        (status = 200, description = "User access revoked", body = ApiResponse<AllowedUserLinkResponse>),
+        (status = 404, description = "Account or User not found", body = ErrorResponse),
+        (status = 500, description = "Database error", body = ErrorResponse),
+    )
+)]
+#[instrument]
+pub async fn unlink_account_allowed_user(
+    State(state): State<AppState>,
+    Path((account_id, user_id)): Path<(i32, i32)>,
+) -> Result<(StatusCode, Json<ApiResponse<AllowedUserLinkResponse>>), (StatusCode, Json<ErrorResponse>)> {
+    // Validate account & user exist
+    if account::Entity::find_by_id(account_id).one(&state.db).await.map_err(|e| {
+        error!(%e, "DB error");
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse{ error: "Database error".into(), code: "DATABASE_ERROR".into(), success: false }))
+    })?.is_none() { return Err((StatusCode::NOT_FOUND, Json(ErrorResponse{ error: "Account not found".into(), code: "NOT_FOUND".into(), success: false }))); }
+    if user::Entity::find_by_id(user_id).one(&state.db).await.map_err(|e| {
+        error!(%e, "DB error");
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse{ error: "Database error".into(), code: "DATABASE_ERROR".into(), success: false }))
+    })?.is_none() { return Err((StatusCode::NOT_FOUND, Json(ErrorResponse{ error: "User not found".into(), code: "NOT_FOUND".into(), success: false }))); }
+
+    let res = account_allowed_user::Entity::delete_many()
+        .filter(account_allowed_user::Column::AccountId.eq(account_id))
+        .filter(account_allowed_user::Column::UserId.eq(user_id))
+        .exec(&state.db).await.map_err(|e| {
+            error!(%e, "DB error deleting allowed user link");
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse{ error: "Database error".into(), code: "DATABASE_ERROR".into(), success: false }))
+        })?;
+    debug!(rows = res.rows_affected, "Revoked access");
+    Ok((StatusCode::OK, Json(ApiResponse{ data: AllowedUserLinkResponse{ account_id, user_id }, message: "Revoked".into(), success: true })))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/accounts/{account_id}/allowed-users",
+    tag = "accounts",
+    params(("account_id" = i32, Path, description = "Account ID")),
+    responses(
+        (status = 200, description = "List allowed users", body = ApiResponse<Vec<crate::handlers::users::UserResponse>>),
+        (status = 404, description = "Account not found", body = ErrorResponse),
+        (status = 500, description = "Database error", body = ErrorResponse),
+    )
+)]
+#[instrument]
+pub async fn get_account_allowed_users(
+    State(state): State<AppState>,
+    Path(account_id): Path<i32>,
+) -> Result<(StatusCode, Json<ApiResponse<Vec<UserDto>>>), (StatusCode, Json<ErrorResponse>)> {
+    if account::Entity::find_by_id(account_id).one(&state.db).await.map_err(|e| {
+        error!(%e, "DB error while checking account");
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse{ error: "Database error".into(), code: "DATABASE_ERROR".into(), success: false }))
+    })?.is_none() {
+        return Err((StatusCode::NOT_FOUND, Json(ErrorResponse{ error: "Account not found".into(), code: "NOT_FOUND".into(), success: false })));
+    }
+
+    // Fetch link rows, then load users by IDs to avoid requiring Related<User> impl on link entity
+    let user_ids: Vec<i32> = account_allowed_user::Entity::find()
+        .filter(account_allowed_user::Column::AccountId.eq(account_id))
+        .all(&state.db)
+        .await
+        .map_err(|e| {
+            error!(%e, "DB error listing allowed user links");
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse{ error: "Database error".into(), code: "DATABASE_ERROR".into(), success: false }))
+        })?
+        .into_iter()
+        .map(|link| link.user_id)
+        .collect();
+
+    if user_ids.is_empty() {
+        return Ok((StatusCode::OK, Json(ApiResponse{ data: Vec::new(), message: "Success".into(), success: true })));
+    }
+
+    let user_models = user::Entity::find()
+        .filter(user::Column::Id.is_in(user_ids))
+        .all(&state.db)
+        .await
+        .map_err(|e| {
+            error!(%e, "DB error loading users by IDs");
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse{ error: "Database error".into(), code: "DATABASE_ERROR".into(), success: false }))
+        })?;
+
+    let users: Vec<UserDto> = user_models.into_iter().map(UserDto::from).collect();
+    Ok((StatusCode::OK, Json(ApiResponse{ data: users, message: "Success".into(), success: true })))
 }
