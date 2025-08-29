@@ -100,10 +100,21 @@ This repository is a Cargo workspace composed of multiple crates. Here’s what 
     - rustup target add wasm32-unknown-unknown
     - cargo install trunk
     - cargo install wasm-bindgen-cli
-  - Dev: cd workspace/frontend && trunk serve (opens http://localhost:8080).
-  - Production build: trunk build --release (outputs to dist/).
-  - API access: use gloo-net/reqwest in WASM; backend typically runs on 3000 (configure CORS in backend if domains differ).
-  - See workspace/frontend/README.md for details.
+  - Validate frontend code with Trunk (not cargo check):
+    - Dev server: cd workspace/frontend && trunk serve (http://localhost:8080)
+    - CI/local build: cd workspace/frontend && trunk build --release (artifacts in dist/)
+    - Rationale: trunk compiles to wasm32-unknown-unknown and catches WASM-target issues that cargo check for host may miss.
+  - API access from WASM:
+    - Use gloo-net (http feature) or wasm-compatible reqwest.
+    - Backend typically on 3000; ensure CORS is permissive in backend when running on different origins.
+  - Logging in browser:
+    - Initialize wasm-logger in the frontend entrypoint to see log::info!/warn!/error! in devtools console.
+  - Routing:
+    - BrowserRouter with SPA routes: e.g., /, /about, /admin.
+    - When serving statically, ensure SPA fallback to index.html for non-root paths (e.g., web server rewrite).
+  - Production tips:
+    - Prefer environment-driven API base URL via Trunk asset pipelines or compile-time cfg if needed.
+  - See workspace/frontend/README.md for additional details.
 
 - workspace/compute: computation and analytics
   - Purpose: Converts model domain to Polars DataFrames; calculates balances, recurring items, merges; provides account statistics.
@@ -112,9 +123,20 @@ This repository is a Cargo workspace composed of multiple crates. Here’s what 
   - See workspace/compute/README.md.
 
 - workspace/common: transport-layer types (no Polars)
-  - Purpose: Lightweight, serializable wrappers for stats and time series, plus converters to/from compute outputs.
-  - Designed to be used by the API without pulling Polars.
-  - See workspace/common/README.md.
+  - Purpose: Lightweight, serde-serializable DTOs (requests/responses) for API and frontend. No Polars here.
+  - Target compatibility (native vs WASM):
+    - Keep dependencies WASM-friendly. Avoid server-only crates (e.g., tokio-specific FS, thread-heavy libs).
+    - Allowed/common: serde, serde_json, chrono (serialize/deserialize only), rust_decimal, rusty-money.
+    - Do NOT depend on polars or axum here. SeaORM entities live in workspace/model, not here.
+  - Feature/cfg gating (when needed):
+    - If you must include server-only traits (e.g., utoipa::ToSchema), gate them via optional feature flags or cfg(target_arch) blocks.
+    - Example pattern:
+      - Add an optional feature "schema" in common/Cargo.toml for utoipa; enable it in backend, keep it disabled in frontend.
+      - Or, use cfg(target_arch = "wasm32") / cfg(not(target_arch = "wasm32")) to isolate impls.
+  - Usage:
+    - Define DTOs in common and reuse them in backend handlers and frontend API calls.
+    - Prefer generic ApiResponse<T> shape here to mirror backend responses for easy deserialization in the frontend.
+  - See workspace/common/README.md for details.
 
 - workspace/model: core domain models and entities
   - Purpose: Transaction and related entities; SeaORM entities; traits like TransactionGenerator.
