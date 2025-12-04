@@ -1,8 +1,9 @@
-pub mod navbar;
-pub mod sidebar;
-pub mod card;
-// pub mod table;
-// pub mod filters;
-// pub mod pagination;
-// pub mod empty_state;
-// pub mod loading;
+pub mod layout;
+pub mod dashboard;
+pub mod accounts;
+pub mod transactions;
+pub mod recurring;
+pub mod budgets;
+pub mod forecast;
+pub mod reports;
+pub mod settings;
