@@ -227,13 +227,16 @@
             // Seed Accounts
             this.data.accounts = [
                 {
-                    id: 'a1', name: 'Main Checking', type: 'checking', currency: 'USD', current_balance: 2450.50, institution: 'Chase'
+                    id: 'a1', name: 'Main Checking', type: 'checking', currency: 'USD', current_balance: 2450.50, institution: 'Chase', include_in_overview: true
                 },
                 {
-                    id: 'a2', name: 'High Yield Savings', type: 'savings', currency: 'USD', current_balance: 15000.00, institution: 'Ally'
+                    id: 'a2', name: 'High Yield Savings', type: 'savings', currency: 'USD', current_balance: 15000.00, institution: 'Ally', include_in_overview: true
                 },
                 {
-                    id: 'a3', name: 'Amex Gold', type: 'credit_card', currency: 'USD', current_balance: -450.20, institution: 'Amex'
+                    id: 'a3', name: 'Amex Gold', type: 'credit_card', currency: 'USD', current_balance: -450.20, institution: 'Amex', include_in_overview: true
+                },
+                {
+                    id: 'a4', name: 'Secret Stash', type: 'cash', currency: 'USD', current_balance: 500.00, institution: 'Home', include_in_overview: false
                 }
             ];
 
@@ -299,7 +302,10 @@
         },
 
         generateForecast() {
-             let balance = this.data.accounts.reduce((sum, a) => sum + parseFloat(a.current_balance), 0);
+             // Initial state: current balances
+             let balances = {};
+             this.data.accounts.forEach(a => balances[a.id] = parseFloat(a.current_balance));
+             
              const forecast = [];
              const today = new Date();
              
@@ -315,14 +321,41 @@
                      if (r.active && r.next_date.toISOString().split('T')[0] === dateStr) {
                          if (r.end_date && new Date(dateStr) > new Date(r.end_date)) return;
 
-                         balance += parseFloat(r.amount);
+                         if (balances[r.account_id] !== undefined) {
+                            balances[r.account_id] += parseFloat(r.amount);
+                         }
                          r.next_date = new Date(Utils.addFrequency(r.next_date.toISOString(), r.frequency));
                      }
                  });
                  
-                 forecast.push({date: dateStr, balance: parseFloat(balance.toFixed(2))});
+                 forecast.push({date: dateStr, accounts: {...balances}});
              }
              return forecast;
+        },
+
+        generateHistory() {
+            const history = [];
+            const today = new Date();
+            const accounts = this.data.accounts;
+            
+            let balances = {};
+            accounts.forEach(a => balances[a.id] = parseFloat(a.current_balance));
+            
+            // Push today
+            history.push({date: today.toISOString().split('T')[0], accounts: {...balances}});
+            
+            for(let i=1; i<=90; i++) {
+                const day = new Date(today);
+                day.setDate(today.getDate() - i);
+                const dateStr = day.toISOString().split('T')[0];
+                
+                accounts.forEach(a => {
+                    const change = (Math.random() * 200 - 100); 
+                    balances[a.id] -= change; 
+                });
+                 history.push({date: dateStr, accounts: {...balances}});
+            }
+            return history.reverse();
         },
 
         async fetch(endpoint, method = 'GET', body = null) {
@@ -345,12 +378,7 @@
 
                 if (endpoint.includes('/reports/net-worth')) {
                     return {
-                        ok: true, json: () => Promise.resolve([
-                            {date: '2025-01-01', value: 12000},
-                            {date: '2025-02-01', value: 14500},
-                            {date: '2025-03-01', value: 16000},
-                            {date: '2025-04-01', value: 17000}
-                        ])
+                        ok: true, json: () => Promise.resolve(this.generateHistory())
                     };
                 }
             }
@@ -450,7 +478,11 @@
         async render(container) {
             const accounts = await Api.request('/accounts') || [];
             const txns = await Api.request('/transactions') || [];
-            const netWorth = accounts.reduce((sum, acc) => sum + parseFloat(acc.current_balance), 0);
+            
+            // Filter accounts for overview
+            const includedAccounts = accounts.filter(a => a.include_in_overview !== false);
+            const netWorth = includedAccounts.reduce((sum, acc) => sum + parseFloat(acc.current_balance), 0);
+            
             const recentTxns = txns.slice(0, 5);
             const income = txns.filter(t => parseFloat(t.amount) > 0).reduce((s, t) => s + parseFloat(t.amount), 0);
             const expense = txns.filter(t => parseFloat(t.amount) < 0).reduce((s, t) => s + parseFloat(t.amount), 0);
@@ -461,6 +493,7 @@
                             <div class="stat">
                                 <div class="stat-title">Net Worth</div>
                                 <div class="stat-value ${netWorth >= 0 ? 'text-primary' : 'text-error'}">${Utils.formatCurrency(netWorth)}</div>
+                                <div class="stat-desc">Included accounts only</div>
                             </div>
                         </div>
                         <div class="stats shadow bg-base-100">
@@ -479,8 +512,8 @@
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
                         <div class="card bg-base-100 shadow">
                             <div class="card-body">
-                                <h2 class="card-title">Net Worth Trend</h2>
-                                <div class="chart-container" id="chart-networth"></div>
+                                <h2 class="card-title">Net Worth Trend (History + Forecast)</h2>
+                                <div class="chart-container" id="chart-networth-total"></div>
                             </div>
                         </div>
                         <div class="card bg-base-100 shadow">
@@ -496,28 +529,82 @@
                             </div>
                         </div>
                     </div>
+                    <div class="card bg-base-100 shadow mt-6">
+                        <div class="card-body">
+                            <h2 class="card-title">Account Balances (Breakdown)</h2>
+                            <div class="chart-container" id="chart-networth-breakdown"></div>
+                        </div>
+                    </div>
                 `;
             container.innerHTML = html;
 
-            const chartData = await Api.request('/reports/net-worth');
-            if (chartData) {
-                const trace = {
-                    x: chartData.map(d => d.date),
-                    y: chartData.map(d => d.value),
+            const history = await Api.request('/reports/net-worth') || [];
+            const forecast = await Api.request('/reports/forecast') || [];
+            
+            // Merge Data: History (up to today) + Forecast (tomorrow onwards)
+            const todayStr = new Date().toISOString().split('T')[0];
+            const combinedData = [...history];
+            
+            if (forecast.length > 0) {
+                 // Append forecast days strictly after history (today)
+                 const future = forecast.filter(d => d.date > todayStr);
+                 combinedData.push(...future);
+            }
+
+            if (combinedData.length > 0) {
+                const redLineShape = {
+                    type: 'line',
+                    x0: todayStr,
+                    y0: 0,
+                    x1: todayStr,
+                    y1: 1,
+                    xref: 'x',
+                    yref: 'paper',
+                    line: { color: '#ef4444', width: 2 }
+                };
+
+                // 1. Total Trend
+                const totalTrace = {
+                    x: combinedData.map(d => d.date),
+                    y: combinedData.map(d => includedAccounts.reduce((sum, a) => sum + (d.accounts[a.id] || 0), 0)),
                     type: 'scatter',
                     mode: 'lines',
                     fill: 'tozeroy',
                     line: {color: '#22c55e', shape: 'spline'},
                     name: 'Net Worth'
                 };
-                const layout = {
+                const layoutTotal = {
                     margin: {t: 10, r: 10, l: 50, b: 30},
                     paper_bgcolor: 'rgba(0,0,0,0)',
                     plot_bgcolor: 'rgba(0,0,0,0)',
                     xaxis: { showgrid: false },
-                    yaxis: { showgrid: true, gridcolor: '#eee' }
+                    yaxis: { showgrid: true, gridcolor: '#eee' },
+                    shapes: [redLineShape]
                 };
-                Plotly.newPlot('chart-networth', [trace], layout, {responsive: true, displayModeBar: false});
+                Plotly.newPlot('chart-networth-total', [totalTrace], layoutTotal, {responsive: true, displayModeBar: false});
+
+                // 2. Breakdown Stacked
+                const traces = includedAccounts.map(acc => ({
+                    x: combinedData.map(d => d.date),
+                    y: combinedData.map(d => d.accounts[acc.id] || 0),
+                    type: 'scatter',
+                    mode: 'lines',
+                    stackgroup: 'one',
+                    name: acc.name,
+                    fill: 'tonexty'
+                }));
+
+                const layoutBreakdown = {
+                    margin: {t: 10, r: 10, l: 50, b: 30},
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    xaxis: { showgrid: false },
+                    yaxis: { showgrid: true, gridcolor: '#eee' },
+                    showlegend: true,
+                    legend: {orientation: 'h', y: -0.2},
+                    shapes: [redLineShape]
+                };
+                Plotly.newPlot('chart-networth-breakdown', traces, layoutBreakdown, {responsive: true, displayModeBar: false});
             }
         }
     };
@@ -532,10 +619,17 @@
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         ${accounts.map(acc => `
-                            <div class="card bg-base-100 shadow border-l-4 border-primary">
+                            <div class="card bg-base-100 shadow border-l-4 ${acc.include_in_overview !== false ? 'border-primary' : 'border-base-300'}">
                                 <div class="card-body">
-                                    <div class="flex justify-between">
-                                        <div><h3 class="card-title text-base">${acc.name}</h3><p class="text-sm opacity-70">${acc.institution} &bull; ${acc.type}</p></div>
+                                    <div class="flex justify-between items-start">
+                                        <div>
+                                            <h3 class="card-title text-base">${acc.name}</h3>
+                                            <p class="text-sm opacity-70">${acc.institution} &bull; ${acc.type}</p>
+                                        </div>
+                                        ${acc.include_in_overview === false ? 
+                                            '<div class="badge badge-ghost badge-sm" title="Excluded from Overview"><i class="fas fa-eye-slash"></i></div>' : 
+                                            '<div class="badge badge-primary badge-outline badge-sm" title="Included in Overview"><i class="fas fa-eye"></i></div>'
+                                        }
                                     </div>
                                     <div class="text-2xl font-bold mt-4 font-mono ${acc.current_balance < 0 ? 'text-error' : ''}">${Utils.formatCurrency(acc.current_balance, acc.currency)}</div>
                                 </div>
@@ -1056,9 +1150,17 @@
              const forecast = await Api.request('/reports/forecast') || [];
              if (forecast.length === 0) { container.innerHTML = 'No data'; return; }
              
-             const minBal = Math.min(...forecast.map(f => f.balance));
-             const maxBal = Math.max(...forecast.map(f => f.balance));
-             const endBal = forecast[forecast.length-1].balance;
+             const accounts = await Api.request('/accounts') || [];
+             const includedAccounts = accounts.filter(a => a.include_in_overview !== false);
+             
+             const getSum = (dayData) => {
+                 return includedAccounts.reduce((sum, acc) => sum + (dayData.accounts[acc.id] || 0), 0);
+             };
+             
+             const dailyTotals = forecast.map(f => getSum(f));
+             const minBal = Math.min(...dailyTotals);
+             const maxBal = Math.max(...dailyTotals);
+             const endBal = dailyTotals[dailyTotals.length-1];
              
              container.innerHTML = `
                 <h2 class="text-2xl font-bold mb-6">Financial Forecast (90 Days)</h2>
@@ -1068,14 +1170,14 @@
                         <div class="stat">
                             <div class="stat-title">Lowest Balance</div>
                             <div class="stat-value ${minBal < 0 ? 'text-error' : 'text-warning'}">${Utils.formatCurrency(minBal)}</div>
-                            <div class="stat-desc">Risk assessment</div>
+                            <div class="stat-desc">Risk assessment (Total)</div>
                         </div>
                     </div>
                     <div class="stats shadow bg-base-100">
                         <div class="stat">
                             <div class="stat-title">Highest Balance</div>
                             <div class="stat-value text-success">${Utils.formatCurrency(maxBal)}</div>
-                            <div class="stat-desc">Peak savings</div>
+                            <div class="stat-desc">Peak savings (Total)</div>
                         </div>
                     </div>
                     <div class="stats shadow bg-base-100">
@@ -1088,29 +1190,32 @@
 
                 <div class="card bg-base-100 shadow">
                     <div class="card-body">
-                        <h3 class="card-title">Projected Balance</h3>
+                        <h3 class="card-title">Projected Balances (Stacked)</h3>
                         <div class="chart-container" style="height: 400px;" id="chart-forecast"></div>
                     </div>
                 </div>
              `;
              
-             const trace = {
+             const traces = includedAccounts.map(acc => ({
                  x: forecast.map(d => d.date),
-                 y: forecast.map(d => d.balance),
+                 y: forecast.map(d => d.accounts[acc.id] || 0),
                  type: 'scatter',
                  mode: 'lines',
-                 fill: 'tozeroy',
-                 line: {color: '#3b82f6', shape: 'spline'},
-                 name: 'Projected'
-             };
+                 stackgroup: 'one',
+                 name: acc.name,
+                 fill: 'tonexty'
+             }));
+
              const layout = {
                  margin: {t: 20, r: 20, l: 50, b: 30},
                  paper_bgcolor: 'rgba(0,0,0,0)',
                  plot_bgcolor: 'rgba(0,0,0,0)',
                  xaxis: { showgrid: false },
-                 yaxis: { showgrid: true, gridcolor: '#eee' }
+                 yaxis: { showgrid: true, gridcolor: '#eee' },
+                 showlegend: true,
+                 legend: {orientation: 'h', y: -0.2}
              };
-             Plotly.newPlot('chart-forecast', [trace], layout, {responsive: true, displayModeBar: false});
+             Plotly.newPlot('chart-forecast', traces, layout, {responsive: true, displayModeBar: false});
         }
     };
 
