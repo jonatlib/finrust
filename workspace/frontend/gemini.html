@@ -1053,95 +1053,310 @@
     };
 
     const ReportsView = {
+        state: {
+            accounts: [],
+            transactions: [],
+            categories: [],
+            selectedAccountIds: new Set(),
+            initialized: false
+        },
+
         async render(container) {
-            const txns = await Api.request('/transactions') || [];
-            const categories = await Api.request('/categories') || [];
+            // 1. Fetch Data
+            this.state.accounts = await Api.request('/accounts') || [];
+            this.state.transactions = await Api.request('/transactions') || [];
+            this.state.categories = await Api.request('/categories') || [];
+            const { accounts } = this.state;
 
-            // 1. Category Breakdown
-            const expensesByCat = {};
-            txns.filter(t => t.amount < 0).forEach(t => {
-                expensesByCat[t.category_id] = (expensesByCat[t.category_id] || 0) + Math.abs(parseFloat(t.amount));
-            });
-            const catLabels = Object.keys(expensesByCat).map(id => categories.find(c => c.id === id)?.name || 'Other');
-            const catData = Object.values(expensesByCat);
-            const catColors = Object.keys(expensesByCat).map(id => categories.find(c => c.id === id)?.color || '#999');
+            // Initialize selection if not initialized
+            if (!this.state.initialized && accounts.length > 0) {
+                accounts.forEach(a => this.state.selectedAccountIds.add(a.id));
+                this.state.initialized = true;
+            }
 
-            // 2. Cash Flow
-            const months = {};
-            txns.forEach(t => {
-                const d = new Date(t.date);
-                const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2, '0')}`;
-                if (!months[key]) months[key] = {income: 0, expense: 0};
-                if (parseFloat(t.amount) > 0) months[key].income += parseFloat(t.amount);
-                else months[key].expense += Math.abs(parseFloat(t.amount));
-            });
-            const cfLabels = Object.keys(months).sort().slice(-6);
-            const incomeData = cfLabels.map(m => months[m].income);
-            const expenseData = cfLabels.map(m => months[m].expense);
-
+            // 2. Render Layout
             container.innerHTML = `
-                    <h2 class="text-2xl font-bold mb-6">Financial Reports</h2>
+                <div class="flex flex-col gap-6">
+                    <div class="flex justify-between items-center">
+                        <h2 class="text-2xl font-bold">Financial Reports</h2>
+                        <div class="dropdown dropdown-end">
+                            <div tabindex="0" role="button" class="btn btn-sm btn-outline m-1"><i class="fas fa-filter"></i> Filter Accounts</div>
+                            <ul tabindex="0" class="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-64 max-h-96 overflow-y-auto">
+                                <li class="menu-title">Included Accounts</li>
+                                ${accounts.map(a => `
+                                    <li>
+                                        <label class="label cursor-pointer">
+                                            <span class="label-text ${!a.include_in_overview ? 'opacity-50' : ''}">${a.name}</span>
+                                            <input type="checkbox" class="checkbox checkbox-sm checkbox-primary account-filter" 
+                                                value="${a.id}" 
+                                                ${this.state.selectedAccountIds.has(a.id) ? 'checked' : ''} />
+                                        </label>
+                                    </li>
+                                `).join('')}
+                                <li><button class="btn btn-xs btn-ghost mt-2" id="btn-select-all-accounts">Select All</button></li>
+                                <li><button class="btn btn-xs btn-ghost" id="btn-deselect-all-accounts">Deselect All</button></li>
+                            </ul>
+                        </div>
+                    </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <!-- Row 1: Spending & Total Cash Flow -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <div class="card bg-base-100 shadow">
                             <div class="card-body">
                                 <h3 class="card-title text-sm uppercase tracking-wide opacity-70">Spending Breakdown</h3>
-                                <div class="chart-container" style="height: 300px;" id="chart-categories"></div>
+                                <div class="chart-container" id="chart-categories"></div>
                             </div>
                         </div>
-
                         <div class="card bg-base-100 shadow">
                             <div class="card-body">
-                                <h3 class="card-title text-sm uppercase tracking-wide opacity-70">Cash Flow (Last 6 Months)</h3>
-                                <div class="chart-container" style="height: 300px;" id="chart-cashflow"></div>
+                                <h3 class="card-title text-sm uppercase tracking-wide opacity-70">Total Cash Flow (Last 6 Months)</h3>
+                                <div class="chart-container" id="chart-cashflow-total"></div>
                             </div>
                         </div>
                     </div>
+
+                    <!-- Row 2: Waterfall & Sankey -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                         <div class="card bg-base-100 shadow">
+                            <div class="card-body">
+                                <h3 class="card-title text-sm uppercase tracking-wide opacity-70">Income vs Expenses (Waterfall)</h3>
+                                <div class="chart-container" id="chart-waterfall"></div>
+                            </div>
+                        </div>
+                         <div class="card bg-base-100 shadow">
+                            <div class="card-body">
+                                <h3 class="card-title text-sm uppercase tracking-wide opacity-70">Flow of Funds (Sankey)</h3>
+                                <div class="chart-container" id="chart-sankey"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Row 3: Cash Flow per Account -->
+                     <div class="card bg-base-100 shadow">
+                        <div class="card-body">
+                            <h3 class="card-title text-sm uppercase tracking-wide opacity-70">Cash Flow by Account</h3>
+                            <div id="account-charts-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mt-4">
+                                <!-- Injected dynamically -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // 3. Event Listeners
+            container.querySelectorAll('.account-filter').forEach(cb => {
+                cb.addEventListener('change', (e) => {
+                    if (e.target.checked) this.state.selectedAccountIds.add(e.target.value);
+                    else this.state.selectedAccountIds.delete(e.target.value);
+                    this.updateCharts();
+                });
+            });
+            
+            document.getElementById('btn-select-all-accounts').addEventListener('click', () => {
+                 this.state.accounts.forEach(a => this.state.selectedAccountIds.add(a.id));
+                 container.querySelectorAll('.account-filter').forEach(cb => cb.checked = true);
+                 this.updateCharts();
+            });
+            
+            document.getElementById('btn-deselect-all-accounts').addEventListener('click', () => {
+                 this.state.selectedAccountIds.clear();
+                 container.querySelectorAll('.account-filter').forEach(cb => cb.checked = false);
+                 this.updateCharts();
+            });
+
+            // 4. Render Charts
+            this.updateCharts();
+        },
+
+        updateCharts() {
+            const { transactions, categories, accounts, selectedAccountIds } = this.state;
+            const filteredTxns = transactions.filter(t => selectedAccountIds.has(t.account_id));
+            const catMap = Object.fromEntries(categories.map(c => [c.id, c]));
+
+            // --- 1. Category Breakdown (Pie) ---
+            const expensesByCat = {};
+            filteredTxns.filter(t => t.amount < 0).forEach(t => {
+                expensesByCat[t.category_id] = (expensesByCat[t.category_id] || 0) + Math.abs(parseFloat(t.amount));
+            });
+            const catLabels = Object.keys(expensesByCat).map(id => catMap[id]?.name || 'Other');
+            const catData = Object.values(expensesByCat);
+            const catColors = Object.keys(expensesByCat).map(id => catMap[id]?.color || '#999');
+
+            Plotly.newPlot('chart-categories', [{
+                labels: catLabels, values: catData, type: 'pie', hole: 0.6,
+                marker: { colors: catColors }, textinfo: 'percent', textposition: 'inside'
+            }], {
+                margin: {t: 10, r: 10, l: 10, b: 10}, paper_bgcolor: 'rgba(0,0,0,0)',
+                showlegend: true, legend: {orientation: 'h', y: -0.1}
+            }, {responsive: true, displayModeBar: false});
+
+            // --- 2. Total Cash Flow (Bar) ---
+            // Helper: Get monthly data
+            const getMonthlyData = (txnsList) => {
+                const months = {};
+                // Init last 6 months
+                for(let i=5; i>=0; i--) {
+                     const d = new Date(); d.setMonth(d.getMonth() - i);
+                     const k = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2, '0')}`;
+                     months[k] = {income: 0, expense: 0};
+                }
+                txnsList.forEach(t => {
+                    const d = new Date(t.date);
+                    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2, '0')}`;
+                    if (months[key]) {
+                        if (parseFloat(t.amount) > 0) months[key].income += parseFloat(t.amount);
+                        else months[key].expense += Math.abs(parseFloat(t.amount));
+                    }
+                });
+                const labels = Object.keys(months).sort();
+                return {
+                    labels,
+                    income: labels.map(m => months[m].income),
+                    expense: labels.map(m => months[m].expense)
+                };
+            };
+
+            const totalCF = getMonthlyData(filteredTxns);
+            Plotly.newPlot('chart-cashflow-total', [
+                { x: totalCF.labels, y: totalCF.income, name: 'Income', type: 'bar', marker: {color: '#22c55e'} },
+                { x: totalCF.labels, y: totalCF.expense, name: 'Expense', type: 'bar', marker: {color: '#ef4444'} }
+            ], {
+                margin: {t: 10, r: 10, l: 40, b: 30}, paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
+                barmode: 'group', xaxis: { showgrid: false }, yaxis: { showgrid: true, gridcolor: '#eee' },
+                showlegend: true, legend: {orientation: 'h', y: -0.2}
+            }, {responsive: true, displayModeBar: false});
+
+            // --- 3. Waterfall Chart ---
+            // Logic: Start 0, +Income, -ExpCat1, -ExpCat2, ..., Result
+            const totalIncome = filteredTxns.filter(t => t.amount > 0).reduce((s, t) => s + parseFloat(t.amount), 0);
+            // Top 5 Expense Categories
+            const sortedCats = Object.entries(expensesByCat).sort((a, b) => b[1] - a[1]).slice(0, 5);
+            const otherExp = Object.entries(expensesByCat).sort((a, b) => b[1] - a[1]).slice(5).reduce((s, item) => s + item[1], 0);
+            
+            const wfX = ['Total Income', ...sortedCats.map(i => catMap[i[0]]?.name || 'Unknown')];
+            const wfY = [totalIncome, ...sortedCats.map(i => -i[1])];
+            const wfMeasure = ['relative', ...sortedCats.map(() => 'relative')];
+            
+            if (otherExp > 0) {
+                wfX.push('Other Expenses'); wfY.push(-otherExp); wfMeasure.push('relative');
+            }
+            wfX.push('Net Result'); wfY.push(0); wfMeasure.push('total'); // 0 for total means calculate automatically? No, Plotly needs null for computed total or just 'total' type.
+            // Actually for waterfall 'total', y is usually ignored or is the final value. Let's try without y for total or just 0.
+
+            Plotly.newPlot('chart-waterfall', [{
+                type: "waterfall",
+                orientation: "v",
+                measure: wfMeasure,
+                x: wfX,
+                y: wfY,
+                connector: { mode: "between", line: { width: 4, color: "rgb(0, 0, 0)", dash: "solid" } },
+                decreasing: { marker: { color: "#ef4444" } },
+                increasing: { marker: { color: "#22c55e" } },
+                totals: { marker: { color: "#3b82f6" } }
+            }], {
+                margin: {t: 10, r: 10, l: 40, b: 30}, paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
+                xaxis: { type: 'category' }, yaxis: { showgrid: true, gridcolor: '#eee' }
+            }, {responsive: true, displayModeBar: false});
+
+            // --- 4. Sankey Chart ---
+            // Nodes: IncomeCats... -> Accounts... -> ExpenseCats...
+            // We need unique list of nodes.
+            const nodes = [];
+            const nodeIdx = {};
+            
+            const addNode = (name, color) => {
+                if (nodeIdx[name] === undefined) {
+                    nodeIdx[name] = nodes.length;
+                    nodes.push({label: name, color});
+                }
+                return nodeIdx[name];
+            };
+
+            const links = [];
+            
+            // Process Income: Category -> Account
+            filteredTxns.filter(t => t.amount > 0).forEach(t => {
+                const catName = catMap[t.category_id]?.name || 'Uncategorized Income';
+                const accName = accounts.find(a => a.id === t.account_id)?.name;
+                if (!accName) return;
+                
+                const src = addNode(catName, '#22c55e');
+                const tgt = addNode(accName, '#3b82f6');
+                
+                // Aggregate links
+                const existing = links.find(l => l.source === src && l.target === tgt);
+                if (existing) existing.value += parseFloat(t.amount);
+                else links.push({source: src, target: tgt, value: parseFloat(t.amount)});
+            });
+
+            // Process Expense: Account -> Category
+            filteredTxns.filter(t => t.amount < 0).forEach(t => {
+                const catName = catMap[t.category_id]?.name || 'Uncategorized Expense';
+                const accName = accounts.find(a => a.id === t.account_id)?.name;
+                if (!accName) return;
+                
+                const src = addNode(accName, '#3b82f6');
+                const tgt = addNode(catName, '#ef4444');
+                
+                const amt = Math.abs(parseFloat(t.amount));
+                const existing = links.find(l => l.source === src && l.target === tgt);
+                if (existing) existing.value += amt;
+                else links.push({source: src, target: tgt, value: amt});
+            });
+
+            if (nodes.length > 0) {
+                Plotly.newPlot('chart-sankey', [{
+                    type: "sankey",
+                    orientation: "h",
+                    node: {
+                        pad: 15, thickness: 20, line: { color: "black", width: 0.5 },
+                        label: nodes.map(n => n.label), color: nodes.map(n => n.color)
+                    },
+                    link: {
+                        source: links.map(l => l.source),
+                        target: links.map(l => l.target),
+                        value: links.map(l => l.value)
+                    }
+                }], {
+                    margin: {t: 10, r: 10, l: 10, b: 10}, paper_bgcolor: 'rgba(0,0,0,0)', font: { size: 10 }
+                }, {responsive: true, displayModeBar: false});
+            } else {
+                document.getElementById('chart-sankey').innerHTML = '<div class="text-center p-10 opacity-50">No data for flows</div>';
+            }
+
+            // --- 5. Cash Flow per Account ---
+            const grid = document.getElementById('account-charts-grid');
+            grid.innerHTML = '';
+            
+            // Only iterate selected accounts
+            accounts.filter(a => selectedAccountIds.has(a.id)).forEach(acc => {
+                const accTxns = transactions.filter(t => t.account_id === acc.id);
+                if (accTxns.length === 0) return; // Skip empty accounts
+                
+                const accCF = getMonthlyData(accTxns);
+                
+                const div = document.createElement('div');
+                div.className = "border border-base-200 rounded-box p-4 bg-base-100";
+                const chartId = `chart-acc-${acc.id}`;
+                div.innerHTML = `
+                    <div class="flex justify-between items-center mb-2">
+                        <h4 class="font-bold text-sm">${acc.name}</h4>
+                        <span class="badge badge-ghost badge-xs">${acc.currency}</span>
+                    </div>
+                    <div id="${chartId}" style="height: 150px;"></div>
                 `;
-
-            // Spending Breakdown (Pie/Doughnut)
-            const traceCat = {
-                labels: catLabels,
-                values: catData,
-                type: 'pie',
-                hole: 0.6,
-                marker: { colors: catColors },
-                textinfo: 'percent',
-                textposition: 'inside',
-                hoverinfo: 'label+value+percent'
-            };
-            const layoutCat = {
-                margin: {t: 10, r: 10, l: 10, b: 10},
-                paper_bgcolor: 'rgba(0,0,0,0)',
-                showlegend: true,
-                legend: {orientation: 'h', y: -0.1}
-            };
-            Plotly.newPlot('chart-categories', [traceCat], layoutCat, {responsive: true, displayModeBar: false});
-
-            // Cash Flow (Bar)
-            const traceIncome = {
-                x: cfLabels,
-                y: incomeData,
-                name: 'Income',
-                type: 'bar',
-                marker: {color: '#22c55e'}
-            };
-            const traceExpense = {
-                x: cfLabels,
-                y: expenseData,
-                name: 'Expense',
-                type: 'bar',
-                marker: {color: '#ef4444'}
-            };
-            const layoutCF = {
-                margin: {t: 10, r: 10, l: 40, b: 30},
-                paper_bgcolor: 'rgba(0,0,0,0)',
-                plot_bgcolor: 'rgba(0,0,0,0)',
-                barmode: 'group',
-                xaxis: { showgrid: false },
-                yaxis: { showgrid: true, gridcolor: '#eee' }
-            };
-            Plotly.newPlot('chart-cashflow', [traceIncome, traceExpense], layoutCF, {responsive: true, displayModeBar: false});
+                grid.appendChild(div);
+                
+                Plotly.newPlot(chartId, [
+                    { x: accCF.labels, y: accCF.income, type: 'bar', marker: {color: '#22c55e'}, name: 'Inc' },
+                    { x: accCF.labels, y: accCF.expense, type: 'bar', marker: {color: '#ef4444'}, name: 'Exp' }
+                ], {
+                    margin: {t: 5, r: 5, l: 25, b: 20}, paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
+                    barmode: 'group', showlegend: false,
+                    xaxis: { showticklabels: true, tickfont: {size: 8} },
+                    yaxis: { showgrid: true, gridcolor: '#f5f5f5' }
+                }, {responsive: true, displayModeBar: false});
+            });
         }
     };
 
