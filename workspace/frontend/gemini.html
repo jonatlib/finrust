@@ -10,8 +10,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
 
-    <!-- Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Plotly.js -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
 
     <style>
         /* Custom Utilities */
@@ -480,7 +480,7 @@
                         <div class="card bg-base-100 shadow">
                             <div class="card-body">
                                 <h2 class="card-title">Net Worth Trend</h2>
-                                <div class="chart-container"><canvas id="chart-networth"></canvas></div>
+                                <div class="chart-container" id="chart-networth"></div>
                             </div>
                         </div>
                         <div class="card bg-base-100 shadow">
@@ -501,21 +501,23 @@
 
             const chartData = await Api.request('/reports/net-worth');
             if (chartData) {
-                new Chart(document.getElementById('chart-networth'), {
-                    type: 'line',
-                    data: {
-                        labels: chartData.map(d => Utils.formatDate(d.date)),
-                        datasets: [{
-                            label: 'Net Worth',
-                            data: chartData.map(d => d.value),
-                            borderColor: '#22c55e',
-                            tension: 0.3,
-                            fill: true,
-                            backgroundColor: 'rgba(34, 197, 94, 0.1)'
-                        }]
-                    },
-                    options: {maintainAspectRatio: false, responsive: true}
-                });
+                const trace = {
+                    x: chartData.map(d => d.date),
+                    y: chartData.map(d => d.value),
+                    type: 'scatter',
+                    mode: 'lines',
+                    fill: 'tozeroy',
+                    line: {color: '#22c55e', shape: 'spline'},
+                    name: 'Net Worth'
+                };
+                const layout = {
+                    margin: {t: 10, r: 10, l: 50, b: 30},
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    xaxis: { showgrid: false },
+                    yaxis: { showgrid: true, gridcolor: '#eee' }
+                };
+                Plotly.newPlot('chart-networth', [trace], layout, {responsive: true, displayModeBar: false});
             }
         }
     };
@@ -990,43 +992,62 @@
                         <div class="card bg-base-100 shadow">
                             <div class="card-body">
                                 <h3 class="card-title text-sm uppercase tracking-wide opacity-70">Spending Breakdown</h3>
-                                <div class="chart-container" style="height: 300px;">
-                                    <canvas id="chart-categories"></canvas>
-                                </div>
+                                <div class="chart-container" style="height: 300px;" id="chart-categories"></div>
                             </div>
                         </div>
 
                         <div class="card bg-base-100 shadow">
                             <div class="card-body">
                                 <h3 class="card-title text-sm uppercase tracking-wide opacity-70">Cash Flow (Last 6 Months)</h3>
-                                <div class="chart-container" style="height: 300px;">
-                                    <canvas id="chart-cashflow"></canvas>
-                                </div>
+                                <div class="chart-container" style="height: 300px;" id="chart-cashflow"></div>
                             </div>
                         </div>
                     </div>
                 `;
 
-            new Chart(document.getElementById('chart-categories'), {
-                type: 'doughnut',
-                data: {
-                    labels: catLabels,
-                    datasets: [{ data: catData, backgroundColor: catColors, borderWidth: 0 }]
-                },
-                options: {responsive: true, maintainAspectRatio: false, plugins: {legend: {position: 'right'}}}
-            });
+            // Spending Breakdown (Pie/Doughnut)
+            const traceCat = {
+                labels: catLabels,
+                values: catData,
+                type: 'pie',
+                hole: 0.6,
+                marker: { colors: catColors },
+                textinfo: 'percent',
+                textposition: 'inside',
+                hoverinfo: 'label+value+percent'
+            };
+            const layoutCat = {
+                margin: {t: 10, r: 10, l: 10, b: 10},
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                showlegend: true,
+                legend: {orientation: 'h', y: -0.1}
+            };
+            Plotly.newPlot('chart-categories', [traceCat], layoutCat, {responsive: true, displayModeBar: false});
 
-            new Chart(document.getElementById('chart-cashflow'), {
+            // Cash Flow (Bar)
+            const traceIncome = {
+                x: cfLabels,
+                y: incomeData,
+                name: 'Income',
                 type: 'bar',
-                data: {
-                    labels: cfLabels,
-                    datasets: [
-                        {label: 'Income', data: incomeData, backgroundColor: '#22c55e'},
-                        {label: 'Expense', data: expenseData, backgroundColor: '#ef4444'}
-                    ]
-                },
-                options: {responsive: true, maintainAspectRatio: false}
-            });
+                marker: {color: '#22c55e'}
+            };
+            const traceExpense = {
+                x: cfLabels,
+                y: expenseData,
+                name: 'Expense',
+                type: 'bar',
+                marker: {color: '#ef4444'}
+            };
+            const layoutCF = {
+                margin: {t: 10, r: 10, l: 40, b: 30},
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                barmode: 'group',
+                xaxis: { showgrid: false },
+                yaxis: { showgrid: true, gridcolor: '#eee' }
+            };
+            Plotly.newPlot('chart-cashflow', [traceIncome, traceExpense], layoutCF, {responsive: true, displayModeBar: false});
         }
     };
 
@@ -1068,28 +1089,28 @@
                 <div class="card bg-base-100 shadow">
                     <div class="card-body">
                         <h3 class="card-title">Projected Balance</h3>
-                        <div class="chart-container" style="height: 400px;">
-                            <canvas id="chart-forecast"></canvas>
-                        </div>
+                        <div class="chart-container" style="height: 400px;" id="chart-forecast"></div>
                     </div>
                 </div>
              `;
              
-             new Chart(document.getElementById('chart-forecast'), {
-                type: 'line',
-                data: {
-                    labels: forecast.map(d => Utils.formatDate(d.date)),
-                    datasets: [{
-                        label: 'Projected Balance',
-                        data: forecast.map(d => d.balance),
-                        borderColor: '#3b82f6',
-                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                        fill: true,
-                        tension: 0.4
-                    }]
-                },
-                options: { responsive: true, maintainAspectRatio: false, interaction: {mode: 'index', intersect: false} }
-             });
+             const trace = {
+                 x: forecast.map(d => d.date),
+                 y: forecast.map(d => d.balance),
+                 type: 'scatter',
+                 mode: 'lines',
+                 fill: 'tozeroy',
+                 line: {color: '#3b82f6', shape: 'spline'},
+                 name: 'Projected'
+             };
+             const layout = {
+                 margin: {t: 20, r: 20, l: 50, b: 30},
+                 paper_bgcolor: 'rgba(0,0,0,0)',
+                 plot_bgcolor: 'rgba(0,0,0,0)',
+                 xaxis: { showgrid: false },
+                 yaxis: { showgrid: true, gridcolor: '#eee' }
+             };
+             Plotly.newPlot('chart-forecast', [trace], layout, {responsive: true, displayModeBar: false});
         }
     };
 
