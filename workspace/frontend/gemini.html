@@ -1,0 +1,952 @@
+<!DOCTYPE html>
+<html data-theme="light" lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>FinRust - Personal Finance</title>
+
+    <!-- Styles & Fonts -->
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.10/dist/full.min.css" rel="stylesheet" type="text/css"/>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        /* Custom Utilities */
+        .currency-pos {
+            color: oklch(var(--su));
+        }
+
+        .currency-neg {
+            color: oklch(var(--er));
+        }
+
+        /* Chart Container sizing */
+        .chart-container {
+            position: relative;
+            height: 300px;
+            width: 100%;
+        }
+
+        /* Loading Overlay */
+        #global-loader {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 9999;
+            display: none;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* Toast Animation */
+        .toast-enter {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+
+        .toast-enter-active {
+            transform: translateX(0);
+            opacity: 1;
+            transition: all 300ms ease-out;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-base-200 text-base-content font-sans">
+
+<!-- Global Loader -->
+<div id="global-loader">
+    <span class="loading loading-spinner loading-lg text-primary"></span>
+</div>
+
+<!-- Toast Container -->
+<div class="toast toast-top toast-end z-50" id="toast-container"></div>
+
+<!-- Main App Layout -->
+<div class="drawer lg:drawer-open">
+    <input class="drawer-toggle" id="my-drawer" type="checkbox"/>
+
+    <!-- Content Area -->
+    <div class="drawer-content flex flex-col">
+        <!-- Navbar -->
+        <div class="navbar bg-base-100 shadow-sm z-40 sticky top-0">
+            <div class="flex-none lg:hidden">
+                <label aria-label="open sidebar" class="btn btn-square btn-ghost" for="my-drawer">
+                    <i class="fas fa-bars text-xl"></i>
+                </label>
+            </div>
+            <div class="flex-1 px-4">
+                <h1 class="text-xl font-bold" id="page-title">Dashboard</h1>
+            </div>
+            <div class="flex-none gap-2">
+                <!-- Date Range (Global Context Mock) -->
+                <select class="select select-sm select-bordered w-full max-w-xs hidden md:block"
+                        id="global-currency-select">
+                    <option value="USD">USD ($)</option>
+                    <option value="EUR">EUR (€)</option>
+                    <option value="GBP">GBP (£)</option>
+                </select>
+
+                <!-- Theme Toggle -->
+                <label class="swap swap-rotate btn btn-ghost btn-circle">
+                    <input id="theme-toggle" type="checkbox"/>
+                    <i class="swap-on fill-current fas fa-sun text-xl"></i>
+                    <i class="swap-off fill-current fas fa-moon text-xl"></i>
+                </label>
+            </div>
+        </div>
+
+        <!-- Page View Container -->
+        <main class="p-4 lg:p-8 space-y-6 fade-in" id="app-view">
+            <!-- Dynamic Content Injected Here -->
+        </main>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="drawer-side z-50">
+        <label aria-label="close sidebar" class="drawer-overlay" for="my-drawer"></label>
+        <ul class="menu p-4 w-80 min-h-full bg-base-100 text-base-content border-r border-base-300">
+            <!-- Branding -->
+            <li class="mb-4">
+                <div class="flex items-center gap-3 px-2">
+                    <div class="w-10 h-10 rounded-lg bg-primary flex items-center justify-center text-primary-content font-bold text-2xl">
+                        <i class="fas fa-wallet"></i>
+                    </div>
+                    <span class="text-2xl font-bold tracking-tight">FinRust</span>
+                </div>
+            </li>
+
+            <!-- Navigation -->
+            <li><a class="nav-link" href="#/dashboard"><i class="fas fa-home w-5"></i> Dashboard</a></li>
+            <li><a class="nav-link" href="#/accounts"><i class="fas fa-university w-5"></i> Accounts</a></li>
+            <li><a class="nav-link" href="#/transactions"><i class="fas fa-exchange-alt w-5"></i> Transactions</a></li>
+            <li><a class="nav-link" href="#/recurring"><i class="fas fa-calendar-check w-5"></i> Recurring</a></li>
+            <li><a class="nav-link" href="#/budgets"><i class="fas fa-chart-pie w-5"></i> Budgets</a></li>
+            <li><a class="nav-link" href="#/forecast"><i class="fas fa-chart-area w-5"></i> Forecast</a></li>
+            <li><a class="nav-link" href="#/reports"><i class="fas fa-chart-line w-5"></i> Reports</a></li>
+
+            <div class="divider"></div>
+
+            <li><a class="nav-link" href="#/settings"><i class="fas fa-cog w-5"></i> Settings</a></li>
+            <li><a class="nav-link" href="https://github.com/generic/finrust" target="_blank"><i
+                    class="fab fa-github w-5"></i> GitHub</a></li>
+        </ul>
+    </div>
+</div>
+
+<!-- Modals (Generic Container) -->
+<dialog class="modal" id="generic_modal">
+    <div class="modal-box w-11/12 max-w-2xl">
+        <h3 class="font-bold text-lg" id="modal-title">Title</h3>
+        <div class="py-4" id="modal-content"></div>
+        <div class="modal-action">
+            <form method="dialog">
+                <button class="btn">Close</button>
+            </form>
+        </div>
+    </div>
+    <form class="modal-backdrop" method="dialog">
+        <button>close</button>
+    </form>
+</dialog>
+
+<!-- JS Application Logic -->
+<script type="module">
+    /**
+     * FinRust Frontend Application
+     */
+
+        // --- 1. UTILS ---
+    const Utils = {
+            formatCurrency: (amount, currency = 'USD') => {
+                const val = parseFloat(amount);
+                return new Intl.NumberFormat('en-US', {style: 'currency', currency}).format(val);
+            },
+            formatDate: (dateStr) => {
+                if (!dateStr) return '-';
+                return new Date(dateStr).toLocaleDateString();
+            },
+            uuid: () => crypto.randomUUID(),
+            serializeForm: (form) => {
+                const obj = {};
+                new FormData(form).forEach((value, key) => obj[key] = value);
+                return obj;
+            },
+            // Date helper to add frequency
+            addFrequency: (dateStr, freq) => {
+                const d = new Date(dateStr);
+                if (freq.toLowerCase() === 'monthly') d.setMonth(d.getMonth() + 1);
+                else if (freq.toLowerCase() === 'weekly') d.setDate(d.getDate() + 7);
+                else if (freq.toLowerCase() === 'bi-weekly') d.setDate(d.getDate() + 14);
+                else if (freq.toLowerCase() === 'yearly') d.setFullYear(d.getFullYear() + 1);
+                return d.toISOString().split('T')[0];
+            }
+        };
+
+    // --- 2. STATE & CONFIG ---
+    const Store = {
+        state: {
+            apiUrl: localStorage.getItem('finrust_api_url') || '',
+            theme: localStorage.getItem('finrust_theme') || 'light',
+            currency: 'USD',
+            demoData: null,
+        },
+        saveSettings() {
+            localStorage.setItem('finrust_api_url', this.state.apiUrl);
+            localStorage.setItem('finrust_theme', this.state.theme);
+        }
+    };
+
+    // --- 3. MOCK DATA GENERATOR ---
+    const MockBackend = {
+        data: {
+            accounts: [],
+            transactions: [],
+            categories: [],
+            recurring: [],
+            budgets: []
+        },
+        init() {
+            if (this.data.accounts.length > 0) return;
+
+            // Seed Categories
+            this.data.categories = [
+                {id: 'c1', name: 'Housing', color: '#ef4444'},
+                {id: 'c2', name: 'Food', color: '#f59e0b'},
+                {id: 'c3', name: 'Income', color: '#22c55e'},
+                {id: 'c4', name: 'Utilities', color: '#3b82f6'},
+                {id: 'c5', name: 'Entertainment', color: '#a855f7'},
+                {id: 'c6', name: 'Transport', color: '#6366f1'}
+            ];
+
+            // Seed Accounts
+            this.data.accounts = [
+                {
+                    id: 'a1', name: 'Main Checking', type: 'checking', currency: 'USD', current_balance: 2450.50, institution: 'Chase'
+                },
+                {
+                    id: 'a2', name: 'High Yield Savings', type: 'savings', currency: 'USD', current_balance: 15000.00, institution: 'Ally'
+                },
+                {
+                    id: 'a3', name: 'Amex Gold', type: 'credit_card', currency: 'USD', current_balance: -450.20, institution: 'Amex'
+                }
+            ];
+
+            // Seed Recurring (Dynamic Dates)
+            const today = new Date();
+            const fmt = (d) => d.toISOString().split('T')[0];
+            const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+
+            this.data.recurring = [
+                {
+                    id: 'r1', name: 'Rent Payment', amount: -1800.00, frequency: 'Monthly',
+                    next_date: fmt(addDays(today, 5)), active: true, category_id: 'c1', account_id: 'a1'
+                },
+                {
+                    id: 'r2', name: 'Netflix', amount: -15.99, frequency: 'Monthly',
+                    next_date: fmt(addDays(today, 12)), active: true, category_id: 'c5', account_id: 'a3'
+                },
+                {
+                    id: 'r3', name: 'Paycheck', amount: 3500.00, frequency: 'Bi-Weekly',
+                    next_date: fmt(addDays(today, 2)), active: true, category_id: 'c3', account_id: 'a1'
+                }
+            ];
+
+            // Seed Budgets
+            this.data.budgets = [
+                {category_id: 'c1', amount: 2000},
+                {category_id: 'c2', amount: 600},
+                {category_id: 'c5', amount: 200},
+                {category_id: 'c4', amount: 300}
+            ];
+
+            // Seed Transactions
+            for (let i = 0; i < 60; i++) {
+                const date = new Date(today);
+                date.setDate(today.getDate() - i);
+                const dStr = fmt(date);
+
+                if (i % 14 === 0) {
+                    this.data.transactions.push({
+                        id: Utils.uuid(), date: dStr, description: 'Tech Corp Salary', amount: 3500.00,
+                        account_id: 'a1', category_id: 'c3', type: 'income', status: 'cleared'
+                    });
+                }
+                if (i % 3 === 0) {
+                    this.data.transactions.push({
+                        id: Utils.uuid(), date: dStr, description: 'Grocery Store', amount: -(Math.random() * 100 + 50).toFixed(2),
+                        account_id: 'a1', category_id: 'c2', type: 'expense', status: 'cleared'
+                    });
+                }
+                if (date.getDate() === 1) {
+                    this.data.transactions.push({
+                        id: Utils.uuid(), date: dStr, description: 'Luxury Apartments', amount: -1800.00,
+                        account_id: 'a1', category_id: 'c1', type: 'expense', status: 'cleared'
+                    });
+                }
+                if (i % 5 === 0) {
+                    this.data.transactions.push({
+                        id: Utils.uuid(), date: dStr, description: 'Uber/Lyft', amount: -(Math.random() * 20 + 15).toFixed(2),
+                        account_id: 'a3', category_id: 'c6', type: 'expense', status: 'pending'
+                    });
+                }
+            }
+        },
+
+        generateForecast() {
+             let balance = this.data.accounts.reduce((sum, a) => sum + parseFloat(a.current_balance), 0);
+             const forecast = [];
+             const today = new Date();
+             
+             // Simple projection
+             let rules = this.data.recurring.map(r => ({...r, next_date: new Date(r.next_date)}));
+             
+             for(let i=0; i<=90; i++) {
+                 const currentDay = new Date(today);
+                 currentDay.setDate(today.getDate() + i);
+                 const dateStr = currentDay.toISOString().split('T')[0];
+                 
+                 rules.forEach(r => {
+                     if (r.active && r.next_date.toISOString().split('T')[0] === dateStr) {
+                         balance += parseFloat(r.amount);
+                         r.next_date = new Date(Utils.addFrequency(r.next_date.toISOString(), r.frequency));
+                     }
+                 });
+                 
+                 forecast.push({date: dateStr, balance: parseFloat(balance.toFixed(2))});
+             }
+             return forecast;
+        },
+
+        async fetch(endpoint, method = 'GET', body = null) {
+            await new Promise(r => setTimeout(r, 100));
+            this.init();
+
+            if (method === 'GET') {
+                if (endpoint.includes('/accounts')) return {ok: true, json: () => Promise.resolve(this.data.accounts)};
+                if (endpoint.includes('/transactions')) return {
+                    ok: true,
+                    json: () => Promise.resolve(this.data.transactions.sort((a, b) => new Date(b.date) - new Date(a.date)))
+                };
+                if (endpoint.includes('/categories')) return {ok: true, json: () => Promise.resolve(this.data.categories)};
+                if (endpoint.includes('/recurring')) return {ok: true, json: () => Promise.resolve(this.data.recurring)};
+                if (endpoint.includes('/budgets')) return {ok: true, json: () => Promise.resolve(this.data.budgets)};
+                
+                if (endpoint.includes('/reports/forecast')) {
+                    return { ok: true, json: () => Promise.resolve(this.generateForecast()) };
+                }
+
+                if (endpoint.includes('/reports/net-worth')) {
+                    return {
+                        ok: true, json: () => Promise.resolve([
+                            {date: '2025-01-01', value: 12000},
+                            {date: '2025-02-01', value: 14500},
+                            {date: '2025-03-01', value: 16000},
+                            {date: '2025-04-01', value: 17000}
+                        ])
+                    };
+                }
+            }
+
+            if (method === 'POST') {
+                if (endpoint.includes('/transactions')) {
+                    const txn = {id: Utils.uuid(), ...JSON.parse(body)};
+                    this.data.transactions.unshift(txn); // add to top
+                    return {ok: true, json: () => Promise.resolve(txn)};
+                }
+            }
+
+            if (method === 'PATCH') {
+                if (endpoint.match(/\/recurring\/\w+/)) {
+                    const id = endpoint.split('/').pop();
+                    const updates = JSON.parse(body);
+                    const idx = this.data.recurring.findIndex(r => r.id === id);
+                    if (idx !== -1) {
+                        this.data.recurring[idx] = {...this.data.recurring[idx], ...updates};
+                        return {ok: true, json: () => Promise.resolve(this.data.recurring[idx])};
+                    }
+                }
+            }
+
+            return {ok: true, json: () => Promise.resolve({})};
+        }
+    };
+
+    // --- 4. API LAYER ---
+    const Api = {
+        async request(endpoint, options = {}) {
+            document.getElementById('global-loader').style.display = 'flex';
+            try {
+                const isDemo = !Store.state.apiUrl;
+                let response;
+                if (isDemo) {
+                    response = await MockBackend.fetch(endpoint, options.method, options.body);
+                } else {
+                    const url = `${Store.state.apiUrl}${endpoint}`;
+                    const headers = {'Content-Type': 'application/json'};
+                    response = await fetch(url, {...options, headers});
+                }
+                if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
+                return await response.json();
+            } catch (err) {
+                UI.toast(err.message, 'error');
+                return null;
+            } finally {
+                document.getElementById('global-loader').style.display = 'none';
+            }
+        }
+    };
+
+    // --- 5. UI HELPERS ---
+    const UI = {
+        toast: (msg, type = 'info') => {
+            const container = document.getElementById('toast-container');
+            const el = document.createElement('div');
+            el.className = `alert alert-${type} shadow-lg mb-2 toast-enter`;
+            el.innerHTML = `<span>${msg}</span>`;
+            container.appendChild(el);
+            requestAnimationFrame(() => el.classList.remove('toast-enter'));
+            setTimeout(() => el.remove(), 3000);
+        },
+        showModal: (title, htmlContent) => {
+            const modal = document.getElementById('generic_modal');
+            document.getElementById('modal-title').innerText = title;
+            document.getElementById('modal-content').innerHTML = htmlContent;
+            modal.showModal();
+        },
+        closeModal: () => {
+            document.getElementById('generic_modal').close();
+        },
+        renderTable: (headers, rows, rowRenderFn) => {
+            return `
+                <div class="overflow-x-auto bg-base-100 rounded-box shadow">
+                    <table class="table table-zebra table-pin-rows">
+                        <thead>
+                            <tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>
+                        </thead>
+                        <tbody>
+                            ${rows.length ? rows.map(rowRenderFn).join('') : `<tr><td colspan="${headers.length}" class="text-center py-4 text-base-content/50">No data found</td></tr>`}
+                        </tbody>
+                    </table>
+                </div>`;
+        }
+    };
+
+    // --- 6. VIEW CONTROLLERS ---
+
+    const DashboardView = {
+        async render(container) {
+            const accounts = await Api.request('/accounts') || [];
+            const txns = await Api.request('/transactions') || [];
+            const netWorth = accounts.reduce((sum, acc) => sum + parseFloat(acc.current_balance), 0);
+            const recentTxns = txns.slice(0, 5);
+            const income = txns.filter(t => parseFloat(t.amount) > 0).reduce((s, t) => s + parseFloat(t.amount), 0);
+            const expense = txns.filter(t => parseFloat(t.amount) < 0).reduce((s, t) => s + parseFloat(t.amount), 0);
+
+            const html = `
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="stats shadow bg-base-100">
+                            <div class="stat">
+                                <div class="stat-title">Net Worth</div>
+                                <div class="stat-value ${netWorth >= 0 ? 'text-primary' : 'text-error'}">${Utils.formatCurrency(netWorth)}</div>
+                            </div>
+                        </div>
+                        <div class="stats shadow bg-base-100">
+                            <div class="stat">
+                                <div class="stat-title">Income (30d)</div>
+                                <div class="stat-value text-success">${Utils.formatCurrency(income)}</div>
+                            </div>
+                        </div>
+                        <div class="stats shadow bg-base-100">
+                            <div class="stat">
+                                <div class="stat-title">Expenses (30d)</div>
+                                <div class="stat-value text-error">${Utils.formatCurrency(Math.abs(expense))}</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+                        <div class="card bg-base-100 shadow">
+                            <div class="card-body">
+                                <h2 class="card-title">Net Worth Trend</h2>
+                                <div class="chart-container"><canvas id="chart-networth"></canvas></div>
+                            </div>
+                        </div>
+                        <div class="card bg-base-100 shadow">
+                            <div class="card-body">
+                                <h2 class="card-title">Recent Activity</h2>
+                                ${UI.renderTable(['Date', 'Payee', 'Amount'], recentTxns, (t) => `
+                                    <tr>
+                                        <td>${Utils.formatDate(t.date)}</td>
+                                        <td>${t.description}</td>
+                                        <td class="${t.amount >= 0 ? 'text-success' : 'text-error'} font-mono text-right">${Utils.formatCurrency(t.amount)}</td>
+                                    </tr>
+                                `)}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            container.innerHTML = html;
+
+            const chartData = await Api.request('/reports/net-worth');
+            if (chartData) {
+                new Chart(document.getElementById('chart-networth'), {
+                    type: 'line',
+                    data: {
+                        labels: chartData.map(d => Utils.formatDate(d.date)),
+                        datasets: [{
+                            label: 'Net Worth',
+                            data: chartData.map(d => d.value),
+                            borderColor: '#22c55e',
+                            tension: 0.3,
+                            fill: true,
+                            backgroundColor: 'rgba(34, 197, 94, 0.1)'
+                        }]
+                    },
+                    options: {maintainAspectRatio: false, responsive: true}
+                });
+            }
+        }
+    };
+
+    const AccountsView = {
+        async render(container) {
+            const accounts = await Api.request('/accounts') || [];
+            container.innerHTML = `
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-2xl font-bold">Accounts</h2>
+                        <button class="btn btn-primary btn-sm" onclick="alert('Demo Mode: Cannot add')"><i class="fas fa-plus"></i> Add Account</button>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        ${accounts.map(acc => `
+                            <div class="card bg-base-100 shadow border-l-4 border-primary">
+                                <div class="card-body">
+                                    <div class="flex justify-between">
+                                        <div><h3 class="card-title text-base">${acc.name}</h3><p class="text-sm opacity-70">${acc.institution} &bull; ${acc.type}</p></div>
+                                    </div>
+                                    <div class="text-2xl font-bold mt-4 font-mono ${acc.current_balance < 0 ? 'text-error' : ''}">${Utils.formatCurrency(acc.current_balance, acc.currency)}</div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+        }
+    };
+
+    const TransactionsView = {
+        async render(container) {
+            const txns = await Api.request('/transactions') || [];
+            const categories = await Api.request('/categories') || [];
+            const catMap = Object.fromEntries(categories.map(c => [c.id, c.name]));
+
+            container.innerHTML = `
+                    <div class="flex flex-col gap-4">
+                        <div class="flex flex-wrap gap-2 items-center bg-base-100 p-4 rounded-box shadow">
+                            <input type="text" placeholder="Search..." class="input input-bordered input-sm w-full md:w-auto">
+                            <button class="btn btn-primary btn-sm ml-auto"><i class="fas fa-plus"></i> Add Transaction</button>
+                        </div>
+                        ${UI.renderTable(
+                ['Date', 'Payee', 'Category', 'Status', 'Amount', ''],
+                txns,
+                (t) => `
+                            <tr class="hover">
+                                <td class="whitespace-nowrap">${Utils.formatDate(t.date)}</td>
+                                <td class="font-medium">${t.description}</td>
+                                <td><span class="badge badge-sm badge-ghost">${catMap[t.category_id] || 'Uncategorized'}</span></td>
+                                <td><span class="badge badge-xs ${t.status === 'cleared' ? 'badge-success' : 'badge-warning'}"></span> ${t.status}</td>
+                                <td class="font-mono text-right font-bold ${t.amount >= 0 ? 'text-success' : 'text-error'}">${Utils.formatCurrency(t.amount)}</td>
+                                <td class="text-right"><button class="btn btn-square btn-ghost btn-xs"><i class="fas fa-edit"></i></button></td>
+                            </tr>
+                        `)}
+                    </div>
+                `;
+        }
+    };
+
+    const RecurringView = {
+        async render(container) {
+            const recurring = await Api.request('/recurring') || [];
+            const categories = await Api.request('/categories') || [];
+            const catMap = Object.fromEntries(categories.map(c => [c.id, c.name]));
+
+            // Calculate upcoming in next 30 days
+            const today = new Date();
+            const next30 = new Date(); next30.setDate(today.getDate() + 30);
+            const upcomingTotal = recurring
+                .filter(r => r.active && new Date(r.next_date) <= next30 && r.amount < 0)
+                .reduce((sum, r) => sum + Math.abs(parseFloat(r.amount)), 0);
+
+            // Helper for the modal logic
+            window.openPaymentModal = (id) => {
+                const rule = recurring.find(r => r.id === id);
+                if (!rule) return;
+
+                const today = new Date().toISOString().split('T')[0];
+                const nextDueDate = Utils.addFrequency(rule.next_date, rule.frequency);
+
+                const formHtml = `
+                        <form id="payment-form" class="space-y-4">
+                            <p class="text-sm opacity-70">Record a payment for this period. This will create a transaction and advance the due date.</p>
+
+                            <div class="grid grid-cols-2 gap-4">
+                                <div class="form-control">
+                                    <label class="label"><span class="label-text">Actual Date</span></label>
+                                    <input type="date" name="date" class="input input-bordered w-full" value="${rule.next_date}" required />
+                                    <label class="label"><span class="label-text-alt text-warning">Edit if paying for a past/different date</span></label>
+                                </div>
+                                <div class="form-control">
+                                    <label class="label"><span class="label-text">Amount</span></label>
+                                    <input type="number" step="0.01" name="amount" class="input input-bordered w-full" value="${rule.amount}" required />
+                                </div>
+                            </div>
+
+                            <div class="form-control">
+                                <label class="label"><span class="label-text">Notes / Description</span></label>
+                                <input type="text" name="description" class="input input-bordered w-full" value="${rule.name} (Paid)" />
+                            </div>
+
+                            <div class="divider">Next Period</div>
+
+                            <div class="form-control">
+                                <label class="label"><span class="label-text">New Next Due Date</span></label>
+                                <input type="date" name="next_date" class="input input-bordered w-full" value="${nextDueDate}" required />
+                                <label class="label"><span class="label-text-alt">Automatically calculated based on ${rule.frequency} schedule</span></label>
+                            </div>
+
+                            <div class="modal-action">
+                                <button type="button" class="btn" onclick="UI.closeModal()">Cancel</button>
+                                <button type="submit" class="btn btn-primary">Confirm Payment</button>
+                            </div>
+                        </form>
+                    `;
+
+                UI.showModal(`Pay: ${rule.name}`, formHtml);
+
+                // Handle Submit
+                document.getElementById('payment-form').addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const formData = Utils.serializeForm(e.target);
+
+                    // 1. Create Transaction
+                    const txnBody = {
+                        date: formData.date,
+                        description: formData.description,
+                        amount: parseFloat(formData.amount),
+                        category_id: rule.category_id,
+                        account_id: rule.account_id,
+                        status: 'cleared',
+                        recurring_rule_id: rule.id
+                    };
+
+                    // 2. Update Recurring Rule
+                    const updateBody = {
+                        next_date: formData.next_date
+                    };
+
+                    await Api.request('/transactions', {method: 'POST', body: JSON.stringify(txnBody)});
+                    await Api.request(`/recurring/${rule.id}`, {method: 'PATCH', body: JSON.stringify(updateBody)});
+
+                    UI.closeModal();
+                    UI.toast('Payment recorded successfully', 'success');
+                    RecurringView.render(container); // Refresh
+                });
+            };
+
+            container.innerHTML = `
+                    <div class="flex justify-between items-center mb-4">
+                        <div>
+                            <h2 class="text-2xl font-bold">Recurring Rules</h2>
+                            <p class="text-sm opacity-70 mt-1">Upcoming 30 Days: <span class="font-bold text-error">${Utils.formatCurrency(upcomingTotal)}</span></p>
+                        </div>
+                        <button class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> New Rule</button>
+                    </div>
+                    ${UI.renderTable(
+                ['Rule Name', 'Frequency', 'Category', 'Next Due', 'Exp. Amount', 'Actions'],
+                recurring,
+                (r) => `
+                        <tr>
+                            <td class="font-bold">
+                                ${r.name}
+                                <div class="text-xs font-normal opacity-50">${r.active ? 'Active' : 'Paused'}</div>
+                            </td>
+                            <td>${r.frequency}</td>
+                            <td><span class="badge badge-sm badge-ghost">${catMap[r.category_id]}</span></td>
+                            <td>
+                                <span class="${new Date(r.next_date) < new Date() ? 'text-error font-bold' : ''}">
+                                    ${Utils.formatDate(r.next_date)}
+                                </span>
+                            </td>
+                            <td class="font-mono ${r.amount >= 0 ? 'text-success' : 'text-error'}">${Utils.formatCurrency(r.amount)}</td>
+                            <td>
+                                <button class="btn btn-sm btn-success btn-outline gap-2" onclick="window.openPaymentModal('${r.id}')">
+                                    <i class="fas fa-check"></i> Pay
+                                </button>
+                            </td>
+                        </tr>
+                        `
+            )}
+                `;
+        }
+    };
+
+    const BudgetsView = {
+        async render(container) {
+            const budgets = await Api.request('/budgets') || [];
+            const txns = await Api.request('/transactions') || [];
+            const categories = await Api.request('/categories') || [];
+
+            // Helper: Sum expenses for category in current month
+            const currentMonth = new Date().getMonth();
+            const getActual = (catId) => {
+                return Math.abs(txns
+                    .filter(t => t.category_id === catId && t.amount < 0 && new Date(t.date).getMonth() === currentMonth)
+                    .reduce((sum, t) => sum + parseFloat(t.amount), 0));
+            };
+
+            container.innerHTML = `
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-2xl font-bold">Monthly Budget</h2>
+                        <button class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Edit Allocations</button>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        ${budgets.map(b => {
+                const cat = categories.find(c => c.id === b.category_id) || {name: 'Unknown', color: '#ccc'};
+                const actual = getActual(b.category_id);
+                const percent = Math.min((actual / b.amount) * 100, 100);
+                const colorClass = percent > 90 ? 'progress-error' : percent > 75 ? 'progress-warning' : 'progress-primary';
+
+                return `
+                            <div class="card bg-base-100 shadow">
+                                <div class="card-body p-5">
+                                    <div class="flex justify-between mb-2">
+                                        <span class="font-bold" style="color:${cat.color}">${cat.name}</span>
+                                        <span class="text-sm">${Utils.formatCurrency(actual)} / ${Utils.formatCurrency(b.amount)}</span>
+                                    </div>
+                                    <progress class="progress w-full ${colorClass}" value="${percent}" max="100"></progress>
+                                    <div class="text-right text-xs mt-1 opacity-70">${(b.amount - actual).toFixed(2)} remaining</div>
+                                </div>
+                            </div>
+                            `;
+            }).join('')}
+                    </div>
+                `;
+        }
+    };
+
+    const ReportsView = {
+        async render(container) {
+            const txns = await Api.request('/transactions') || [];
+            const categories = await Api.request('/categories') || [];
+
+            // 1. Category Breakdown
+            const expensesByCat = {};
+            txns.filter(t => t.amount < 0).forEach(t => {
+                expensesByCat[t.category_id] = (expensesByCat[t.category_id] || 0) + Math.abs(parseFloat(t.amount));
+            });
+            const catLabels = Object.keys(expensesByCat).map(id => categories.find(c => c.id === id)?.name || 'Other');
+            const catData = Object.values(expensesByCat);
+            const catColors = Object.keys(expensesByCat).map(id => categories.find(c => c.id === id)?.color || '#999');
+
+            // 2. Cash Flow
+            const months = {};
+            txns.forEach(t => {
+                const d = new Date(t.date);
+                const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2, '0')}`;
+                if (!months[key]) months[key] = {income: 0, expense: 0};
+                if (parseFloat(t.amount) > 0) months[key].income += parseFloat(t.amount);
+                else months[key].expense += Math.abs(parseFloat(t.amount));
+            });
+            const cfLabels = Object.keys(months).sort().slice(-6);
+            const incomeData = cfLabels.map(m => months[m].income);
+            const expenseData = cfLabels.map(m => months[m].expense);
+
+            container.innerHTML = `
+                    <h2 class="text-2xl font-bold mb-6">Financial Reports</h2>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div class="card bg-base-100 shadow">
+                            <div class="card-body">
+                                <h3 class="card-title text-sm uppercase tracking-wide opacity-70">Spending Breakdown</h3>
+                                <div class="chart-container" style="height: 300px;">
+                                    <canvas id="chart-categories"></canvas>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card bg-base-100 shadow">
+                            <div class="card-body">
+                                <h3 class="card-title text-sm uppercase tracking-wide opacity-70">Cash Flow (Last 6 Months)</h3>
+                                <div class="chart-container" style="height: 300px;">
+                                    <canvas id="chart-cashflow"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+            new Chart(document.getElementById('chart-categories'), {
+                type: 'doughnut',
+                data: {
+                    labels: catLabels,
+                    datasets: [{ data: catData, backgroundColor: catColors, borderWidth: 0 }]
+                },
+                options: {responsive: true, maintainAspectRatio: false, plugins: {legend: {position: 'right'}}}
+            });
+
+            new Chart(document.getElementById('chart-cashflow'), {
+                type: 'bar',
+                data: {
+                    labels: cfLabels,
+                    datasets: [
+                        {label: 'Income', data: incomeData, backgroundColor: '#22c55e'},
+                        {label: 'Expense', data: expenseData, backgroundColor: '#ef4444'}
+                    ]
+                },
+                options: {responsive: true, maintainAspectRatio: false}
+            });
+        }
+    };
+
+    const ForecastView = {
+        async render(container) {
+             const forecast = await Api.request('/reports/forecast') || [];
+             if (forecast.length === 0) { container.innerHTML = 'No data'; return; }
+             
+             const minBal = Math.min(...forecast.map(f => f.balance));
+             const maxBal = Math.max(...forecast.map(f => f.balance));
+             const endBal = forecast[forecast.length-1].balance;
+             
+             container.innerHTML = `
+                <h2 class="text-2xl font-bold mb-6">Financial Forecast (90 Days)</h2>
+                
+                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <div class="stats shadow bg-base-100">
+                        <div class="stat">
+                            <div class="stat-title">Lowest Balance</div>
+                            <div class="stat-value ${minBal < 0 ? 'text-error' : 'text-warning'}">${Utils.formatCurrency(minBal)}</div>
+                            <div class="stat-desc">Risk assessment</div>
+                        </div>
+                    </div>
+                    <div class="stats shadow bg-base-100">
+                        <div class="stat">
+                            <div class="stat-title">Highest Balance</div>
+                            <div class="stat-value text-success">${Utils.formatCurrency(maxBal)}</div>
+                            <div class="stat-desc">Peak savings</div>
+                        </div>
+                    </div>
+                    <div class="stats shadow bg-base-100">
+                        <div class="stat">
+                            <div class="stat-title">Projected (90d)</div>
+                            <div class="stat-value text-primary">${Utils.formatCurrency(endBal)}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card bg-base-100 shadow">
+                    <div class="card-body">
+                        <h3 class="card-title">Projected Balance</h3>
+                        <div class="chart-container" style="height: 400px;">
+                            <canvas id="chart-forecast"></canvas>
+                        </div>
+                    </div>
+                </div>
+             `;
+             
+             new Chart(document.getElementById('chart-forecast'), {
+                type: 'line',
+                data: {
+                    labels: forecast.map(d => Utils.formatDate(d.date)),
+                    datasets: [{
+                        label: 'Projected Balance',
+                        data: forecast.map(d => d.balance),
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, interaction: {mode: 'index', intersect: false} }
+             });
+        }
+    };
+
+    const SettingsView = {
+        async render(container) {
+            container.innerHTML = `
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div class="card bg-base-100 shadow">
+                        <div class="card-body">
+                            <h2 class="card-title">Connection Settings</h2>
+                            <div class="form-control w-full mt-4">
+                                <label class="label"><span class="label-text">API Base URL</span></label>
+                                <input type="text" id="api-url-input" placeholder="Empty = Demo Mode" class="input input-bordered w-full" value="${Store.state.apiUrl}" />
+                            </div>
+                            <div class="card-actions justify-end mt-4">
+                                <button class="btn btn-primary" id="save-settings-btn">Save & Reload</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                `;
+            document.getElementById('save-settings-btn').addEventListener('click', () => {
+                const url = document.getElementById('api-url-input').value.trim();
+                Store.state.apiUrl = url;
+                Store.saveSettings();
+                UI.toast('Settings saved. Reloading...', 'success');
+                setTimeout(() => location.reload(), 1000);
+            });
+        }
+    };
+
+    // --- 7. ROUTING ---
+    const Router = {
+        routes: {
+            dashboard: DashboardView,
+            accounts: AccountsView,
+            transactions: TransactionsView,
+            recurring: RecurringView,
+            budgets: BudgetsView,
+            forecast: ForecastView,
+            reports: ReportsView,
+            settings: SettingsView
+        },
+        async navigate() {
+            const hash = window.location.hash.slice(2) || 'dashboard';
+            const view = this.routes[hash] || DashboardView;
+            document.querySelectorAll('.nav-link').forEach(el => {
+                el.classList.toggle('active', el.getAttribute('href') === `#/${hash}`);
+            });
+            const title = hash.charAt(0).toUpperCase() + hash.slice(1);
+            document.getElementById('page-title').innerText = title;
+            const container = document.getElementById('app-view');
+            container.innerHTML = '<div class="flex justify-center p-10"><span class="loading loading-spinner loading-lg"></span></div>';
+            await view.render(container);
+        }
+    };
+
+    // --- 8. INIT ---
+    const init = () => {
+        const toggle = document.getElementById('theme-toggle');
+        toggle.checked = Store.state.theme === 'dark';
+        document.querySelector('html').setAttribute('data-theme', Store.state.theme);
+
+        toggle.addEventListener('change', (e) => {
+            const theme = e.target.checked ? 'dark' : 'light';
+            document.querySelector('html').setAttribute('data-theme', theme);
+            Store.state.theme = theme;
+            Store.saveSettings();
+        });
+
+        if (!Store.state.apiUrl) UI.toast('Running in Demo Mode (Mock Data)', 'info');
+        window.addEventListener('hashchange', () => Router.navigate());
+        Router.navigate();
+    };
+
+    document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
