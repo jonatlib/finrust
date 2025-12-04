@@ -313,6 +313,8 @@
                  
                  rules.forEach(r => {
                      if (r.active && r.next_date.toISOString().split('T')[0] === dateStr) {
+                         if (r.end_date && new Date(dateStr) > new Date(r.end_date)) return;
+
                          balance += parseFloat(r.amount);
                          r.next_date = new Date(Utils.addFrequency(r.next_date.toISOString(), r.frequency));
                      }
@@ -652,43 +654,60 @@
     };
 
     const RecurringView = {
+        state: { hideEnded: false },
         async render(container) {
             const recurring = await Api.request('/recurring') || [];
             const categories = await Api.request('/categories') || [];
             const accounts = await Api.request('/accounts') || [];
             const catMap = Object.fromEntries(categories.map(c => [c.id, c.name]));
 
+            // Filter logic
+            const todayStr = new Date().toISOString().split('T')[0];
+            const isEnded = (r) => r.end_date && r.end_date < todayStr;
+            
+            const displayedRecurring = this.state.hideEnded 
+                ? recurring.filter(r => !isEnded(r))
+                : recurring;
+
             // Calculate upcoming in next 30 days
-            const today = new Date();
-            const next30 = new Date(); next30.setDate(today.getDate() + 30);
+            const todayDate = new Date();
+            const next30 = new Date(); next30.setDate(todayDate.getDate() + 30);
             const upcomingTotal = recurring
-                .filter(r => r.active && new Date(r.next_date) <= next30 && r.amount < 0)
+                .filter(r => r.active && new Date(r.next_date) <= next30 && r.amount < 0 && !isEnded(r))
                 .reduce((sum, r) => sum + Math.abs(parseFloat(r.amount)), 0);
 
-             // Add Recurring Rule Modal Handler
-             window.openAddRecurringModal = () => {
+             // Add/Edit Recurring Rule Modal Handler
+             window.openRecurringModal = (id = null) => {
+                const isEdit = !!id;
+                const rule = isEdit ? recurring.find(r => r.id === id) : {};
                 const today = new Date().toISOString().split('T')[0];
                 
+                const defaults = {
+                    name: '', amount: '', frequency: 'Monthly', next_date: today, 
+                    category_id: categories[0]?.id, account_id: accounts[0]?.id,
+                    end_date: ''
+                };
+                const data = { ...defaults, ...rule };
+
                 const formHtml = `
-                    <form id="add-recurring-form" class="space-y-4">
+                    <form id="recurring-form" class="space-y-4">
                         <div class="form-control">
                             <label class="label"><span class="label-text">Rule Name</span></label>
-                            <input type="text" name="name" class="input input-bordered w-full" placeholder="e.g. Rent" required />
+                            <input type="text" name="name" class="input input-bordered w-full" placeholder="e.g. Rent" value="${data.name}" required />
                         </div>
 
                         <div class="grid grid-cols-2 gap-4">
                              <div class="form-control">
                                 <label class="label"><span class="label-text">Amount</span></label>
-                                <input type="number" step="0.01" name="amount" class="input input-bordered w-full" placeholder="-100.00" required />
+                                <input type="number" step="0.01" name="amount" class="input input-bordered w-full" placeholder="-100.00" value="${data.amount}" required />
                                 <label class="label"><span class="label-text-alt">Negative for expenses</span></label>
                             </div>
                             <div class="form-control">
                                 <label class="label"><span class="label-text">Frequency</span></label>
                                 <select name="frequency" class="select select-bordered w-full">
-                                    <option value="Monthly">Monthly</option>
-                                    <option value="Weekly">Weekly</option>
-                                    <option value="Bi-Weekly">Bi-Weekly</option>
-                                    <option value="Yearly">Yearly</option>
+                                    ${['Monthly', 'Weekly', 'Bi-Weekly', 'Yearly'].map(f => 
+                                        `<option value="${f}" ${data.frequency === f ? 'selected' : ''}>${f}</option>`
+                                    ).join('')}
                                 </select>
                             </div>
                         </div>
@@ -696,33 +715,40 @@
                         <div class="grid grid-cols-2 gap-4">
                             <div class="form-control">
                                 <label class="label"><span class="label-text">Next Due Date</span></label>
-                                <input type="date" name="next_date" class="input input-bordered w-full" value="${today}" required />
+                                <input type="date" name="next_date" class="input input-bordered w-full" value="${data.next_date}" required />
                             </div>
+                            <div class="form-control">
+                                <label class="label"><span class="label-text">End Date (Optional)</span></label>
+                                <input type="date" name="end_date" class="input input-bordered w-full" value="${data.end_date || ''}" />
+                                <label class="label"><span class="label-text-alt">Leave empty if indefinite</span></label>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4">
                             <div class="form-control">
                                  <label class="label"><span class="label-text">Category</span></label>
                                 <select name="category_id" class="select select-bordered w-full">
-                                    ${categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
+                                    ${categories.map(c => `<option value="${c.id}" ${data.category_id === c.id ? 'selected' : ''}>${c.name}</option>`).join('')}
+                                </select>
+                            </div>
+                             <div class="form-control">
+                                <label class="label"><span class="label-text">Account</span></label>
+                                 <select name="account_id" class="select select-bordered w-full">
+                                    ${accounts.map(a => `<option value="${a.id}" ${data.account_id === a.id ? 'selected' : ''}>${a.name}</option>`).join('')}
                                 </select>
                             </div>
                         </div>
 
-                         <div class="form-control">
-                            <label class="label"><span class="label-text">Account</span></label>
-                             <select name="account_id" class="select select-bordered w-full">
-                                ${accounts.map(a => `<option value="${a.id}">${a.name}</option>`).join('')}
-                            </select>
-                        </div>
-
                         <div class="modal-action">
                             <button type="button" class="btn" onclick="UI.closeModal()">Cancel</button>
-                            <button type="submit" class="btn btn-primary">Save Rule</button>
+                            <button type="submit" class="btn btn-primary">${isEdit ? 'Update Rule' : 'Save Rule'}</button>
                         </div>
                     </form>
                 `;
                 
-                UI.showModal('New Recurring Rule', formHtml);
+                UI.showModal(isEdit ? 'Edit Recurring Rule' : 'New Recurring Rule', formHtml);
                 
-                document.getElementById('add-recurring-form').addEventListener('submit', async (e) => {
+                document.getElementById('recurring-form').addEventListener('submit', async (e) => {
                      e.preventDefault();
                      const formData = Utils.serializeForm(e.target);
                      
@@ -731,14 +757,21 @@
                          amount: parseFloat(formData.amount),
                          frequency: formData.frequency,
                          next_date: formData.next_date,
+                         end_date: formData.end_date || null,
                          category_id: formData.category_id,
                          account_id: formData.account_id,
                          active: true
                      };
                      
-                     await Api.request('/recurring', {method: 'POST', body: JSON.stringify(body)});
+                     if (isEdit) {
+                         await Api.request(`/recurring/${id}`, {method: 'PATCH', body: JSON.stringify(body)});
+                         UI.toast('Recurring rule updated', 'success');
+                     } else {
+                         await Api.request('/recurring', {method: 'POST', body: JSON.stringify(body)});
+                         UI.toast('Recurring rule created', 'success');
+                     }
+                     
                      UI.closeModal();
-                     UI.toast('Recurring rule added', 'success');
                      RecurringView.render(container);
                 });
             };
@@ -819,38 +852,61 @@
                 });
             };
 
+            // Filter Toggle Handler
+            window.toggleHideEnded = () => {
+                this.state.hideEnded = !this.state.hideEnded;
+                this.render(container);
+            };
+
             container.innerHTML = `
                     <div class="flex justify-between items-center mb-4">
                         <div>
                             <h2 class="text-2xl font-bold">Recurring Rules</h2>
                             <p class="text-sm opacity-70 mt-1">Upcoming 30 Days: <span class="font-bold text-error">${Utils.formatCurrency(upcomingTotal)}</span></p>
                         </div>
-                        <button class="btn btn-primary btn-sm" onclick="window.openAddRecurringModal()"><i class="fas fa-plus"></i> New Rule</button>
+                        <div class="flex items-center gap-4">
+                            <div class="form-control">
+                                <label class="label cursor-pointer gap-2">
+                                    <span class="label-text">Hide Ended</span> 
+                                    <input type="checkbox" class="toggle toggle-primary" ${this.state.hideEnded ? 'checked' : ''} onchange="window.toggleHideEnded()" />
+                                </label>
+                            </div>
+                            <button class="btn btn-primary btn-sm" onclick="window.openRecurringModal()"><i class="fas fa-plus"></i> New Rule</button>
+                        </div>
                     </div>
                     ${UI.renderTable(
-                ['Rule Name', 'Frequency', 'Category', 'Next Due', 'Exp. Amount', 'Actions'],
-                recurring,
-                (r) => `
-                        <tr>
+                ['Rule Name', 'Frequency', 'Category', 'Next Due', 'End Date', 'Exp. Amount', 'Actions'],
+                displayedRecurring,
+                (r) => {
+                     const ended = isEnded(r);
+                     return `
+                        <tr class="${ended ? 'opacity-50' : ''}">
                             <td class="font-bold">
                                 ${r.name}
-                                <div class="text-xs font-normal opacity-50">${r.active ? 'Active' : 'Paused'}</div>
+                                <div class="text-xs font-normal opacity-50">${r.active ? 'Active' : 'Paused'}${ended ? ' (Ended)' : ''}</div>
                             </td>
                             <td>${r.frequency}</td>
                             <td><span class="badge badge-sm badge-ghost">${catMap[r.category_id]}</span></td>
                             <td>
-                                <span class="${new Date(r.next_date) < new Date() ? 'text-error font-bold' : ''}">
+                                <span class="${!ended && new Date(r.next_date) < new Date() ? 'text-error font-bold' : ''}">
                                     ${Utils.formatDate(r.next_date)}
                                 </span>
                             </td>
+                            <td>${Utils.formatDate(r.end_date)}</td>
                             <td class="font-mono ${r.amount >= 0 ? 'text-success' : 'text-error'}">${Utils.formatCurrency(r.amount)}</td>
                             <td>
-                                <button class="btn btn-sm btn-success btn-outline gap-2" onclick="window.openPaymentModal('${r.id}')">
-                                    <i class="fas fa-check"></i> Pay
-                                </button>
+                                <div class="flex gap-2">
+                                    <button class="btn btn-sm btn-ghost btn-square" onclick="window.openRecurringModal('${r.id}')" title="Edit">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-success btn-outline gap-2" onclick="window.openPaymentModal('${r.id}')" ${ended ? 'disabled' : ''}>
+                                        <i class="fas fa-check"></i> Pay
+                                    </button>
+                                </div>
                             </td>
                         </tr>
-                        `
+                        `;
+                }
             )}
                 `;
         }
