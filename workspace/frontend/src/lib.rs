@@ -63,3 +63,9 @@ pub fn app() -> Html {
         </BrowserRouter>
     }
 }
+
+#[wasm_bindgen::prelude::wasm_bindgen(start)]
+pub fn run_app() {
+    wasm_logger::init(wasm_logger::Config::default());
+    yew::Renderer::<App>::new().render();
+}
