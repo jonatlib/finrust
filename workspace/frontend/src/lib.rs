@@ -7,16 +7,16 @@ pub mod api_client;
 pub mod hooks;
 pub mod common;
 
-use components::layout::layout::Layout;
 use common::toast::ToastProvider;
-use components::dashboard::Dashboard;
 use components::accounts::Accounts;
-use components::transactions::Transactions;
-use components::recurring::Recurring;
 use components::budgets::Budgets;
+use components::dashboard::Dashboard;
 use components::forecast::Forecast;
+use components::layout::layout::Layout;
+use components::recurring::Recurring;
 use components::reports::Reports;
 use components::settings::Settings;
+use components::transactions::Transactions;
 
 #[derive(Clone, Routable, PartialEq)]
 pub enum Route {
@@ -48,7 +48,10 @@ pub enum Route {
 fn switch(routes: Route) -> Html {
     match routes {
         Route::Home | Route::Dashboard => html! { <Layout title="Dashboard"><Dashboard /></Layout> },
-        Route::Accounts => html! { <Layout title="Accounts"><Accounts /></Layout> },
+        Route::Accounts => {
+            // For Accounts page, we need to create a wrapper that provides refresh functionality
+            html! { <AccountsPage /> }
+        }
         Route::Transactions => html! { <Layout title="Transactions"><Transactions /></Layout> },
         Route::Recurring => html! { <Layout title="Recurring"><Recurring /></Layout> },
         Route::Budgets => html! { <Layout title="Budgets"><Budgets /></Layout> },
@@ -57,6 +60,24 @@ fn switch(routes: Route) -> Html {
         Route::Settings => html! { <Layout title="Settings"><Settings /></Layout> },
         Route::About => html! { <Layout title="About"><div>{"About Page"}</div></Layout> },
         Route::NotFound => html! { <Layout title="404"><h1>{"404 Not Found"}</h1></Layout> },
+    }
+}
+
+#[function_component(AccountsPage)]
+fn accounts_page() -> Html {
+    let refresh_trigger = use_state(|| 0);
+
+    let on_refresh = {
+        let refresh_trigger = refresh_trigger.clone();
+        Callback::from(move |_| {
+            refresh_trigger.set(*refresh_trigger + 1);
+        })
+    };
+
+    html! {
+        <Layout title="Accounts" on_refresh={Some(on_refresh)}>
+            <Accounts key={*refresh_trigger} />
+        </Layout>
     }
 }
 
