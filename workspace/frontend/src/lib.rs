@@ -4,8 +4,11 @@ use yew_router::prelude::*;
 mod components;
 mod mock_data;
 pub mod api_client;
+pub mod hooks;
+pub mod common;
 
 use components::layout::layout::Layout;
+use common::toast::ToastProvider;
 use components::dashboard::Dashboard;
 use components::accounts::Accounts;
 use components::transactions::Transactions;
@@ -60,9 +63,11 @@ fn switch(routes: Route) -> Html {
 #[function_component(App)]
 pub fn app() -> Html {
     html! {
-        <BrowserRouter>
-            <Switch<Route> render={switch} />
-        </BrowserRouter>
+        <ToastProvider>
+            <BrowserRouter>
+                <Switch<Route> render={switch} />
+            </BrowserRouter>
+        </ToastProvider>
     }
 }
 

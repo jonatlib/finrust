@@ -19,8 +19,8 @@ js-sys = "0.3"
 wasm-bindgen-futures = "0.4"
 
 # HTTP client for API calls
-
 gloo-net = { version = "0.5", features = ["http"] }
+gloo-timers = "0.3"
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
