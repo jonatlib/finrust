@@ -3,6 +3,7 @@ use yew_router::prelude::*;
 
 mod components;
 mod mock_data;
+pub mod api_client;
 
 use components::layout::layout::Layout;
 use components::dashboard::Dashboard;
