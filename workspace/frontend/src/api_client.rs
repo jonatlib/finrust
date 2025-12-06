@@ -2,8 +2,12 @@ pub mod account;
 
 use gloo_net::http::Request;
 use serde::{Deserialize, Serialize};
+use crate::settings;
 
-const API_BASE: &str = "/api/v1";
+// API_BASE is now retrieved from settings
+fn api_base() -> String {
+    settings::get_settings().api_base_url()
+}
 
 /// API Response wrapper
 #[derive(Debug, Deserialize, Serialize)]
@@ -26,7 +30,7 @@ pub async fn get<T>(endpoint: &str) -> Result<T, String>
 where
     T: for<'de> Deserialize<'de>,
 {
-    let url = format!("{}{}", API_BASE, endpoint);
+    let url = format!("{}{}", api_base(), endpoint);
 
     let response = Request::get(&url)
         .send()
@@ -51,7 +55,7 @@ where
     T: for<'de> Deserialize<'de>,
     B: Serialize,
 {
-    let url = format!("{}{}", API_BASE, endpoint);
+    let url = format!("{}{}", api_base(), endpoint);
 
     let response = Request::post(&url)
         .json(body)
@@ -82,7 +86,7 @@ where
     T: for<'de> Deserialize<'de>,
     B: Serialize,
 {
-    let url = format!("{}{}", API_BASE, endpoint);
+    let url = format!("{}{}", api_base(), endpoint);
 
     let response = Request::put(&url)
         .json(body)
@@ -112,7 +116,7 @@ pub async fn delete<T>(endpoint: &str) -> Result<T, String>
 where
     T: for<'de> Deserialize<'de>,
 {
-    let url = format!("{}{}", API_BASE, endpoint);
+    let url = format!("{}{}", api_base(), endpoint);
 
     let response = Request::delete(&url)
         .send()

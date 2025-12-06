@@ -6,6 +6,7 @@ mod mock_data;
 pub mod api_client;
 pub mod hooks;
 pub mod common;
+pub mod settings;
 
 use common::toast::ToastProvider;
 use components::accounts::Accounts;
@@ -94,6 +95,14 @@ pub fn app() -> Html {
 
 #[wasm_bindgen::prelude::wasm_bindgen(start)]
 pub fn run_app() {
-    wasm_logger::init(wasm_logger::Config::default());
+    // Initialize settings first
+    settings::init_settings();
+
+    // Initialize logger with settings
+    let settings = settings::get_settings();
+    wasm_logger::init(wasm_logger::Config::new(settings.log_level));
+
+    log::info!("Application starting with settings: {:?}", settings);
+
     yew::Renderer::<App>::new().render();
 }
