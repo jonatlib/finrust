@@ -19,7 +19,7 @@ use components::reports::Reports;
 use components::settings::Settings;
 use components::transactions::Transactions;
 
-#[derive(Clone, Routable, PartialEq)]
+#[derive(Debug, Clone, Routable, PartialEq)]
 pub enum Route {
     #[at("/")]
     Home,

@@ -27,7 +27,7 @@ pub struct CreateAccountRequest {
 /// Get all accounts
 pub async fn get_accounts() -> Result<Vec<AccountResponse>, String> {
     log::trace!("Fetching all accounts");
-    let result = api_client::get("/accounts").await;
+    let result = api_client::get::<Vec<AccountResponse>>("/accounts").await;
     match &result {
         Ok(accounts) => log::info!("Fetched {} accounts", accounts.len()),
         Err(e) => log::error!("Failed to fetch accounts: {}", e),
@@ -38,7 +38,7 @@ pub async fn get_accounts() -> Result<Vec<AccountResponse>, String> {
 /// Get a specific account by ID
 pub async fn get_account(account_id: i32) -> Result<AccountResponse, String> {
     log::trace!("Fetching account with ID: {}", account_id);
-    let result = api_client::get(&format!("/accounts/{}", account_id)).await;
+    let result = api_client::get::<AccountResponse>(&format!("/accounts/{}", account_id)).await;
     match &result {
         Ok(account) => log::info!("Fetched account: {} (ID: {})", account.name, account.id),
         Err(e) => log::error!("Failed to fetch account {}: {}", account_id, e),
@@ -49,7 +49,7 @@ pub async fn get_account(account_id: i32) -> Result<AccountResponse, String> {
 /// Create a new account
 pub async fn create_account(request: CreateAccountRequest) -> Result<AccountResponse, String> {
     log::debug!("Creating new account: {}", request.name);
-    let result = api_client::post("/accounts", &request).await;
+    let result = api_client::post::<AccountResponse, _>("/accounts", &request).await;
     match &result {
         Ok(account) => log::info!("Successfully created account: {} (ID: {})", account.name, account.id),
         Err(e) => log::error!("Failed to create account '{}': {}", request.name, e),
