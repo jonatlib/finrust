@@ -2,6 +2,7 @@ use yew::prelude::*;
 use yew_router::prelude::*;
 
 mod components;
+mod mock_data;
 
 use components::layout::layout::Layout;
 use components::dashboard::Dashboard;

@@ -7,3 +7,4 @@ pub mod budgets;
 pub mod forecast;
 pub mod reports;
 pub mod settings;
+pub mod modals;
