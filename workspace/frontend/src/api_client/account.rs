@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use crate::api_client;
 
 /// Account response model
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct AccountResponse {
     pub id: i32,
     pub name: String,

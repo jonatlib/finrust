@@ -1,13 +1,35 @@
 use yew::prelude::*;
-use crate::mock_data::get_mock_accounts;
+use crate::api_client::account::{get_accounts, AccountResponse};
+use super::account_card::AccountCard;
 
 #[function_component(Accounts)]
 pub fn accounts() -> Html {
-    let accounts = get_mock_accounts();
+    let accounts = use_state(|| None::<Vec<AccountResponse>>);
+    let loading = use_state(|| true);
+    let error = use_state(|| None::<String>);
 
-    let format_currency = |amount: f64| -> String {
-        format!("${:.2}", amount)
-    };
+    {
+        let accounts = accounts.clone();
+        let loading = loading.clone();
+        let error = error.clone();
+
+        use_effect_with((), move |_| {
+            wasm_bindgen_futures::spawn_local(async move {
+                loading.set(true);
+                match get_accounts().await {
+                    Ok(data) => {
+                        accounts.set(Some(data));
+                        loading.set(false);
+                    }
+                    Err(e) => {
+                        error.set(Some(e));
+                        loading.set(false);
+                    }
+                }
+            });
+            || ()
+        });
+    }
 
     html! {
         <>
@@ -15,33 +37,40 @@ pub fn accounts() -> Html {
                 <h2 class="text-2xl font-bold">{"Accounts"}</h2>
                 <button class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> {" Add Account"}</button>
             </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                { for accounts.iter().map(|acc| {
-                    let border_class = if acc.include_in_overview { "border-primary" } else { "border-base-300" };
-                    let balance_class = if acc.current_balance < 0.0 { "text-error" } else { "" };
 
+            {if *loading {
+                html! {
+                    <div class="flex justify-center items-center py-12">
+                        <span class="loading loading-spinner loading-lg"></span>
+                    </div>
+                }
+            } else if let Some(err) = (*error).as_ref() {
+                html! {
+                    <div class="alert alert-error">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <span>{format!("Failed to load accounts: {}", err)}</span>
+                    </div>
+                }
+            } else if let Some(accounts_data) = (*accounts).as_ref() {
+                if accounts_data.is_empty() {
                     html! {
-                        <div class={classes!("card", "bg-base-100", "shadow", "border-l-4", border_class)}>
-                            <div class="card-body">
-                                <div class="flex justify-between items-start">
-                                    <div>
-                                        <h3 class="card-title text-base">{&acc.name}</h3>
-                                        <p class="text-sm opacity-70">{&acc.institution}{" • "}{&acc.account_type}</p>
-                                    </div>
-                                    {if acc.include_in_overview {
-                                        html! { <div class="badge badge-primary badge-outline badge-sm" title="Included in Overview"><i class="fas fa-eye"></i></div> }
-                                    } else {
-                                        html! { <div class="badge badge-ghost badge-sm" title="Excluded from Overview"><i class="fas fa-eye-slash"></i></div> }
-                                    }}
-                                </div>
-                                <div class={classes!("text-2xl", "font-bold", "mt-4", "font-mono", balance_class)}>
-                                    {format_currency(acc.current_balance)}
-                                </div>
-                            </div>
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle"></i>
+                            <span>{"No accounts found. Create your first account to get started!"}</span>
                         </div>
                     }
-                })}
-            </div>
+                } else {
+                    html! {
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            { for accounts_data.iter().map(|account| {
+                                html! { <AccountCard account={account.clone()} /> }
+                            })}
+                        </div>
+                    }
+                }
+            } else {
+                html! {}
+            }}
         </>
     }
 }
