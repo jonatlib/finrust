@@ -25,13 +25,19 @@ where
             let toast_ctx = toast_ctx.clone();
             let fetch_fn = fetch_fn.clone();
 
+            log::debug!("Starting fetch operation");
             fetch_state.set(FetchState::Loading);
 
             wasm_bindgen_futures::spawn_local(async move {
+                log::trace!("Executing fetch function");
                 let fut = (*fetch_fn)();
                 match fut.await {
-                    Ok(data) => fetch_state.set(FetchState::Success(data)),
+                    Ok(data) => {
+                        log::info!("Fetch operation completed successfully");
+                        fetch_state.set(FetchState::Success(data));
+                    }
                     Err(err) => {
+                        log::error!("Fetch operation failed: {}", err);
                         fetch_state.set(FetchState::Error(err.clone()));
                         toast_ctx.show_error(err);
                     }
@@ -44,6 +50,7 @@ where
     {
         let refetch = refetch.clone();
         use_effect_with((), move |_| {
+            log::trace!("Component mounted, triggering initial fetch");
             refetch.emit(());
             || ()
         });

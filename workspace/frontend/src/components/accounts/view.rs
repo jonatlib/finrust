@@ -6,17 +6,29 @@ use super::account_card::AccountCard;
 
 #[function_component(Accounts)]
 pub fn accounts() -> Html {
+    log::trace!("Accounts component rendering");
     let (fetch_state, refetch) = use_fetch_with_refetch(get_accounts);
 
     let render_item = Callback::from(|account: AccountResponse| {
+        log::trace!("Rendering account card for: {}", account.name);
         html! { <AccountCard account={account} /> }
     });
+
+    log::debug!("Accounts component state: loading={}, success={}, error={}",
+        fetch_state.is_loading(), fetch_state.is_success(), fetch_state.is_error());
 
     html! {
         <>
             <div class="flex justify-between items-center mb-4">
                 <h2 class="text-2xl font-bold">{"Accounts"}</h2>
-                <button class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> {" Add Account"}</button>
+                <button
+                    class="btn btn-primary btn-sm"
+                    onclick={Callback::from(|_| {
+                        log::info!("Add Account button clicked");
+                    })}
+                >
+                    <i class="fas fa-plus"></i> {" Add Account"}
+                </button>
             </div>
 
             <FetchRenderList<AccountResponse>

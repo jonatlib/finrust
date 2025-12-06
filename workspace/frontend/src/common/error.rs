@@ -9,6 +9,8 @@ pub struct ErrorDisplayProps {
 
 #[function_component(ErrorDisplay)]
 pub fn error_display(props: &ErrorDisplayProps) -> Html {
+    log::warn!("Displaying error to user: {}", props.message);
+
     html! {
         <div class="flex flex-col items-center justify-center py-12 gap-4">
             <div class="alert alert-error max-w-lg">
@@ -23,7 +25,10 @@ pub fn error_display(props: &ErrorDisplayProps) -> Html {
                 html! {
                     <button
                         class="btn btn-primary btn-sm"
-                        onclick={Callback::from(move |_| on_retry.emit(()))}
+                        onclick={Callback::from(move |_| {
+                            log::debug!("User clicked retry button");
+                            on_retry.emit(());
+                        })}
                     >
                         <i class="fas fa-redo"></i>
                         {" Try Again"}

@@ -47,20 +47,49 @@ pub enum Route {
 }
 
 fn switch(routes: Route) -> Html {
+    log::debug!("Routing to: {:?}", routes);
     match routes {
-        Route::Home | Route::Dashboard => html! { <Layout title="Dashboard"><Dashboard /></Layout> },
+        Route::Home | Route::Dashboard => {
+            log::trace!("Rendering Dashboard page");
+            html! { <Layout title="Dashboard"><Dashboard /></Layout> }
+        }
         Route::Accounts => {
+            log::trace!("Rendering Accounts page");
             // For Accounts page, we need to create a wrapper that provides refresh functionality
             html! { <AccountsPage /> }
         }
-        Route::Transactions => html! { <Layout title="Transactions"><Transactions /></Layout> },
-        Route::Recurring => html! { <Layout title="Recurring"><Recurring /></Layout> },
-        Route::Budgets => html! { <Layout title="Budgets"><Budgets /></Layout> },
-        Route::Forecast => html! { <Layout title="Forecast"><Forecast /></Layout> },
-        Route::Reports => html! { <Layout title="Reports"><Reports /></Layout> },
-        Route::Settings => html! { <Layout title="Settings"><Settings /></Layout> },
-        Route::About => html! { <Layout title="About"><div>{"About Page"}</div></Layout> },
-        Route::NotFound => html! { <Layout title="404"><h1>{"404 Not Found"}</h1></Layout> },
+        Route::Transactions => {
+            log::trace!("Rendering Transactions page");
+            html! { <Layout title="Transactions"><Transactions /></Layout> }
+        }
+        Route::Recurring => {
+            log::trace!("Rendering Recurring page");
+            html! { <Layout title="Recurring"><Recurring /></Layout> }
+        }
+        Route::Budgets => {
+            log::trace!("Rendering Budgets page");
+            html! { <Layout title="Budgets"><Budgets /></Layout> }
+        }
+        Route::Forecast => {
+            log::trace!("Rendering Forecast page");
+            html! { <Layout title="Forecast"><Forecast /></Layout> }
+        }
+        Route::Reports => {
+            log::trace!("Rendering Reports page");
+            html! { <Layout title="Reports"><Reports /></Layout> }
+        }
+        Route::Settings => {
+            log::trace!("Rendering Settings page");
+            html! { <Layout title="Settings"><Settings /></Layout> }
+        }
+        Route::About => {
+            log::trace!("Rendering About page");
+            html! { <Layout title="About"><div>{"About Page"}</div></Layout> }
+        }
+        Route::NotFound => {
+            log::warn!("404 - Route not found");
+            html! { <Layout title="404"><h1>{"404 Not Found"}</h1></Layout> }
+        }
     }
 }
 
@@ -71,6 +100,7 @@ fn accounts_page() -> Html {
     let on_refresh = {
         let refresh_trigger = refresh_trigger.clone();
         Callback::from(move |_| {
+            log::debug!("Accounts page refresh triggered");
             refresh_trigger.set(*refresh_trigger + 1);
         })
     };
@@ -102,7 +132,12 @@ pub fn run_app() {
     let settings = settings::get_settings();
     wasm_logger::init(wasm_logger::Config::new(settings.log_level));
 
-    log::info!("Application starting with settings: {:?}", settings);
+    log::info!("=== FinRust Frontend Application Starting ===");
+    log::info!("Application settings: {:?}", settings);
+    log::debug!("API base URL: {}", settings.api_base_url());
+    log::debug!("Debug mode: {}", settings.debug_mode);
 
+    log::trace!("Initializing Yew renderer");
     yew::Renderer::<App>::new().render();
+    log::info!("Application initialized successfully");
 }

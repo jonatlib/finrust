@@ -2,6 +2,8 @@ use yew::prelude::*;
 
 #[function_component(Settings)]
 pub fn settings() -> Html {
+    log::trace!("Settings component rendering");
+
     html! {
         <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div class="card bg-base-100 shadow">
@@ -12,7 +14,15 @@ pub fn settings() -> Html {
                         <input type="text" id="api-url-input" placeholder="Empty = Demo Mode" class="input input-bordered w-full" />
                     </div>
                     <div class="card-actions justify-end mt-4">
-                        <button class="btn btn-primary">{"Save & Reload"}</button>
+                        <button
+                            class="btn btn-primary"
+                            onclick={Callback::from(|_| {
+                                log::info!("Save & Reload button clicked in Settings");
+                                log::warn!("Settings save functionality not yet implemented");
+                            })}
+                        >
+                            {"Save & Reload"}
+                        </button>
                     </div>
                 </div>
             </div>

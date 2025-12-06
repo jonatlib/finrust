@@ -52,40 +52,51 @@ impl Default for AppSettings {
 impl AppSettings {
     /// Create settings from environment/window location
     pub fn from_environment() -> Self {
+        log::trace!("Loading settings from environment");
         let mut settings = Self::default();
 
         // Detect if running in development mode
         if let Some(window) = window() {
             if let Ok(hostname) = window.location().hostname() {
+                log::debug!("Detected hostname: {}", hostname);
                 settings.debug_mode = hostname == "localhost" || hostname == "127.0.0.1";
 
                 // In development, use more verbose logging
                 if settings.debug_mode {
+                    log::debug!("Running in development mode, setting log level to Debug");
                     settings.log_level = Level::Debug;
                 }
 
                 // Try to read from localStorage for custom settings
                 if let Ok(Some(storage)) = window.local_storage() {
+                    log::trace!("Reading settings from localStorage");
+
                     // Read API host
                     if let Ok(Some(api_host)) = storage.get_item("finrust_api_host") {
+                        log::debug!("Loaded API host from storage: {}", api_host);
                         settings.api_host = api_host;
                     }
 
                     // Read API port
                     if let Ok(Some(api_port)) = storage.get_item("finrust_api_port") {
                         if let Ok(port_val) = api_port.parse::<u16>() {
+                            log::debug!("Loaded API port from storage: {}", port_val);
                             settings.api_port = port_val;
+                        } else {
+                            log::warn!("Failed to parse API port from storage: {}", api_port);
                         }
                     }
 
                     // Read API path
                     if let Ok(Some(api_path)) = storage.get_item("finrust_api_path") {
+                        log::debug!("Loaded API path from storage: {}", api_path);
                         settings.api_path = api_path;
                     }
 
                     // Read API HTTPS flag
                     if let Ok(Some(use_https)) = storage.get_item("finrust_api_use_https") {
                         settings.api_use_https = use_https.to_lowercase() == "true";
+                        log::debug!("Loaded API HTTPS flag from storage: {}", settings.api_use_https);
                     }
 
                     // Read log level
@@ -96,32 +107,51 @@ impl AppSettings {
                             "info" => Level::Info,
                             "debug" => Level::Debug,
                             "trace" => Level::Trace,
-                            _ => settings.log_level,
+                            _ => {
+                                log::warn!("Unknown log level in storage: {}, using default", log_level);
+                                settings.log_level
+                            }
                         };
+                        log::debug!("Loaded log level from storage: {:?}", settings.log_level);
                     }
 
                     // Read timeout
                     if let Ok(Some(timeout)) = storage.get_item("finrust_request_timeout_ms") {
                         if let Ok(timeout_val) = timeout.parse::<u32>() {
+                            log::debug!("Loaded request timeout from storage: {}ms", timeout_val);
                             settings.request_timeout_ms = timeout_val;
+                        } else {
+                            log::warn!("Failed to parse request timeout from storage: {}", timeout);
                         }
                     }
 
                     // Read retry attempts
                     if let Ok(Some(retries)) = storage.get_item("finrust_api_retry_attempts") {
                         if let Ok(retry_val) = retries.parse::<u32>() {
+                            log::debug!("Loaded retry attempts from storage: {}", retry_val);
                             settings.api_retry_attempts = retry_val;
+                        } else {
+                            log::warn!("Failed to parse retry attempts from storage: {}", retries);
                         }
                     }
+                } else {
+                    log::warn!("localStorage not available, using default settings");
                 }
+            } else {
+                log::error!("Failed to get hostname from window location");
             }
+        } else {
+            log::error!("Window object not available, using default settings");
         }
 
+        log::info!("Settings initialized: api={}:{}, debug_mode={}, log_level={:?}",
+                   settings.api_host, settings.api_port, settings.debug_mode, settings.log_level);
         settings
     }
 
     /// Save settings to localStorage
     pub fn save_to_storage(&self) -> Result<(), JsValue> {
+        log::debug!("Saving settings to localStorage");
         if let Some(window) = window() {
             if let Some(storage) = window.local_storage()? {
                 storage.set_item("finrust_api_host", &self.api_host)?;
@@ -131,7 +161,12 @@ impl AppSettings {
                 storage.set_item("finrust_log_level", &format!("{:?}", self.log_level).to_lowercase())?;
                 storage.set_item("finrust_request_timeout_ms", &self.request_timeout_ms.to_string())?;
                 storage.set_item("finrust_api_retry_attempts", &self.api_retry_attempts.to_string())?;
+                log::info!("Settings saved successfully to localStorage");
+            } else {
+                log::error!("localStorage not available, cannot save settings");
             }
+        } else {
+            log::error!("Window object not available, cannot save settings");
         }
         Ok(())
     }
@@ -165,15 +200,19 @@ pub fn update_settings<F>(f: F)
 where
     F: FnOnce(&mut AppSettings),
 {
+    log::trace!("Updating global settings");
     SETTINGS.with(|s| {
         let mut settings = s.borrow_mut();
         f(&mut settings);
     });
+    log::debug!("Global settings updated");
 }
 
 /// Initialize settings (call this at app startup)
 pub fn init_settings() {
+    log::trace!("Initializing global settings");
     SETTINGS.with(|s| {
         *s.borrow_mut() = AppSettings::from_environment();
     });
+    log::debug!("Global settings initialized successfully");
 }
