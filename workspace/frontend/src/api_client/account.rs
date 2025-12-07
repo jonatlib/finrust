@@ -49,6 +49,34 @@ pub struct AccountResponse {
     pub account_kind: AccountKind,
 }
 
+/// Account statistics response
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+pub struct AccountStatistics {
+    pub account_id: i32,
+    pub min_state: Option<String>,
+    pub max_state: Option<String>,
+    pub average_expense: Option<String>,
+    pub average_income: Option<String>,
+    pub upcoming_expenses: Option<String>,
+    pub end_of_period_state: Option<String>,
+}
+
+/// Statistics collection for an account
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+pub struct AccountStatisticsCollection {
+    pub period: TimePeriod,
+    pub statistics: Vec<AccountStatistics>,
+}
+
+/// Time period for statistics (matches backend enum exactly)
+/// Backend serializes this as externally tagged: {"Year": 2025} or {"Month": {"year": 2025, "month": 1}}
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+pub enum TimePeriod {
+    Year(i32),
+    Month { year: i32, month: u32 },
+    DateRange { start: String, end: String },
+}
+
 /// Request body for creating a new account
 #[derive(Debug, Serialize)]
 pub struct CreateAccountRequest {
@@ -90,6 +118,17 @@ pub async fn create_account(request: CreateAccountRequest) -> Result<AccountResp
     match &result {
         Ok(account) => log::info!("Successfully created account: {} (ID: {})", account.name, account.id),
         Err(e) => log::error!("Failed to create account '{}': {}", request.name, e),
+    }
+    result
+}
+
+/// Get statistics for a specific account
+pub async fn get_account_statistics(account_id: i32) -> Result<AccountStatisticsCollection, String> {
+    log::trace!("Fetching statistics for account ID: {}", account_id);
+    let result = api_client::get::<AccountStatisticsCollection>(&format!("/accounts/{}/statistics", account_id)).await;
+    match &result {
+        Ok(_) => log::info!("Fetched statistics for account ID: {}", account_id),
+        Err(e) => log::error!("Failed to fetch statistics for account {}: {}", account_id, e),
     }
     result
 }
