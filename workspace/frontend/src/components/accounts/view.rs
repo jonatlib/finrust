@@ -3,12 +3,14 @@ use crate::api_client::account::{get_accounts, AccountResponse, AccountKind};
 use crate::common::fetch_hook::use_fetch_with_refetch;
 use crate::hooks::FetchState;
 use super::account_card::AccountCard;
+use super::account_modal::AccountModal;
 use std::collections::BTreeMap;
 
 #[function_component(Accounts)]
 pub fn accounts() -> Html {
     log::trace!("Accounts component rendering");
     let (fetch_state, refetch) = use_fetch_with_refetch(get_accounts);
+    let show_modal = use_state(|| false);
 
     log::debug!("Accounts component state: loading={}, success={}, error={}",
         fetch_state.is_loading(), fetch_state.is_success(), fetch_state.is_error());
@@ -27,15 +29,43 @@ pub fn accounts() -> Html {
         _ => None,
     };
 
+    let on_open_modal = {
+        let show_modal = show_modal.clone();
+        Callback::from(move |_| {
+            log::info!("Opening Add Account modal");
+            show_modal.set(true);
+        })
+    };
+
+    let on_close_modal = {
+        let show_modal = show_modal.clone();
+        Callback::from(move |_| {
+            log::info!("Closing Add Account modal");
+            show_modal.set(false);
+        })
+    };
+
+    let on_success = {
+        let refetch = refetch.clone();
+        Callback::from(move |_| {
+            log::info!("Account created successfully, refetching accounts");
+            refetch.emit(());
+        })
+    };
+
     html! {
         <>
+            <AccountModal
+                show={*show_modal}
+                on_close={on_close_modal}
+                on_success={on_success}
+            />
+
             <div class="flex justify-between items-center mb-4">
                 <h2 class="text-2xl font-bold">{"Accounts"}</h2>
                 <button
                     class="btn btn-primary btn-sm"
-                    onclick={Callback::from(|_| {
-                        log::info!("Add Account button clicked");
-                    })}
+                    onclick={on_open_modal}
                 >
                     <i class="fas fa-plus"></i> {" Add Account"}
                 </button>
