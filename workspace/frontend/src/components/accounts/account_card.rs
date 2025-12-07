@@ -1,7 +1,9 @@
 use yew::prelude::*;
+use yew_router::prelude::*;
 use crate::api_client::account::{AccountResponse, get_account_statistics};
 use crate::common::fetch_hook::use_fetch_with_refetch;
 use crate::hooks::FetchState;
+use crate::Route;
 
 #[derive(Properties, PartialEq)]
 pub struct Props {
@@ -12,6 +14,7 @@ pub struct Props {
 pub fn account_card(props: &Props) -> Html {
     let account = &props.account;
     let account_id = account.id;
+    let navigator = use_navigator().unwrap();
 
     // Fetch statistics for this account
     let (stats_state, _refetch) = use_fetch_with_refetch(move || get_account_statistics(account_id));
@@ -40,8 +43,19 @@ pub fn account_card(props: &Props) -> Html {
         _ => None,
     };
 
+    let on_card_click = {
+        let navigator = navigator.clone();
+        Callback::from(move |_| {
+            log::info!("Navigating to account detail page for ID: {}", account_id);
+            navigator.push(&Route::AccountEdit { id: account_id });
+        })
+    };
+
     html! {
-        <div class="card bg-base-100 shadow hover:shadow-md transition-shadow cursor-pointer">
+        <div
+            class="card bg-base-100 shadow hover:shadow-lg transition-shadow cursor-pointer"
+            onclick={on_card_click}
+        >
             <div class="card-body">
                 <div class="flex justify-between items-start">
                     <div>
@@ -155,10 +169,6 @@ pub fn account_card(props: &Props) -> Html {
                 } else {
                     html! {}
                 }}
-                <div class="card-actions justify-end mt-4">
-                   <button class="btn btn-sm btn-ghost">{"Edit"}</button>
-                   <button class="btn btn-sm btn-ghost">{"View"}</button>
-                </div>
             </div>
         </div>
     }

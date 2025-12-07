@@ -9,7 +9,7 @@ pub mod common;
 pub mod settings;
 
 use common::toast::ToastProvider;
-use components::accounts::Accounts;
+use components::accounts::{Accounts, AccountEdit};
 use components::budgets::Budgets;
 use components::dashboard::Dashboard;
 use components::forecast::Forecast;
@@ -27,6 +27,8 @@ pub enum Route {
     Dashboard,
     #[at("/accounts")]
     Accounts,
+    #[at("/accounts/:id")]
+    AccountEdit { id: i32 },
     #[at("/transactions")]
     Transactions,
     #[at("/recurring")]
@@ -57,6 +59,10 @@ fn switch(routes: Route) -> Html {
             log::trace!("Rendering Accounts page");
             // For Accounts page, we need to create a wrapper that provides refresh functionality
             html! { <AccountsPage /> }
+        }
+        Route::AccountEdit { id } => {
+            log::trace!("Rendering Account Edit page for ID: {}", id);
+            html! { <Layout title="Edit Account"><AccountEdit account_id={id} /></Layout> }
         }
         Route::Transactions => {
             log::trace!("Rendering Transactions page");

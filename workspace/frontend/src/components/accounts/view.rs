@@ -59,6 +59,7 @@ pub fn accounts() -> Html {
                 show={*show_modal}
                 on_close={on_close_modal}
                 on_success={on_success}
+                account={None}
             />
 
             <div class="flex justify-between items-center mb-4">

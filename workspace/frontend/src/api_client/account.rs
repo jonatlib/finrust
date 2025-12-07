@@ -89,6 +89,17 @@ pub struct CreateAccountRequest {
     pub account_kind: Option<AccountKind>,
 }
 
+/// Request body for updating an account
+#[derive(Debug, Serialize)]
+pub struct UpdateAccountRequest {
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub currency_code: Option<String>,
+    pub include_in_statistics: Option<bool>,
+    pub ledger_name: Option<String>,
+    pub account_kind: Option<AccountKind>,
+}
+
 /// Get all accounts
 pub async fn get_accounts() -> Result<Vec<AccountResponse>, String> {
     log::trace!("Fetching all accounts");
@@ -129,6 +140,28 @@ pub async fn get_account_statistics(account_id: i32) -> Result<AccountStatistics
     match &result {
         Ok(_) => log::info!("Fetched statistics for account ID: {}", account_id),
         Err(e) => log::error!("Failed to fetch statistics for account {}: {}", account_id, e),
+    }
+    result
+}
+
+/// Update an existing account
+pub async fn update_account(account_id: i32, request: UpdateAccountRequest) -> Result<AccountResponse, String> {
+    log::debug!("Updating account ID: {}", account_id);
+    let result = api_client::put::<AccountResponse, _>(&format!("/accounts/{}", account_id), &request).await;
+    match &result {
+        Ok(account) => log::info!("Successfully updated account: {} (ID: {})", account.name, account.id),
+        Err(e) => log::error!("Failed to update account {}: {}", account_id, e),
+    }
+    result
+}
+
+/// Delete an account
+pub async fn delete_account(account_id: i32) -> Result<String, String> {
+    log::debug!("Deleting account ID: {}", account_id);
+    let result = api_client::delete::<String>(&format!("/accounts/{}", account_id)).await;
+    match &result {
+        Ok(_) => log::info!("Successfully deleted account ID: {}", account_id),
+        Err(e) => log::error!("Failed to delete account {}: {}", account_id, e),
     }
     result
 }

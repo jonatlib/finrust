@@ -1,12 +1,13 @@
 use yew::prelude::*;
-use web_sys::HtmlInputElement;
-use crate::api_client::account::{AccountKind, CreateAccountRequest, create_account};
+use crate::api_client::account::{AccountKind, AccountResponse, CreateAccountRequest, UpdateAccountRequest, create_account, update_account};
 
 #[derive(Properties, PartialEq)]
 pub struct AccountModalProps {
     pub show: bool,
     pub on_close: Callback<()>,
     pub on_success: Callback<()>,
+    /// If provided, the modal is in edit mode with this account
+    pub account: Option<AccountResponse>,
 }
 
 #[function_component(AccountModal)]
@@ -15,12 +16,17 @@ pub fn account_modal(props: &AccountModalProps) -> Html {
     let is_submitting = use_state(|| false);
     let error_message = use_state(|| None::<String>);
 
+    let is_edit_mode = props.account.is_some();
+    let title = if is_edit_mode { "Edit Account" } else { "Add Account" };
+
     let on_submit = {
         let on_close = props.on_close.clone();
         let on_success = props.on_success.clone();
         let form_ref = form_ref.clone();
         let is_submitting = is_submitting.clone();
         let error_message = error_message.clone();
+        let account = props.account.clone();
+        let is_edit = account.is_some();
 
         Callback::from(move |e: SubmitEvent| {
             e.prevent_default();
@@ -49,16 +55,6 @@ pub fn account_modal(props: &AccountModalProps) -> Html {
                     _ => AccountKind::RealAccount,
                 };
 
-                let request = CreateAccountRequest {
-                    name: name.clone(),
-                    description: if description.as_ref().map(|d| d.is_empty()).unwrap_or(true) { None } else { description },
-                    currency_code,
-                    owner_id: 1, // TODO: Get from user context
-                    include_in_statistics: Some(include_in_statistics),
-                    ledger_name: if ledger_name.as_ref().map(|l| l.is_empty()).unwrap_or(true) { None } else { ledger_name },
-                    account_kind: Some(account_kind),
-                };
-
                 let is_submitting = is_submitting.clone();
                 let error_message = error_message.clone();
                 let on_close = on_close.clone();
@@ -67,22 +63,64 @@ pub fn account_modal(props: &AccountModalProps) -> Html {
                 is_submitting.set(true);
                 error_message.set(None);
 
-                wasm_bindgen_futures::spawn_local(async move {
-                    log::info!("Creating account: {}", name);
-                    match create_account(request).await {
-                        Ok(account) => {
-                            log::info!("Account created successfully: {} (ID: {})", account.name, account.id);
-                            is_submitting.set(false);
-                            on_success.emit(());
-                            on_close.emit(());
+                if is_edit {
+                    // Edit mode - update account
+                    let existing_account = account.clone().unwrap();
+                    let account_id = existing_account.id;
+                    let request = UpdateAccountRequest {
+                        name: Some(name.clone()),
+                        description: if description.as_ref().map(|d| d.is_empty()).unwrap_or(true) { Some(String::new()) } else { description },
+                        currency_code: Some(currency_code),
+                        include_in_statistics: Some(include_in_statistics),
+                        ledger_name: if ledger_name.as_ref().map(|l| l.is_empty()).unwrap_or(true) { Some(String::new()) } else { ledger_name },
+                        account_kind: Some(account_kind),
+                    };
+
+                    wasm_bindgen_futures::spawn_local(async move {
+                        log::info!("Updating account ID {}: {}", account_id, name);
+                        match update_account(account_id, request).await {
+                            Ok(account) => {
+                                log::info!("Account updated successfully: {} (ID: {})", account.name, account.id);
+                                is_submitting.set(false);
+                                on_success.emit(());
+                                on_close.emit(());
+                            }
+                            Err(e) => {
+                                log::error!("Failed to update account: {}", e);
+                                error_message.set(Some(format!("Failed to update account: {}", e)));
+                                is_submitting.set(false);
+                            }
                         }
-                        Err(e) => {
-                            log::error!("Failed to create account: {}", e);
-                            error_message.set(Some(format!("Failed to create account: {}", e)));
-                            is_submitting.set(false);
+                    });
+                } else {
+                    // Create mode - create new account
+                    let request = CreateAccountRequest {
+                        name: name.clone(),
+                        description: if description.as_ref().map(|d| d.is_empty()).unwrap_or(true) { None } else { description },
+                        currency_code,
+                        owner_id: 1, // TODO: Get from user context
+                        include_in_statistics: Some(include_in_statistics),
+                        ledger_name: if ledger_name.as_ref().map(|l| l.is_empty()).unwrap_or(true) { None } else { ledger_name },
+                        account_kind: Some(account_kind),
+                    };
+
+                    wasm_bindgen_futures::spawn_local(async move {
+                        log::info!("Creating account: {}", name);
+                        match create_account(request).await {
+                            Ok(account) => {
+                                log::info!("Account created successfully: {} (ID: {})", account.name, account.id);
+                                is_submitting.set(false);
+                                on_success.emit(());
+                                on_close.emit(());
+                            }
+                            Err(e) => {
+                                log::error!("Failed to create account: {}", e);
+                                error_message.set(Some(format!("Failed to create account: {}", e)));
+                                is_submitting.set(false);
+                            }
                         }
-                    }
-                });
+                    });
+                }
             }
         })
     };
@@ -97,10 +135,18 @@ pub fn account_modal(props: &AccountModalProps) -> Html {
         })
     };
 
+    // Get default values from account if in edit mode
+    let default_name = props.account.as_ref().map(|a| a.name.clone()).unwrap_or_default();
+    let default_description = props.account.as_ref().and_then(|a| a.description.clone()).unwrap_or_default();
+    let default_currency = props.account.as_ref().map(|a| a.currency_code.clone()).unwrap_or_else(|| "CZK".to_string());
+    let default_ledger = props.account.as_ref().and_then(|a| a.ledger_name.clone()).unwrap_or_default();
+    let default_include_stats = props.account.as_ref().map(|a| a.include_in_statistics).unwrap_or(true);
+    let default_kind = props.account.as_ref().map(|a| a.account_kind).unwrap_or(AccountKind::RealAccount);
+
     html! {
         <dialog class={classes!("modal", props.show.then_some("modal-open"))} id="account_modal">
             <div class="modal-box w-11/12 max-w-2xl">
-                <h3 class="font-bold text-lg">{"Add Account"}</h3>
+                <h3 class="font-bold text-lg">{title}</h3>
 
                 {if let Some(error) = (*error_message).as_ref() {
                     html! {
@@ -120,6 +166,7 @@ pub fn account_modal(props: &AccountModalProps) -> Html {
                             name="name"
                             class="input input-bordered w-full"
                             placeholder="e.g. Main Checking Account"
+                            value={default_name}
                             required={true}
                             disabled={*is_submitting}
                         />
@@ -131,6 +178,7 @@ pub fn account_modal(props: &AccountModalProps) -> Html {
                             name="description"
                             class="textarea textarea-bordered w-full"
                             placeholder="Additional details about this account"
+                            value={default_description}
                             disabled={*is_submitting}
                         />
                     </div>
@@ -143,7 +191,7 @@ pub fn account_modal(props: &AccountModalProps) -> Html {
                                 name="currency_code"
                                 class="input input-bordered w-full"
                                 placeholder="CZK"
-                                value="CZK"
+                                value={default_currency}
                                 required={true}
                                 disabled={*is_submitting}
                             />
@@ -151,11 +199,11 @@ pub fn account_modal(props: &AccountModalProps) -> Html {
                         <div class="form-control">
                             <label class="label"><span class="label-text">{"Account Type"}</span></label>
                             <select name="account_kind" class="select select-bordered w-full" disabled={*is_submitting}>
-                                <option value="RealAccount">{"Real Account"}</option>
-                                <option value="Savings">{"Savings"}</option>
-                                <option value="Investment">{"Investment"}</option>
-                                <option value="Debt">{"Debt"}</option>
-                                <option value="Other">{"Other"}</option>
+                                <option value="RealAccount" selected={default_kind == AccountKind::RealAccount}>{"Real Account"}</option>
+                                <option value="Savings" selected={default_kind == AccountKind::Savings}>{"Savings"}</option>
+                                <option value="Investment" selected={default_kind == AccountKind::Investment}>{"Investment"}</option>
+                                <option value="Debt" selected={default_kind == AccountKind::Debt}>{"Debt"}</option>
+                                <option value="Other" selected={default_kind == AccountKind::Other}>{"Other"}</option>
                             </select>
                         </div>
                     </div>
@@ -167,6 +215,7 @@ pub fn account_modal(props: &AccountModalProps) -> Html {
                             name="ledger_name"
                             class="input input-bordered w-full"
                             placeholder="e.g. Assets:Checking"
+                            value={default_ledger}
                             disabled={*is_submitting}
                         />
                     </div>
@@ -177,7 +226,7 @@ pub fn account_modal(props: &AccountModalProps) -> Html {
                                 type="checkbox"
                                 name="include_in_statistics"
                                 class="checkbox checkbox-primary"
-                                checked={true}
+                                checked={default_include_stats}
                                 disabled={*is_submitting}
                             />
                             <span class="label-text">{"Include in Statistics"}</span>
@@ -199,9 +248,17 @@ pub fn account_modal(props: &AccountModalProps) -> Html {
                             disabled={*is_submitting}
                         >
                             {if *is_submitting {
-                                html! { <><span class="loading loading-spinner loading-sm"></span>{" Creating..."}</> }
+                                if is_edit_mode {
+                                    html! { <><span class="loading loading-spinner loading-sm"></span>{" Updating..."}</> }
+                                } else {
+                                    html! { <><span class="loading loading-spinner loading-sm"></span>{" Creating..."}</> }
+                                }
                             } else {
-                                html! { "Create Account" }
+                                if is_edit_mode {
+                                    html! { "Update Account" }
+                                } else {
+                                    html! { "Create Account" }
+                                }
                             }}
                         </button>
                     </div>
