@@ -1,6 +1,22 @@
 use super::{tag, user};
 use sea_orm::entity::prelude::*;
 
+/// The kind of account
+#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter, DeriveActiveEnum)]
+#[sea_orm(rs_type = "String", db_type = "String(StringLen::N(20))")]
+pub enum AccountKind {
+    #[sea_orm(string_value = "RealAccount")]
+    RealAccount,
+    #[sea_orm(string_value = "Savings")]
+    Savings,
+    #[sea_orm(string_value = "Investment")]
+    Investment,
+    #[sea_orm(string_value = "Debt")]
+    Debt,
+    #[sea_orm(string_value = "Other")]
+    Other,
+}
+
 /// Represents a financial account, like a bank account, credit card, or cash wallet.
 /// Corresponds to `MoneyAccountModel`.
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel)]
@@ -21,6 +37,8 @@ pub struct Model {
     pub include_in_statistics: bool,
     /// The name to use when exporting to Ledger CLI format.
     pub ledger_name: Option<String>,
+    /// The kind of account
+    pub account_kind: AccountKind,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

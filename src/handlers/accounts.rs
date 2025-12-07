@@ -10,6 +10,41 @@ use serde::{Deserialize, Serialize};
 use tracing::{instrument, error, warn, info, debug, trace};
 use utoipa::ToSchema;
 
+/// The kind of account
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, ToSchema)]
+#[serde(rename_all = "PascalCase")]
+pub enum AccountKind {
+    RealAccount,
+    Savings,
+    Investment,
+    Debt,
+    Other,
+}
+
+impl From<account::AccountKind> for AccountKind {
+    fn from(kind: account::AccountKind) -> Self {
+        match kind {
+            account::AccountKind::RealAccount => AccountKind::RealAccount,
+            account::AccountKind::Savings => AccountKind::Savings,
+            account::AccountKind::Investment => AccountKind::Investment,
+            account::AccountKind::Debt => AccountKind::Debt,
+            account::AccountKind::Other => AccountKind::Other,
+        }
+    }
+}
+
+impl From<AccountKind> for account::AccountKind {
+    fn from(kind: AccountKind) -> Self {
+        match kind {
+            AccountKind::RealAccount => account::AccountKind::RealAccount,
+            AccountKind::Savings => account::AccountKind::Savings,
+            AccountKind::Investment => account::AccountKind::Investment,
+            AccountKind::Debt => account::AccountKind::Debt,
+            AccountKind::Other => account::AccountKind::Other,
+        }
+    }
+}
+
 /// Request body for creating a new account
 #[derive(Debug, Deserialize, Serialize, ToSchema)]
 pub struct CreateAccountRequest {
@@ -25,6 +60,8 @@ pub struct CreateAccountRequest {
     pub include_in_statistics: Option<bool>,
     /// Ledger name for export
     pub ledger_name: Option<String>,
+    /// The kind of account (default: RealAccount)
+    pub account_kind: Option<AccountKind>,
 }
 
 /// Request body for updating an account
@@ -40,6 +77,8 @@ pub struct UpdateAccountRequest {
     pub include_in_statistics: Option<bool>,
     /// Ledger name for export
     pub ledger_name: Option<String>,
+    /// The kind of account
+    pub account_kind: Option<AccountKind>,
 }
 
 /// Account response model
@@ -52,6 +91,7 @@ pub struct AccountResponse {
     pub owner_id: i32,
     pub include_in_statistics: bool,
     pub ledger_name: Option<String>,
+    pub account_kind: AccountKind,
 }
 
 impl From<account::Model> for AccountResponse {
@@ -64,6 +104,7 @@ impl From<account::Model> for AccountResponse {
             owner_id: model.owner_id,
             include_in_statistics: model.include_in_statistics,
             ledger_name: model.ledger_name,
+            account_kind: model.account_kind.into(),
         }
     }
 }
@@ -122,6 +163,7 @@ pub async fn create_account(
         owner_id: Set(request.owner_id),
         include_in_statistics: Set(request.include_in_statistics.unwrap_or(true)),
         ledger_name: Set(request.ledger_name.clone()),
+        account_kind: Set(request.account_kind.unwrap_or(AccountKind::RealAccount).into()),
         ..Default::default()
     };
 
@@ -329,6 +371,11 @@ pub async fn update_account(
         debug!("Updating account ledger_name to: {:?}", ledger_name);
         account_active.ledger_name = Set(Some(ledger_name.clone()));
         updated_fields.push(format!("ledger_name: {:?}", ledger_name));
+    }
+    if let Some(account_kind) = request.account_kind {
+        debug!("Updating account account_kind to: {:?}", account_kind);
+        account_active.account_kind = Set(account_kind.into());
+        updated_fields.push(format!("account_kind: {:?}", account_kind));
     }
 
     if updated_fields.is_empty() {

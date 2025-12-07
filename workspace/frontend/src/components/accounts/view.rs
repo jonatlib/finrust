@@ -1,21 +1,31 @@
 use yew::prelude::*;
-use crate::api_client::account::{get_accounts, AccountResponse};
-use crate::common::fetch_render::FetchRenderList;
+use crate::api_client::account::{get_accounts, AccountResponse, AccountKind};
 use crate::common::fetch_hook::use_fetch_with_refetch;
+use crate::hooks::FetchState;
 use super::account_card::AccountCard;
+use std::collections::BTreeMap;
 
 #[function_component(Accounts)]
 pub fn accounts() -> Html {
     log::trace!("Accounts component rendering");
     let (fetch_state, refetch) = use_fetch_with_refetch(get_accounts);
 
-    let render_item = Callback::from(|account: AccountResponse| {
-        log::trace!("Rendering account card for: {}", account.name);
-        html! { <AccountCard account={account} /> }
-    });
-
     log::debug!("Accounts component state: loading={}, success={}, error={}",
         fetch_state.is_loading(), fetch_state.is_success(), fetch_state.is_error());
+
+    // Group accounts by kind
+    let grouped_accounts: Option<BTreeMap<AccountKind, Vec<AccountResponse>>> = match &*fetch_state {
+        FetchState::Success(accounts) => {
+            let mut groups: BTreeMap<AccountKind, Vec<AccountResponse>> = BTreeMap::new();
+            for account in accounts {
+                groups.entry(account.account_kind)
+                    .or_insert_with(Vec::new)
+                    .push(account.clone());
+            }
+            Some(groups)
+        },
+        _ => None,
+    };
 
     html! {
         <>
@@ -31,13 +41,61 @@ pub fn accounts() -> Html {
                 </button>
             </div>
 
-            <FetchRenderList<AccountResponse>
-                state={(*fetch_state).clone()}
-                render_item={render_item}
-                on_retry={Some(refetch)}
-                empty_message={"No accounts found. Create your first account to get started!".to_string()}
-                container_class={"grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4".to_string()}
-            />
+            {
+                match &*fetch_state {
+                    FetchState::Loading => html! {
+                        <div class="flex justify-center items-center py-8">
+                            <span class="loading loading-spinner loading-lg"></span>
+                        </div>
+                    },
+                    FetchState::Error(error) => html! {
+                        <div class="alert alert-error">
+                            <span>{error}</span>
+                            <button class="btn btn-sm" onclick={move |_| refetch.emit(())}>
+                                {"Retry"}
+                            </button>
+                        </div>
+                    },
+                    FetchState::Success(accounts) => {
+                        if accounts.is_empty() {
+                            html! {
+                                <div class="text-center py-8">
+                                    <p class="text-gray-500">{"No accounts found. Create your first account to get started!"}</p>
+                                </div>
+                            }
+                        } else if let Some(groups) = grouped_accounts {
+                            html! {
+                                <div class="space-y-6">
+                                    {
+                                        // Render groups in the specified order
+                                        [AccountKind::RealAccount, AccountKind::Savings, AccountKind::Investment, AccountKind::Debt, AccountKind::Other]
+                                            .iter()
+                                            .filter_map(|kind| {
+                                                groups.get(kind).map(|accounts| {
+                                                    html! {
+                                                        <div key={kind.display_name()}>
+                                                            <h3 class="text-xl font-semibold mb-3">{kind.display_name()}</h3>
+                                                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                                                { for accounts.iter().map(|account| {
+                                                                    log::trace!("Rendering account card for: {}", account.name);
+                                                                    html! { <AccountCard key={account.id} account={account.clone()} /> }
+                                                                })}
+                                                            </div>
+                                                        </div>
+                                                    }
+                                                })
+                                            })
+                                            .collect::<Html>()
+                                    }
+                                </div>
+                            }
+                        } else {
+                            html! { <></> }
+                        }
+                    },
+                    FetchState::NotStarted => html! { <></> },
+                }
+            }
         </>
     }
 }
