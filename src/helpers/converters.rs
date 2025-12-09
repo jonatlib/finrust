@@ -1,3 +1,4 @@
+use chrono::{Duration, NaiveDate};
 use common::{AccountStatePoint, AccountStateTimeseries};
 use polars::prelude::AnyValue;
 use std::str::FromStr;
@@ -12,10 +13,14 @@ pub fn convert_dataframe_to_timeseries(
         .map_err(|e| format!("Missing account_id column: {}", e))?;
     let date_col = df
         .column("date")
-        .map_err(|e| format!("Missing date column: {}", e))?;
+        .map_err(|e| format!("Missing date column: {}", e))?
+        .date()
+        .map_err(|e| format!("Column is not of type Date: {}", e))?;
     let balance_col = df
         .column("balance")
         .map_err(|e| format!("Missing balance column: {}", e))?;
+    // Create the epoch constant once to avoid re-creating it 1000s of times
+    let epoch = NaiveDate::from_ymd_opt(1970, 1, 1).unwrap();
 
     let mut data_points = Vec::new();
 
@@ -27,16 +32,15 @@ pub fn convert_dataframe_to_timeseries(
             .try_extract::<i32>()
             .map_err(|e| format!("Error extracting account_id as i32 at row {}: {}", i, e))?;
 
-        let date_ms = date_col
-            .get(i)
-            .map_err(|e| format!("Error getting date at row {}: {}", i, e))?
-            .try_extract::<i64>()
-            .map_err(|e| format!("Error extracting date as i64 at row {}: {}", i, e))?;
+        // Retrieve the integer value (days) directly from the typed array
+        let days_since_epoch = date_col
+            .get(i) // Returns Option<i32>
+            .ok_or_else(|| format!("Null date at row {}", i))?;
 
-        // Convert milliseconds timestamp to NaiveDate
-        let naive_date = chrono::DateTime::from_timestamp_millis(date_ms)
-            .ok_or_else(|| format!("Invalid timestamp at row {}: {}", i, date_ms))?
-            .date_naive();
+        // Perform the math: 1970-01-01 + X days
+        let naive_date = epoch
+            .checked_add_signed(Duration::days(days_since_epoch as i64))
+            .ok_or_else(|| format!("Date out of range at row {}", i))?;
 
         let balance_str = match balance_col
             .get(i)
