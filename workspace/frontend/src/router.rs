@@ -9,8 +9,9 @@ use crate::components::layout::layout::Layout;
 use crate::components::recurring::Recurring;
 use crate::components::reports::Reports;
 use crate::components::settings::Settings;
-use crate::components::transactions::Transactions;
 use crate::pages::accounts::AccountsPage;
+use crate::pages::transactions::TransactionsPage;
+use crate::pages::transaction_edit::TransactionEditPage;
 
 #[derive(Debug, Clone, Routable, PartialEq)]
 pub enum Route {
@@ -24,6 +25,8 @@ pub enum Route {
     AccountEdit { id: i32 },
     #[at("/transactions")]
     Transactions,
+    #[at("/transactions/:id")]
+    TransactionEdit { id: i32 },
     #[at("/recurring")]
     Recurring,
     #[at("/budgets")]
@@ -58,7 +61,11 @@ pub fn switch(routes: Route) -> Html {
         }
         Route::Transactions => {
             log::trace!("Rendering Transactions page");
-            html! { <Layout title="Transactions"><Transactions /></Layout> }
+            html! { <TransactionsPage /> }
+        }
+        Route::TransactionEdit { id } => {
+            log::trace!("Rendering Transaction Edit page for ID: {}", id);
+            html! { <TransactionEditPage transaction_id={id} /> }
         }
         Route::Recurring => {
             log::trace!("Rendering Recurring page");

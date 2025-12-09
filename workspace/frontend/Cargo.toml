@@ -34,6 +34,7 @@ stylist = { version = "0.13", features = ["yew"] }
 log = "0.4"
 wasm-logger = "0.2"
 chrono = "0.4"
+rust_decimal = "1.36"
 
 # Common workspace dependencies
 common = { path = "../common" }

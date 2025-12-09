@@ -1,4 +1,5 @@
 pub mod account;
+pub mod transaction;
 
 use gloo_net::http::Request;
 use serde::{Deserialize, Serialize};
