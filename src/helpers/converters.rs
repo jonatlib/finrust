@@ -27,13 +27,16 @@ pub fn convert_dataframe_to_timeseries(
             .try_extract::<i32>()
             .map_err(|e| format!("Error extracting account_id as i32 at row {}: {}", i, e))?;
 
-        let date = date_col
+        let date_ms = date_col
             .get(i)
             .map_err(|e| format!("Error getting date at row {}: {}", i, e))?
             .try_extract::<i64>()
             .map_err(|e| format!("Error extracting date as i64 at row {}: {}", i, e))?;
-        let naive_date = chrono::NaiveDate::from_num_days_from_ce_opt(date as i32)
-            .ok_or_else(|| format!("Invalid date value at row {}: {}", i, date))?;
+
+        // Convert milliseconds timestamp to NaiveDate
+        let naive_date = chrono::DateTime::from_timestamp_millis(date_ms)
+            .ok_or_else(|| format!("Invalid timestamp at row {}: {}", i, date_ms))?
+            .date_naive();
 
         let balance_str = match balance_col
             .get(i)

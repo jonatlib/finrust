@@ -114,18 +114,16 @@ fn forecast_plotly_chart(props: &ForecastPlotlyChartProps) -> Html {
                 .y_axis(plotly::layout::Axis::new().title(plotly::common::Title::with_text("Projected Balance")))
                 .height(400);
 
-            // Create plot
-            let mut plot = Plot::new();
-            plot.add_trace(trace);
-            plot.set_layout(layout);
+            // Serialize trace to JSON and parse as JS object
+            let trace_json = serde_json::to_string(&trace).unwrap();
+            let trace_js = js_sys::JSON::parse(&trace_json).unwrap();
 
-            // Convert to JS objects and call Plotly.newPlot
             let data_js = js_sys::Array::new();
-            data_js.push(&plot.to_js_object());
+            data_js.push(&trace_js);
 
-            let layout_obj = plot.to_js_object();
-            let layout_js = js_sys::Reflect::get(&layout_obj, &JsValue::from_str("layout"))
-                .unwrap_or(JsValue::NULL);
+            // Serialize layout to JSON and parse as JS object
+            let layout_json = serde_json::to_string(&layout).unwrap();
+            let layout_js = js_sys::JSON::parse(&layout_json).unwrap();
 
             newPlot(div_id, data_js.into(), layout_js);
         }
