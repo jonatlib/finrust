@@ -1,12 +1,15 @@
 use chrono::{Duration, NaiveDate};
 use common::{AccountStatePoint, AccountStateTimeseries};
-use polars::prelude::AnyValue;
+use polars::prelude::{AnyValue, SortMultipleOptions};
 use std::str::FromStr;
 
 /// Helper function to convert DataFrame to AccountStateTimeseries
 pub fn convert_dataframe_to_timeseries(
-    df: polars::prelude::DataFrame,
+    mut df: polars::prelude::DataFrame,
 ) -> Result<AccountStateTimeseries, String> {
+    df.sort_in_place(["account_id", "date"], SortMultipleOptions::default())
+        .map_err(|e| format!("Missing account_id column: {}", e))?;
+
     // Extract columns from DataFrame
     let account_id_col = df
         .column("account_id")
