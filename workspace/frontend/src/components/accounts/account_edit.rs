@@ -4,6 +4,8 @@ use crate::api_client::account::{get_account, delete_account};
 use crate::common::fetch_hook::use_fetch_with_refetch;
 use crate::hooks::FetchState;
 use super::account_modal::AccountModal;
+use super::{AccountStats, AccountChart, AccountForecast};
+use crate::components::manual_states::ManualStatesAccountView;
 use crate::Route;
 
 #[derive(Properties, PartialEq)]
@@ -239,6 +241,14 @@ pub fn account_edit(props: &Props) -> Html {
                                         </div>
                                     </div>
                                 </div>
+
+                                <AccountStats account_id={account_id} />
+
+                                <AccountChart account_id={account_id} />
+
+                                <AccountForecast account_id={account_id} />
+
+                                <ManualStatesAccountView account_id={account_id} />
                             </div>
                         </>
                     }

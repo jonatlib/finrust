@@ -12,6 +12,7 @@ use crate::components::settings::Settings;
 use crate::pages::accounts::AccountsPage;
 use crate::pages::transactions::TransactionsPage;
 use crate::pages::transaction_edit::TransactionEditPage;
+use crate::pages::manual_states::ManualStatesPage;
 
 #[derive(Debug, Clone, Routable, PartialEq)]
 pub enum Route {
@@ -27,6 +28,8 @@ pub enum Route {
     Transactions,
     #[at("/transactions/:id")]
     TransactionEdit { id: i32 },
+    #[at("/manual-states")]
+    ManualStates,
     #[at("/recurring")]
     Recurring,
     #[at("/budgets")]
@@ -66,6 +69,10 @@ pub fn switch(routes: Route) -> Html {
         Route::TransactionEdit { id } => {
             log::trace!("Rendering Transaction Edit page for ID: {}", id);
             html! { <TransactionEditPage transaction_id={id} /> }
+        }
+        Route::ManualStates => {
+            log::trace!("Rendering Manual Account States page");
+            html! { <ManualStatesPage /> }
         }
         Route::Recurring => {
             log::trace!("Rendering Recurring page");

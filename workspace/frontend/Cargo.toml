@@ -35,6 +35,7 @@ log = "0.4"
 wasm-logger = "0.2"
 chrono = "0.4"
 rust_decimal = "1.36"
+plotly = { version = "0.9", features = ["wasm"] }
 
 # Common workspace dependencies
 common = { path = "../common" }

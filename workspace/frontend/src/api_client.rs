@@ -1,5 +1,8 @@
 pub mod account;
 pub mod transaction;
+pub mod manual_account_state;
+pub mod statistics;
+pub mod timeseries;
 
 use gloo_net::http::Request;
 use serde::{Deserialize, Serialize};

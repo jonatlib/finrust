@@ -2,8 +2,8 @@ use crate::handlers::{
     accounts::{create_account, delete_account, get_account, get_accounts, update_account},
     health::health_check,
     manual_account_states::{
-        create_manual_account_state, delete_manual_account_state, get_manual_account_state,
-        get_manual_account_states, update_manual_account_state,
+        create_manual_account_state, delete_manual_account_state, get_all_manual_account_states,
+        get_manual_account_state, get_manual_account_states, update_manual_account_state,
     },
     recurring_income::{
         create_recurring_income, delete_recurring_income, get_recurring_income,
@@ -67,6 +67,7 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/accounts/:account_id", put(update_account))
         .route("/api/v1/accounts/:account_id", delete(delete_account))
         // Manual account states routes
+        .route("/api/v1/manual-account-states", get(get_all_manual_account_states))
         .route("/api/v1/accounts/:account_id/manual-states", post(create_manual_account_state))
         .route("/api/v1/accounts/:account_id/manual-states", get(get_manual_account_states))
         .route("/api/v1/accounts/:account_id/manual-states/:state_id", get(get_manual_account_state))

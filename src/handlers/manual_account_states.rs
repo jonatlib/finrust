@@ -130,6 +130,54 @@ pub async fn create_manual_account_state(
     }
 }
 
+/// Get all manual account states across all accounts
+#[utoipa::path(
+    get,
+    path = "/api/v1/manual-account-states",
+    tag = "manual-account-states",
+    responses(
+        (status = 200, description = "All manual account states retrieved successfully", body = ApiResponse<Vec<ManualAccountStateResponse>>),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    )
+)]
+#[instrument]
+pub async fn get_all_manual_account_states(
+    State(state): State<AppState>,
+) -> Result<Json<ApiResponse<Vec<ManualAccountStateResponse>>>, (StatusCode, Json<ErrorResponse>)> {
+    trace!("Entering get_all_manual_account_states function");
+    debug!("Retrieving all manual account states");
+
+    trace!("Querying all manual account states from database");
+    match manual_account_state::Entity::find()
+        .all(&state.db)
+        .await
+    {
+        Ok(manual_states) => {
+            debug!("Retrieved {} manual account states total", manual_states.len());
+            let response_data: Vec<ManualAccountStateResponse> = manual_states
+                .into_iter()
+                .map(ManualAccountStateResponse::from)
+                .collect();
+
+            let response = ApiResponse {
+                data: response_data,
+                message: "All manual account states retrieved successfully".to_string(),
+                success: true,
+            };
+            Ok(Json(response))
+        }
+        Err(db_error) => {
+            error!("Failed to retrieve manual account states: {}", db_error);
+            let error_response = ErrorResponse {
+                error: "Failed to retrieve manual account states".to_string(),
+                code: "DATABASE_ERROR".to_string(),
+                success: false,
+            };
+            Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)))
+        }
+    }
+}
+
 /// Get all manual account states for an account
 #[utoipa::path(
     get,

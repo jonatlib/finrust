@@ -20,6 +20,7 @@ pub fn sidebar() -> Html {
                 <li><Link<Route> to={Route::Dashboard} classes="nav-link"><i class="fas fa-home w-5"></i> {"Dashboard"}</Link<Route>></li>
                 <li><Link<Route> to={Route::Accounts} classes="nav-link"><i class="fas fa-university w-5"></i> {"Accounts"}</Link<Route>></li>
                 <li><Link<Route> to={Route::Transactions} classes="nav-link"><i class="fas fa-exchange-alt w-5"></i> {"Transactions"}</Link<Route>></li>
+                <li><Link<Route> to={Route::ManualStates} classes="nav-link"><i class="fas fa-balance-scale w-5"></i> {"Account Balances"}</Link<Route>></li>
                 <li><Link<Route> to={Route::Recurring} classes="nav-link"><i class="fas fa-calendar-check w-5"></i> {"Recurring"}</Link<Route>></li>
                 <li><Link<Route> to={Route::Budgets} classes="nav-link"><i class="fas fa-chart-pie w-5"></i> {"Budgets"}</Link<Route>></li>
                 <li><Link<Route> to={Route::Forecast} classes="nav-link"><i class="fas fa-chart-area w-5"></i> {"Forecast"}</Link<Route>></li>
