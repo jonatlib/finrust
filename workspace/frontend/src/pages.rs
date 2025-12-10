@@ -3,3 +3,4 @@ pub mod transactions;
 pub mod transaction_edit;
 pub mod manual_states;
 pub mod recurring;
+pub mod instances;

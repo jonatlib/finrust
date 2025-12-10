@@ -96,6 +96,11 @@ pub struct RecurringTransactionResponse {
 pub struct RecurringInstanceResponse {
     pub id: i32,
     pub recurring_transaction_id: i32,
+    pub recurring_transaction_name: Option<String>,
+    pub target_account_id: Option<i32>,
+    pub target_account_name: Option<String>,
+    pub source_account_id: Option<i32>,
+    pub source_account_name: Option<String>,
     pub status: String,
     pub due_date: String,
     pub expected_amount: String,
@@ -259,6 +264,101 @@ pub async fn create_recurring_instance(
     match &result {
         Ok(instance) => log::info!("Successfully created instance with ID: {}", instance.id),
         Err(e) => log::error!("Failed to create instance for recurring transaction {}: {}", recurring_transaction_id, e),
+    }
+    result
+}
+/// Get all recurring transaction instances
+pub async fn get_recurring_instances(
+    page: Option<u64>,
+    limit: Option<u64>,
+    recurring_transaction_id: Option<i32>,
+    status: Option<String>,
+) -> Result<Vec<RecurringInstanceResponse>, String> {
+    log::trace!("Fetching recurring instances");
+
+    let mut query_params = Vec::new();
+    if let Some(p) = page {
+        query_params.push(format!("page={}", p));
+    }
+    if let Some(l) = limit {
+        query_params.push(format!("limit={}", l));
+    }
+    if let Some(rt_id) = recurring_transaction_id {
+        query_params.push(format!("recurring_transaction_id={}", rt_id));
+    }
+    if let Some(s) = status {
+        query_params.push(format!("status={}", s));
+    }
+
+    let query_string = if query_params.is_empty() {
+        String::new()
+    } else {
+        format!("?{}", query_params.join("&"))
+    };
+
+    let result = api_client::get::<Vec<RecurringInstanceResponse>>(
+        &format!("/recurring-instances{}", query_string)
+    ).await;
+
+    match &result {
+        Ok(instances) => log::info!("Fetched {} recurring instances", instances.len()),
+        Err(e) => log::error!("Failed to fetch recurring instances: {}", e),
+    }
+    result
+}
+
+/// Get a specific recurring transaction instance by ID
+pub async fn get_recurring_instance(id: i32) -> Result<RecurringInstanceResponse, String> {
+    log::trace!("Fetching recurring instance with ID: {}", id);
+    let result = api_client::get::<RecurringInstanceResponse>(
+        &format!("/recurring-instances/{}", id)
+    ).await;
+
+    match &result {
+        Ok(instance) => log::info!("Fetched recurring instance with ID: {}", instance.id),
+        Err(e) => log::error!("Failed to fetch recurring instance {}: {}", id, e),
+    }
+    result
+}
+
+/// Request body for updating a recurring transaction instance
+#[derive(Debug, Serialize)]
+pub struct UpdateRecurringInstanceRequest {
+    pub status: Option<String>,
+    pub due_date: Option<String>,
+    pub expected_amount: Option<String>,
+    pub paid_date: Option<String>,
+    pub paid_amount: Option<String>,
+}
+
+/// Update an existing recurring transaction instance
+pub async fn update_recurring_instance(
+    id: i32,
+    request: UpdateRecurringInstanceRequest
+) -> Result<RecurringInstanceResponse, String> {
+    log::debug!("Updating recurring instance ID: {}", id);
+    let result = api_client::put::<RecurringInstanceResponse, _>(
+        &format!("/recurring-instances/{}", id),
+        &request
+    ).await;
+
+    match &result {
+        Ok(instance) => log::info!("Successfully updated recurring instance with ID: {}", instance.id),
+        Err(e) => log::error!("Failed to update recurring instance {}: {}", id, e),
+    }
+    result
+}
+
+/// Delete a recurring transaction instance
+pub async fn delete_recurring_instance(id: i32) -> Result<String, String> {
+    log::debug!("Deleting recurring instance ID: {}", id);
+    let result = api_client::delete::<String>(
+        &format!("/recurring-instances/{}", id)
+    ).await;
+
+    match &result {
+        Ok(_) => log::info!("Successfully deleted recurring instance ID: {}", id),
+        Err(e) => log::error!("Failed to delete recurring instance {}: {}", id, e),
     }
     result
 }

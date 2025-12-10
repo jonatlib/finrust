@@ -164,6 +164,11 @@ pub struct CreateRecurringInstanceRequest {
 pub struct RecurringInstanceResponse {
     pub id: i32,
     pub recurring_transaction_id: i32,
+    pub recurring_transaction_name: Option<String>,
+    pub target_account_id: Option<i32>,
+    pub target_account_name: Option<String>,
+    pub source_account_id: Option<i32>,
+    pub source_account_name: Option<String>,
     pub status: String,
     pub due_date: NaiveDate,
     pub expected_amount: Decimal,
@@ -178,6 +183,11 @@ impl From<recurring_transaction_instance::Model> for RecurringInstanceResponse {
         Self {
             id: model.id,
             recurring_transaction_id: model.recurring_transaction_id,
+            recurring_transaction_name: None,
+            target_account_id: None,
+            target_account_name: None,
+            source_account_id: None,
+            source_account_name: None,
             status: format!("{:?}", model.status),
             due_date: model.due_date,
             expected_amount: model.expected_amount,
@@ -195,21 +205,39 @@ impl RecurringInstanceResponse {
         model: recurring_transaction_instance::Model,
         db: &sea_orm::DatabaseConnection,
     ) -> Result<Self, sea_orm::DbErr> {
+        use sea_orm::EntityTrait;
+        use model::entities::account;
+
         // Fetch the parent recurring transaction to get its tags
         let parent_transaction = recurring_transaction::Entity::find_by_id(model.recurring_transaction_id)
             .one(db)
             .await?;
-        
-        let tag_infos = if let Some(parent) = parent_transaction {
+
+        let mut response = Self::from(model);
+
+        if let Some(parent) = parent_transaction {
+            // Get transaction name
+            response.recurring_transaction_name = Some(parent.name.clone());
+            response.target_account_id = Some(parent.target_account_id);
+            response.source_account_id = parent.source_account_id;
+
+            // Fetch target account name
+            if let Ok(Some(target_account)) = account::Entity::find_by_id(parent.target_account_id).one(db).await {
+                response.target_account_name = Some(target_account.name);
+            }
+
+            // Fetch source account name if present
+            if let Some(source_id) = parent.source_account_id {
+                if let Ok(Some(source_account)) = account::Entity::find_by_id(source_id).one(db).await {
+                    response.source_account_name = Some(source_account.name);
+                }
+            }
+
             // Use the get_tag_for_transaction method from the TransactionGenerator trait
             let tags = parent.get_tag_for_transaction(db, true).await;
-            tags.into_iter().map(TagInfo::from).collect()
-        } else {
-            Vec::new()
-        };
-        
-        let mut response = Self::from(model);
-        response.tags = tag_infos;
+            response.tags = tags.into_iter().map(TagInfo::from).collect();
+        }
+
         Ok(response)
     }
 }

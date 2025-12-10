@@ -3,6 +3,7 @@ pub mod dashboard;
 pub mod accounts;
 pub mod transactions;
 pub mod recurring;
+pub mod instances;
 pub mod budgets;
 pub mod forecast;
 pub mod reports;

@@ -20,6 +20,8 @@ use crate::handlers::{
         get_transactions, update_transaction, create_recurring_instance,
         create_recurring_transaction, get_recurring_transactions, get_recurring_transaction,
         update_recurring_transaction, delete_recurring_transaction,
+        get_recurring_instances, get_recurring_instance,
+        update_recurring_instance, delete_recurring_instance,
         create_imported_transaction, get_imported_transactions, get_account_imported_transactions,
         get_imported_transaction, update_imported_transaction, delete_imported_transaction,
         reconcile_imported_transaction, clear_imported_transaction_reconciliation,
@@ -103,6 +105,11 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/recurring-transactions/:recurring_transaction_id", put(update_recurring_transaction))
         .route("/api/v1/recurring-transactions/:recurring_transaction_id", delete(delete_recurring_transaction))
         .route("/api/v1/recurring-transactions/:recurring_transaction_id/instances", post(create_recurring_instance))
+        // Recurring instance routes
+        .route("/api/v1/recurring-instances", get(get_recurring_instances))
+        .route("/api/v1/recurring-instances/:instance_id", get(get_recurring_instance))
+        .route("/api/v1/recurring-instances/:instance_id", put(update_recurring_instance))
+        .route("/api/v1/recurring-instances/:instance_id", delete(delete_recurring_instance))
         // Imported transaction routes
         .route("/api/v1/imported-transactions", post(create_imported_transaction))
         .route("/api/v1/imported-transactions", get(get_imported_transactions))

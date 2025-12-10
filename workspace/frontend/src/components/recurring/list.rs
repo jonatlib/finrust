@@ -10,6 +10,8 @@ pub struct RecurringListProps {
     #[prop_or_default]
     pub on_create_instance: Option<Callback<i32>>,
     #[prop_or_default]
+    pub on_quick_create_instance: Option<Callback<i32>>,
+    #[prop_or_default]
     pub account_id: Option<i32>,
 }
 
@@ -74,6 +76,17 @@ pub fn recurring_list(props: &RecurringListProps) -> Html {
                                         })
                                     };
 
+                                    let on_quick_create_click = {
+                                        let on_quick = props.on_quick_create_instance.clone();
+                                        let id = t.id;
+                                        Callback::from(move |e: MouseEvent| {
+                                            e.prevent_default();
+                                            if let Some(callback) = &on_quick {
+                                                callback.emit(id);
+                                            }
+                                        })
+                                    };
+
                                     html! {
                                         <tr>
                                             <td class="font-bold">
@@ -111,10 +124,17 @@ pub fn recurring_list(props: &RecurringListProps) -> Html {
                                                         <i class="fas fa-edit"></i>
                                                     </button>
                                                     <button
+                                                        class="btn btn-sm btn-primary btn-square"
+                                                        title="Quick Create Instance (today, default amount)"
+                                                        onclick={on_quick_create_click}
+                                                    >
+                                                        <i class="fas fa-plus"></i>
+                                                    </button>
+                                                    <button
                                                         class="btn btn-sm btn-success btn-outline gap-2"
                                                         onclick={on_create_instance_click}
                                                     >
-                                                        <i class="fas fa-check"></i> {"Create Instance"}
+                                                        <i class="fas fa-calendar-plus"></i> {"Custom Instance"}
                                                     </button>
                                                 </div>
                                             </td>
