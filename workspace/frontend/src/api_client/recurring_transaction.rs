@@ -375,6 +375,10 @@ pub struct MissingInstanceInfo {
     pub recurring_transaction_name: String,
     pub due_date: String,
     pub expected_amount: String,
+    /// If true, instance exists but is in Pending status
+    pub is_pending: bool,
+    /// If the instance exists (pending), this is its ID
+    pub instance_id: Option<i32>,
 }
 
 /// Get missing instances for recurring transactions
@@ -409,6 +413,48 @@ pub async fn get_missing_instances(
     match &result {
         Ok(instances) => log::debug!("Successfully fetched {} missing instances", instances.len()),
         Err(e) => log::error!("Failed to fetch missing instances: {}", e),
+    }
+    result
+}
+
+/// Bulk instance item for creation
+#[derive(Debug, Serialize)]
+pub struct BulkInstanceItem {
+    pub recurring_transaction_id: i32,
+    pub due_date: String,
+    pub expected_amount: String,
+    pub instance_id: Option<i32>,
+}
+
+/// Request body for bulk creating instances
+#[derive(Debug, Serialize)]
+pub struct BulkCreateInstancesRequest {
+    pub instances: Vec<BulkInstanceItem>,
+    pub mark_as_paid: bool,
+}
+
+/// Response for bulk creating instances
+#[derive(Debug, Deserialize)]
+pub struct BulkCreateInstancesResponse {
+    pub created: i32,
+    pub updated: i32,
+    pub skipped: i32,
+}
+
+/// Bulk create recurring transaction instances
+pub async fn bulk_create_instances(
+    request: BulkCreateInstancesRequest
+) -> Result<BulkCreateInstancesResponse, String> {
+    log::debug!("Bulk creating {} instances (mark_as_paid: {})", request.instances.len(), request.mark_as_paid);
+    let result = api_client::post::<BulkCreateInstancesResponse, _>(
+        "/recurring-transactions/bulk-create-instances",
+        &request
+    ).await;
+
+    match &result {
+        Ok(response) => log::info!("Bulk create completed: {} created, {} updated, {} skipped",
+            response.created, response.updated, response.skipped),
+        Err(e) => log::error!("Failed to bulk create instances: {}", e),
     }
     result
 }

@@ -1,7 +1,10 @@
 use yew::prelude::*;
 use yew_router::prelude::*;
 use std::collections::HashSet;
-use crate::api_client::recurring_transaction::{MissingInstanceInfo, get_missing_instances, create_recurring_instance, CreateRecurringInstanceRequest};
+use crate::api_client::recurring_transaction::{
+    MissingInstanceInfo, get_missing_instances, bulk_create_instances,
+    BulkCreateInstancesRequest, BulkInstanceItem
+};
 use crate::common::fetch_hook::use_fetch_with_refetch;
 use crate::common::toast::ToastContext;
 use crate::hooks::FetchState;
@@ -66,51 +69,53 @@ pub fn missing_instances(props: &MissingInstancesProps) -> Html {
                 is_creating.set(true);
 
                 if let FetchState::Success(instances) = &*fetch_state {
-                    let mut success_count = 0;
-                    let mut error_count = 0;
+                    // Build bulk request with selected instances
+                    let bulk_items: Vec<BulkInstanceItem> = instances
+                        .iter()
+                        .filter(|instance| {
+                            let key = format!("{}-{}", instance.recurring_transaction_id, instance.due_date);
+                            selected.contains(&key)
+                        })
+                        .map(|instance| BulkInstanceItem {
+                            recurring_transaction_id: instance.recurring_transaction_id,
+                            due_date: instance.due_date.clone(),
+                            expected_amount: instance.expected_amount.clone(),
+                            instance_id: instance.instance_id,
+                        })
+                        .collect();
 
-                    for instance in instances {
-                        let key = format!("{}-{}", instance.recurring_transaction_id, instance.due_date);
-                        if selected.contains(&key) {
-                            let request = if as_paid {
-                                let today = chrono::Local::now().format("%Y-%m-%d").to_string();
-                                CreateRecurringInstanceRequest {
-                                    date: instance.due_date.clone(),
-                                    amount: None,
-                                }
-                            } else {
-                                CreateRecurringInstanceRequest {
-                                    date: instance.due_date.clone(),
-                                    amount: None,
-                                }
-                            };
+                    let request = BulkCreateInstancesRequest {
+                        instances: bulk_items,
+                        mark_as_paid: as_paid,
+                    };
 
-                            match create_recurring_instance(instance.recurring_transaction_id, request).await {
-                                Ok(_) => {
-                                    success_count += 1;
-                                    // If created as paid, update the instance to paid status
-                                    if as_paid {
-                                        // We'll need to update the instance after creation
-                                        // For now, this is a simplified version
-                                    }
-                                }
-                                Err(e) => {
-                                    log::error!("Failed to create instance: {}", e);
-                                    error_count += 1;
-                                }
+                    match bulk_create_instances(request).await {
+                        Ok(response) => {
+                            is_creating.set(false);
+
+                            let mut messages = Vec::new();
+                            if response.created > 0 {
+                                messages.push(format!("{} created", response.created));
                             }
+                            if response.updated > 0 {
+                                messages.push(format!("{} updated", response.updated));
+                            }
+                            if response.skipped > 0 {
+                                messages.push(format!("{} skipped", response.skipped));
+                            }
+
+                            if !messages.is_empty() {
+                                toast_ctx.show_success(format!("Instances processed: {}", messages.join(", ")));
+                            }
+
+                            refetch.emit(());
+                            on_instances_created.emit(());
                         }
-                    }
-
-                    is_creating.set(false);
-
-                    if success_count > 0 {
-                        toast_ctx.show_success(format!("Created {} instance(s) successfully", success_count));
-                        refetch.emit(());
-                        on_instances_created.emit(());
-                    }
-                    if error_count > 0 {
-                        toast_ctx.show_error(format!("Failed to create {} instance(s)", error_count));
+                        Err(e) => {
+                            is_creating.set(false);
+                            log::error!("Failed to bulk create instances: {}", e);
+                            toast_ctx.show_error(format!("Failed to create instances: {}", e));
+                        }
                     }
                 }
             });
@@ -164,6 +169,7 @@ pub fn missing_instances(props: &MissingInstancesProps) -> Html {
                                                 <th>{"Recurring Transaction"}</th>
                                                 <th>{"Due Date"}</th>
                                                 <th>{"Expected Amount"}</th>
+                                                <th>{"Status"}</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -214,6 +220,13 @@ pub fn missing_instances(props: &MissingInstancesProps) -> Html {
                                                         <td>{&instance.due_date}</td>
                                                         <td class={classes!("font-mono", amount_class)}>
                                                             {format!("{}{}", amount_prefix, format_currency(&instance.expected_amount))}
+                                                        </td>
+                                                        <td>
+                                                            if instance.is_pending {
+                                                                <span class="badge badge-warning badge-sm">{"Pending"}</span>
+                                                            } else {
+                                                                <span class="badge badge-ghost badge-sm">{"Missing"}</span>
+                                                            }
                                                         </td>
                                                     </tr>
                                                 }

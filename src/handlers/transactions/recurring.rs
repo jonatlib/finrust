@@ -809,6 +809,10 @@ pub struct MissingInstanceInfo {
     pub recurring_transaction_name: String,
     pub due_date: NaiveDate,
     pub expected_amount: Decimal,
+    /// If true, instance exists but is in Pending status
+    pub is_pending: bool,
+    /// If the instance exists (pending), this is its ID
+    pub instance_id: Option<i32>,
 }
 
 /// Query parameters for getting missing instances
@@ -919,21 +923,45 @@ pub async fn get_missing_instances(
             }
         };
 
-        // Build a set of existing instance dates
-        let existing_dates: std::collections::HashSet<NaiveDate> = existing_instances
+        // Build a map of existing instance dates to their status and ID
+        let existing_map: std::collections::HashMap<NaiveDate, (recurring_transaction_instance::InstanceStatus, i32)> = existing_instances
             .iter()
-            .map(|instance| instance.due_date)
+            .map(|instance| (instance.due_date, (instance.status.clone(), instance.id)))
             .collect();
 
-        // Find missing dates (expected but not existing)
+        // Find missing dates or pending instances (expected but not paid/skipped)
         for expected_date in expected_dates {
-            if !existing_dates.contains(&expected_date) && expected_date <= today {
-                missing_instances.push(MissingInstanceInfo {
-                    recurring_transaction_id: rt.id,
-                    recurring_transaction_name: rt.name.clone(),
-                    due_date: expected_date,
-                    expected_amount: rt.amount,
-                });
+            if expected_date <= today {
+                match existing_map.get(&expected_date) {
+                    None => {
+                        // Truly missing - no instance exists
+                        missing_instances.push(MissingInstanceInfo {
+                            recurring_transaction_id: rt.id,
+                            recurring_transaction_name: rt.name.clone(),
+                            due_date: expected_date,
+                            expected_amount: rt.amount,
+                            is_pending: false,
+                            instance_id: None,
+                        });
+                    }
+                    Some((recurring_transaction_instance::InstanceStatus::Pending, id)) => {
+                        // Instance exists but is pending
+                        missing_instances.push(MissingInstanceInfo {
+                            recurring_transaction_id: rt.id,
+                            recurring_transaction_name: rt.name.clone(),
+                            due_date: expected_date,
+                            expected_amount: rt.amount,
+                            is_pending: true,
+                            instance_id: Some(*id),
+                        });
+                    }
+                    Some((recurring_transaction_instance::InstanceStatus::Paid, _)) => {
+                        // Instance is paid, skip it
+                    }
+                    Some((recurring_transaction_instance::InstanceStatus::Skipped, _)) => {
+                        // Instance is skipped, skip it
+                    }
+                }
             }
         }
     }
@@ -951,4 +979,141 @@ pub async fn get_missing_instances(
             success: true,
         }),
     ))
+}
+
+/// Request body for bulk creating/updating instances
+#[derive(Debug, Deserialize, Serialize, ToSchema, Validate)]
+pub struct BulkCreateInstancesRequest {
+    /// List of instances to create/update
+    pub instances: Vec<BulkInstanceItem>,
+    /// Whether to mark instances as paid (true) or pending (false)
+    pub mark_as_paid: bool,
+}
+
+#[derive(Debug, Deserialize, Serialize, ToSchema)]
+pub struct BulkInstanceItem {
+    pub recurring_transaction_id: i32,
+    pub due_date: NaiveDate,
+    /// If provided, this is an existing instance ID to update instead of create
+    pub instance_id: Option<i32>,
+}
+
+/// Bulk create or update recurring transaction instances
+#[utoipa::path(
+    post,
+    path = "/api/v1/recurring-transactions/bulk-create-instances",
+    tag = "recurring-transactions",
+    request_body = BulkCreateInstancesRequest,
+    responses(
+        (status = 200, description = "Instances created/updated successfully", body = ApiResponse<BulkCreateInstancesResponse>),
+        (status = 400, description = "Invalid request", body = ErrorResponse),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    )
+)]
+#[instrument(skip(state))]
+pub async fn bulk_create_instances(
+    State(state): State<AppState>,
+    Valid(Json(request)): Valid<Json<BulkCreateInstancesRequest>>,
+) -> Result<(StatusCode, Json<ApiResponse<BulkCreateInstancesResponse>>), (StatusCode, Json<ErrorResponse>)> {
+    trace!("Bulk creating/updating {} instances", request.instances.len());
+
+    let mut created_count = 0;
+    let mut updated_count = 0;
+    let mut skipped_count = 0;
+
+    for item in request.instances {
+        // If instance_id is provided, update existing instance
+        if let Some(instance_id) = item.instance_id {
+            // Only update if marking as paid
+            if request.mark_as_paid {
+                match recurring_transaction_instance::Entity::find_by_id(instance_id).one(&state.db).await {
+                    Ok(Some(instance)) => {
+                        let mut active_model: recurring_transaction_instance::ActiveModel = instance.into();
+                        active_model.status = Set(recurring_transaction_instance::InstanceStatus::Paid);
+                        active_model.paid_date = Set(Some(item.due_date));
+                        active_model.paid_amount = Set(Some(active_model.expected_amount.clone().unwrap()));
+
+                        match active_model.update(&state.db).await {
+                            Ok(_) => {
+                                updated_count += 1;
+                            }
+                            Err(e) => {
+                                error!("Failed to update instance {}: {}", instance_id, e);
+                            }
+                        }
+                    }
+                    Ok(None) => {
+                        warn!("Instance {} not found for update", instance_id);
+                    }
+                    Err(e) => {
+                        error!("Database error while fetching instance {}: {}", instance_id, e);
+                    }
+                }
+            } else {
+                // If marking as pending and instance already exists as pending, skip it
+                skipped_count += 1;
+            }
+        } else {
+            // Create new instance
+            // First, fetch the recurring transaction to get the amount
+            let recurring_transaction = match recurring_transaction::Entity::find_by_id(item.recurring_transaction_id).one(&state.db).await {
+                Ok(Some(rt)) => rt,
+                Ok(None) => {
+                    warn!("Recurring transaction {} not found", item.recurring_transaction_id);
+                    continue;
+                }
+                Err(e) => {
+                    error!("Database error while fetching recurring transaction: {}", e);
+                    continue;
+                }
+            };
+
+            let new_instance = recurring_transaction_instance::ActiveModel {
+                recurring_transaction_id: Set(item.recurring_transaction_id),
+                status: Set(if request.mark_as_paid {
+                    recurring_transaction_instance::InstanceStatus::Paid
+                } else {
+                    recurring_transaction_instance::InstanceStatus::Pending
+                }),
+                due_date: Set(item.due_date),
+                expected_amount: Set(recurring_transaction.amount),
+                paid_date: Set(if request.mark_as_paid { Some(item.due_date) } else { None }),
+                paid_amount: Set(if request.mark_as_paid { Some(recurring_transaction.amount) } else { None }),
+                reconciled_imported_transaction_id: Set(None),
+                ..Default::default()
+            };
+
+            match new_instance.insert(&state.db).await {
+                Ok(_) => {
+                    created_count += 1;
+                }
+                Err(e) => {
+                    error!("Failed to create instance: {}", e);
+                }
+            }
+        }
+    }
+
+    info!("Bulk operation completed: {} created, {} updated, {} skipped", created_count, updated_count, skipped_count);
+
+    Ok((
+        StatusCode::OK,
+        Json(ApiResponse {
+            data: BulkCreateInstancesResponse {
+                created_count,
+                updated_count,
+                skipped_count,
+            },
+            message: format!("Processed {} instances: {} created, {} updated, {} skipped",
+                created_count + updated_count + skipped_count, created_count, updated_count, skipped_count),
+            success: true,
+        }),
+    ))
+}
+
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct BulkCreateInstancesResponse {
+    pub created_count: usize,
+    pub updated_count: usize,
+    pub skipped_count: usize,
 }

@@ -20,6 +20,7 @@ use crate::handlers::{
         get_transactions, update_transaction, create_recurring_instance,
         create_recurring_transaction, get_recurring_transactions, get_recurring_transaction,
         update_recurring_transaction, delete_recurring_transaction, get_missing_instances,
+        bulk_create_instances,
         get_recurring_instances, get_recurring_instance,
         update_recurring_instance, delete_recurring_instance,
         create_imported_transaction, get_imported_transactions, get_account_imported_transactions,
@@ -102,6 +103,7 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/recurring-transactions", post(create_recurring_transaction))
         .route("/api/v1/recurring-transactions", get(get_recurring_transactions))
         .route("/api/v1/recurring-transactions/missing-instances", get(get_missing_instances))
+        .route("/api/v1/recurring-transactions/bulk-create-instances", post(bulk_create_instances))
         .route("/api/v1/recurring-transactions/:recurring_transaction_id", get(get_recurring_transaction))
         .route("/api/v1/recurring-transactions/:recurring_transaction_id", put(update_recurring_transaction))
         .route("/api/v1/recurring-transactions/:recurring_transaction_id", delete(delete_recurring_transaction))

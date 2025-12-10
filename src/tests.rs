@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod integration_tests {
-    use crate::test_utils::test_utils::setup_test_app;
+    use crate::test_utils::test_utils::{setup_test_app, setup_test_app_state};
     use crate::handlers::accounts::{CreateAccountRequest, UpdateAccountRequest};
     use crate::handlers::transactions::CreateTransactionRequest;
     use crate::handlers::users::{CreateUserRequest, UpdateUserRequest};
@@ -1197,6 +1197,501 @@ mod integration_tests {
         println!("✓ 3. Tested with default amount (no amount override)");
         println!("✓ 4. Tested with custom amount override");
         println!("✓ 5. Tested error case (404 for non-existent recurring transaction)");
+    }
+
+    #[tokio::test]
+    async fn test_get_missing_instances() {
+        use crate::handlers::transactions::{MissingInstanceInfo};
+        use crate::schemas::ApiResponse;
+        use model::entities::{recurring_transaction, recurring_transaction_instance, account};
+        use sea_orm::{ActiveModelTrait, Set};
+        use chrono::NaiveDate;
+
+        // Setup test server and state
+        let app_state = setup_test_app_state().await;
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // Create test account
+        let test_account = account::ActiveModel {
+            name: Set("Test Account for Missing Instances".to_string()),
+            description: Set(Some("Account for testing missing instances".to_string())),
+            balance: Set(rust_decimal::Decimal::new(100000, 0)),
+            user_id: Set(1),
+            ledger_name: Set(Some("test_missing_ledger".to_string())),
+            ..Default::default()
+        };
+        let account = test_account.insert(&app_state.db).await.expect("Failed to create account");
+
+        // Create a recurring transaction that started 3 months ago (monthly)
+        let three_months_ago = chrono::Local::now().date_naive() - chrono::Duration::days(90);
+        let recurring_tx = recurring_transaction::ActiveModel {
+            name: Set("Monthly Rent".to_string()),
+            description: Set(Some("Monthly rent payment".to_string())),
+            amount: Set(rust_decimal::Decimal::new(-1500, 0)),
+            start_date: Set(three_months_ago),
+            end_date: Set(None),
+            period: Set(recurring_transaction::RecurrencePeriod::Monthly),
+            include_in_statistics: Set(true),
+            target_account_id: Set(account.id),
+            source_account_id: Set(None),
+            ledger_name: Set(Some("test_missing_ledger".to_string())),
+            ..Default::default()
+        };
+        let recurring_transaction = recurring_tx.insert(&app_state.db).await.expect("Failed to create recurring transaction");
+
+        // Create one paid instance (2 months ago)
+        let two_months_ago = chrono::Local::now().date_naive() - chrono::Duration::days(60);
+        let paid_instance = recurring_transaction_instance::ActiveModel {
+            recurring_transaction_id: Set(recurring_transaction.id),
+            status: Set(recurring_transaction_instance::InstanceStatus::Paid),
+            due_date: Set(two_months_ago),
+            expected_amount: Set(rust_decimal::Decimal::new(-1500, 0)),
+            paid_date: Set(Some(two_months_ago)),
+            paid_amount: Set(Some(rust_decimal::Decimal::new(-1500, 0))),
+            ..Default::default()
+        };
+        paid_instance.insert(&app_state.db).await.expect("Failed to create paid instance");
+
+        // Create one pending instance (1 month ago)
+        let one_month_ago = chrono::Local::now().date_naive() - chrono::Duration::days(30);
+        let pending_instance = recurring_transaction_instance::ActiveModel {
+            recurring_transaction_id: Set(recurring_transaction.id),
+            status: Set(recurring_transaction_instance::InstanceStatus::Pending),
+            due_date: Set(one_month_ago),
+            expected_amount: Set(rust_decimal::Decimal::new(-1500, 0)),
+            paid_date: Set(None),
+            paid_amount: Set(None),
+            ..Default::default()
+        };
+        let pending = pending_instance.insert(&app_state.db).await.expect("Failed to create pending instance");
+
+        // No instance for current month (today) - this should be missing
+
+        // Get missing instances
+        let response = server
+            .get("/api/v1/recurring-transactions/missing-instances")
+            .await;
+
+        response.assert_status(StatusCode::OK);
+        let response_body: ApiResponse<Vec<MissingInstanceInfo>> = response.json();
+        assert!(response_body.success);
+
+        // Should have at least 2 items: 1 pending (from last month) and 1 missing (current month)
+        assert!(response_body.data.len() >= 2, "Expected at least 2 missing/pending instances, got {}", response_body.data.len());
+
+        // Find the pending instance
+        let pending_info = response_body.data.iter()
+            .find(|i| i.due_date == one_month_ago.to_string())
+            .expect("Should find pending instance");
+        assert!(pending_info.is_pending, "Instance from last month should be marked as pending");
+        assert_eq!(pending_info.instance_id, Some(pending.id), "Should have instance ID");
+        assert_eq!(pending_info.recurring_transaction_name, "Monthly Rent");
+
+        // Find a truly missing instance (should be current month or the 3 months ago start date)
+        let missing_info = response_body.data.iter()
+            .find(|i| !i.is_pending)
+            .expect("Should find at least one truly missing instance");
+        assert!(!missing_info.is_pending, "Should be marked as not pending");
+        assert_eq!(missing_info.instance_id, None, "Should not have instance ID");
+
+        println!("✓ Test passed: get_missing_instances correctly identifies pending and missing instances");
+    }
+
+    #[tokio::test]
+    async fn test_bulk_create_instances_new() {
+        use crate::handlers::transactions::{BulkCreateInstancesRequest, BulkInstanceItem, BulkCreateInstancesResponse};
+        use crate::schemas::ApiResponse;
+        use model::entities::{recurring_transaction, recurring_transaction_instance, account};
+        use sea_orm::{ActiveModelTrait, Set, EntityTrait};
+        use chrono::NaiveDate;
+
+        // Setup test server and state
+        let app_state = setup_test_app_state().await;
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // Create test account
+        let test_account = account::ActiveModel {
+            name: Set("Test Account for Bulk Create".to_string()),
+            description: Set(Some("Account for testing bulk create".to_string())),
+            balance: Set(rust_decimal::Decimal::new(100000, 0)),
+            user_id: Set(1),
+            ledger_name: Set(Some("test_bulk_ledger".to_string())),
+            ..Default::default()
+        };
+        let account = test_account.insert(&app_state.db).await.expect("Failed to create account");
+
+        // Create a recurring transaction
+        let start_date = chrono::Local::now().date_naive() - chrono::Duration::days(60);
+        let recurring_tx = recurring_transaction::ActiveModel {
+            name: Set("Monthly Subscription".to_string()),
+            description: Set(Some("Test subscription".to_string())),
+            amount: Set(rust_decimal::Decimal::new(-999, 1)), // -99.9
+            start_date: Set(start_date),
+            end_date: Set(None),
+            period: Set(recurring_transaction::RecurrencePeriod::Monthly),
+            include_in_statistics: Set(true),
+            target_account_id: Set(account.id),
+            source_account_id: Set(None),
+            ledger_name: Set(Some("test_bulk_ledger".to_string())),
+            ..Default::default()
+        };
+        let recurring_transaction = recurring_tx.insert(&app_state.db).await.expect("Failed to create recurring transaction");
+
+        // Test 1: Create new instances as pending
+        let date1 = start_date.to_string();
+        let date2 = (start_date + chrono::Duration::days(30)).to_string();
+
+        let bulk_request = BulkCreateInstancesRequest {
+            instances: vec![
+                BulkInstanceItem {
+                    recurring_transaction_id: recurring_transaction.id,
+                    due_date: date1.clone(),
+                    expected_amount: "-99.9".to_string(),
+                    instance_id: None,
+                },
+                BulkInstanceItem {
+                    recurring_transaction_id: recurring_transaction.id,
+                    due_date: date2.clone(),
+                    expected_amount: "-99.9".to_string(),
+                    instance_id: None,
+                },
+            ],
+            mark_as_paid: false,
+        };
+
+        let response = server
+            .post("/api/v1/recurring-transactions/bulk-create-instances")
+            .json(&bulk_request)
+            .await;
+
+        response.assert_status(StatusCode::CREATED);
+        let response_body: ApiResponse<BulkCreateInstancesResponse> = response.json();
+        assert!(response_body.success);
+        assert_eq!(response_body.data.created, 2, "Should create 2 new instances");
+        assert_eq!(response_body.data.updated, 0, "Should not update any instances");
+        assert_eq!(response_body.data.skipped, 0, "Should not skip any instances");
+
+        // Verify instances were created as Pending
+        let instances = recurring_transaction_instance::Entity::find()
+            .all(&app_state.db)
+            .await
+            .expect("Failed to fetch instances");
+        assert_eq!(instances.len(), 2);
+        assert!(instances.iter().all(|i| i.status == recurring_transaction_instance::InstanceStatus::Pending));
+
+        println!("✓ Test passed: bulk_create_instances creates new pending instances");
+    }
+
+    #[tokio::test]
+    async fn test_bulk_create_instances_update_pending_to_paid() {
+        use crate::handlers::transactions::{BulkCreateInstancesRequest, BulkInstanceItem, BulkCreateInstancesResponse};
+        use crate::schemas::ApiResponse;
+        use model::entities::{recurring_transaction, recurring_transaction_instance, account};
+        use sea_orm::{ActiveModelTrait, Set, EntityTrait};
+        use chrono::NaiveDate;
+
+        // Setup test server and state
+        let app_state = setup_test_app_state().await;
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // Create test account
+        let test_account = account::ActiveModel {
+            name: Set("Test Account for Update".to_string()),
+            description: Set(Some("Account for testing update".to_string())),
+            balance: Set(rust_decimal::Decimal::new(100000, 0)),
+            user_id: Set(1),
+            ledger_name: Set(Some("test_update_ledger".to_string())),
+            ..Default::default()
+        };
+        let account = test_account.insert(&app_state.db).await.expect("Failed to create account");
+
+        // Create a recurring transaction
+        let start_date = chrono::Local::now().date_naive() - chrono::Duration::days(30);
+        let recurring_tx = recurring_transaction::ActiveModel {
+            name: Set("Utility Bill".to_string()),
+            description: Set(Some("Test utility".to_string())),
+            amount: Set(rust_decimal::Decimal::new(-150, 0)),
+            start_date: Set(start_date),
+            end_date: Set(None),
+            period: Set(recurring_transaction::RecurrencePeriod::Monthly),
+            include_in_statistics: Set(true),
+            target_account_id: Set(account.id),
+            source_account_id: Set(None),
+            ledger_name: Set(Some("test_update_ledger".to_string())),
+            ..Default::default()
+        };
+        let recurring_transaction = recurring_tx.insert(&app_state.db).await.expect("Failed to create recurring transaction");
+
+        // Create a pending instance
+        let pending_instance = recurring_transaction_instance::ActiveModel {
+            recurring_transaction_id: Set(recurring_transaction.id),
+            status: Set(recurring_transaction_instance::InstanceStatus::Pending),
+            due_date: Set(start_date),
+            expected_amount: Set(rust_decimal::Decimal::new(-150, 0)),
+            paid_date: Set(None),
+            paid_amount: Set(None),
+            ..Default::default()
+        };
+        let pending = pending_instance.insert(&app_state.db).await.expect("Failed to create pending instance");
+
+        // Test: Update pending instance to paid
+        let bulk_request = BulkCreateInstancesRequest {
+            instances: vec![
+                BulkInstanceItem {
+                    recurring_transaction_id: recurring_transaction.id,
+                    due_date: start_date.to_string(),
+                    expected_amount: "-150".to_string(),
+                    instance_id: Some(pending.id),
+                },
+            ],
+            mark_as_paid: true,
+        };
+
+        let response = server
+            .post("/api/v1/recurring-transactions/bulk-create-instances")
+            .json(&bulk_request)
+            .await;
+
+        response.assert_status(StatusCode::CREATED);
+        let response_body: ApiResponse<BulkCreateInstancesResponse> = response.json();
+        assert!(response_body.success);
+        assert_eq!(response_body.data.created, 0, "Should not create new instances");
+        assert_eq!(response_body.data.updated, 1, "Should update 1 instance");
+        assert_eq!(response_body.data.skipped, 0, "Should not skip any instances");
+
+        // Verify instance was updated to Paid
+        let updated_instance = recurring_transaction_instance::Entity::find_by_id(pending.id)
+            .one(&app_state.db)
+            .await
+            .expect("Failed to fetch instance")
+            .expect("Instance not found");
+        assert_eq!(updated_instance.status, recurring_transaction_instance::InstanceStatus::Paid);
+        assert!(updated_instance.paid_date.is_some(), "Should have paid_date");
+        assert!(updated_instance.paid_amount.is_some(), "Should have paid_amount");
+        assert_eq!(updated_instance.paid_amount.unwrap(), rust_decimal::Decimal::new(-150, 0));
+
+        println!("✓ Test passed: bulk_create_instances updates pending to paid");
+    }
+
+    #[tokio::test]
+    async fn test_bulk_create_instances_skip_pending() {
+        use crate::handlers::transactions::{BulkCreateInstancesRequest, BulkInstanceItem, BulkCreateInstancesResponse};
+        use crate::schemas::ApiResponse;
+        use model::entities::{recurring_transaction, recurring_transaction_instance, account};
+        use sea_orm::{ActiveModelTrait, Set, EntityTrait};
+        use chrono::NaiveDate;
+
+        // Setup test server and state
+        let app_state = setup_test_app_state().await;
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // Create test account
+        let test_account = account::ActiveModel {
+            name: Set("Test Account for Skip".to_string()),
+            description: Set(Some("Account for testing skip".to_string())),
+            balance: Set(rust_decimal::Decimal::new(100000, 0)),
+            user_id: Set(1),
+            ledger_name: Set(Some("test_skip_ledger".to_string())),
+            ..Default::default()
+        };
+        let account = test_account.insert(&app_state.db).await.expect("Failed to create account");
+
+        // Create a recurring transaction
+        let start_date = chrono::Local::now().date_naive() - chrono::Duration::days(20);
+        let recurring_tx = recurring_transaction::ActiveModel {
+            name: Set("Gym Membership".to_string()),
+            description: Set(Some("Test gym".to_string())),
+            amount: Set(rust_decimal::Decimal::new(-50, 0)),
+            start_date: Set(start_date),
+            end_date: Set(None),
+            period: Set(recurring_transaction::RecurrencePeriod::Monthly),
+            include_in_statistics: Set(true),
+            target_account_id: Set(account.id),
+            source_account_id: Set(None),
+            ledger_name: Set(Some("test_skip_ledger".to_string())),
+            ..Default::default()
+        };
+        let recurring_transaction = recurring_tx.insert(&app_state.db).await.expect("Failed to create recurring transaction");
+
+        // Create a pending instance
+        let pending_instance = recurring_transaction_instance::ActiveModel {
+            recurring_transaction_id: Set(recurring_transaction.id),
+            status: Set(recurring_transaction_instance::InstanceStatus::Pending),
+            due_date: Set(start_date),
+            expected_amount: Set(rust_decimal::Decimal::new(-50, 0)),
+            paid_date: Set(None),
+            paid_amount: Set(None),
+            ..Default::default()
+        };
+        let pending = pending_instance.insert(&app_state.db).await.expect("Failed to create pending instance");
+
+        // Test: Try to create pending when already pending - should skip
+        let bulk_request = BulkCreateInstancesRequest {
+            instances: vec![
+                BulkInstanceItem {
+                    recurring_transaction_id: recurring_transaction.id,
+                    due_date: start_date.to_string(),
+                    expected_amount: "-50".to_string(),
+                    instance_id: Some(pending.id),
+                },
+            ],
+            mark_as_paid: false,
+        };
+
+        let response = server
+            .post("/api/v1/recurring-transactions/bulk-create-instances")
+            .json(&bulk_request)
+            .await;
+
+        response.assert_status(StatusCode::CREATED);
+        let response_body: ApiResponse<BulkCreateInstancesResponse> = response.json();
+        assert!(response_body.success);
+        assert_eq!(response_body.data.created, 0, "Should not create new instances");
+        assert_eq!(response_body.data.updated, 0, "Should not update instances");
+        assert_eq!(response_body.data.skipped, 1, "Should skip 1 instance");
+
+        // Verify instance remains Pending and unchanged
+        let instance = recurring_transaction_instance::Entity::find_by_id(pending.id)
+            .one(&app_state.db)
+            .await
+            .expect("Failed to fetch instance")
+            .expect("Instance not found");
+        assert_eq!(instance.status, recurring_transaction_instance::InstanceStatus::Pending);
+        assert!(instance.paid_date.is_none(), "Should not have paid_date");
+        assert!(instance.paid_amount.is_none(), "Should not have paid_amount");
+
+        println!("✓ Test passed: bulk_create_instances skips pending instances when creating as pending");
+    }
+
+    #[tokio::test]
+    async fn test_bulk_create_instances_mixed_operations() {
+        use crate::handlers::transactions::{BulkCreateInstancesRequest, BulkInstanceItem, BulkCreateInstancesResponse};
+        use crate::schemas::ApiResponse;
+        use model::entities::{recurring_transaction, recurring_transaction_instance, account};
+        use sea_orm::{ActiveModelTrait, Set, EntityTrait};
+        use chrono::NaiveDate;
+
+        // Setup test server and state
+        let app_state = setup_test_app_state().await;
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // Create test account
+        let test_account = account::ActiveModel {
+            name: Set("Test Account for Mixed".to_string()),
+            description: Set(Some("Account for testing mixed operations".to_string())),
+            balance: Set(rust_decimal::Decimal::new(100000, 0)),
+            user_id: Set(1),
+            ledger_name: Set(Some("test_mixed_ledger".to_string())),
+            ..Default::default()
+        };
+        let account = test_account.insert(&app_state.db).await.expect("Failed to create account");
+
+        // Create a recurring transaction
+        let start_date = chrono::Local::now().date_naive() - chrono::Duration::days(90);
+        let recurring_tx = recurring_transaction::ActiveModel {
+            name: Set("Internet Bill".to_string()),
+            description: Set(Some("Test internet".to_string())),
+            amount: Set(rust_decimal::Decimal::new(-80, 0)),
+            start_date: Set(start_date),
+            end_date: Set(None),
+            period: Set(recurring_transaction::RecurrencePeriod::Monthly),
+            include_in_statistics: Set(true),
+            target_account_id: Set(account.id),
+            source_account_id: Set(None),
+            ledger_name: Set(Some("test_mixed_ledger".to_string())),
+            ..Default::default()
+        };
+        let recurring_transaction = recurring_tx.insert(&app_state.db).await.expect("Failed to create recurring transaction");
+
+        // Create two pending instances
+        let date1 = start_date;
+        let date2 = start_date + chrono::Duration::days(30);
+        let date3 = start_date + chrono::Duration::days(60); // This will be new
+
+        let pending1 = recurring_transaction_instance::ActiveModel {
+            recurring_transaction_id: Set(recurring_transaction.id),
+            status: Set(recurring_transaction_instance::InstanceStatus::Pending),
+            due_date: Set(date1),
+            expected_amount: Set(rust_decimal::Decimal::new(-80, 0)),
+            paid_date: Set(None),
+            paid_amount: Set(None),
+            ..Default::default()
+        };
+        let pending1_saved = pending1.insert(&app_state.db).await.expect("Failed to create pending instance 1");
+
+        let pending2 = recurring_transaction_instance::ActiveModel {
+            recurring_transaction_id: Set(recurring_transaction.id),
+            status: Set(recurring_transaction_instance::InstanceStatus::Pending),
+            due_date: Set(date2),
+            expected_amount: Set(rust_decimal::Decimal::new(-80, 0)),
+            paid_date: Set(None),
+            paid_amount: Set(None),
+            ..Default::default()
+        };
+        let pending2_saved = pending2.insert(&app_state.db).await.expect("Failed to create pending instance 2");
+
+        // Test: Mixed operations - update pending1 to paid, skip pending2, create new date3
+        let bulk_request = BulkCreateInstancesRequest {
+            instances: vec![
+                // This should be updated to paid
+                BulkInstanceItem {
+                    recurring_transaction_id: recurring_transaction.id,
+                    due_date: date1.to_string(),
+                    expected_amount: "-80".to_string(),
+                    instance_id: Some(pending1_saved.id),
+                },
+                // This should be skipped (pending -> pending)
+                BulkInstanceItem {
+                    recurring_transaction_id: recurring_transaction.id,
+                    due_date: date2.to_string(),
+                    expected_amount: "-80".to_string(),
+                    instance_id: Some(pending2_saved.id),
+                },
+                // This should be created as new paid
+                BulkInstanceItem {
+                    recurring_transaction_id: recurring_transaction.id,
+                    due_date: date3.to_string(),
+                    expected_amount: "-80".to_string(),
+                    instance_id: None,
+                },
+            ],
+            mark_as_paid: true,
+        };
+
+        let response = server
+            .post("/api/v1/recurring-transactions/bulk-create-instances")
+            .json(&bulk_request)
+            .await;
+
+        response.assert_status(StatusCode::CREATED);
+        let response_body: ApiResponse<BulkCreateInstancesResponse> = response.json();
+        assert!(response_body.success);
+        assert_eq!(response_body.data.created, 1, "Should create 1 new instance");
+        assert_eq!(response_body.data.updated, 1, "Should update 1 instance");
+        assert_eq!(response_body.data.skipped, 1, "Should skip 1 instance");
+
+        // Verify results
+        let all_instances = recurring_transaction_instance::Entity::find()
+            .all(&app_state.db)
+            .await
+            .expect("Failed to fetch instances");
+        assert_eq!(all_instances.len(), 3, "Should have 3 total instances");
+
+        let instance1 = all_instances.iter().find(|i| i.id == pending1_saved.id).expect("Instance 1 not found");
+        assert_eq!(instance1.status, recurring_transaction_instance::InstanceStatus::Paid, "Instance 1 should be paid");
+
+        let instance2 = all_instances.iter().find(|i| i.id == pending2_saved.id).expect("Instance 2 not found");
+        assert_eq!(instance2.status, recurring_transaction_instance::InstanceStatus::Pending, "Instance 2 should still be pending");
+
+        let instance3 = all_instances.iter().find(|i| i.due_date == date3).expect("Instance 3 not found");
+        assert_eq!(instance3.status, recurring_transaction_instance::InstanceStatus::Paid, "Instance 3 should be paid");
+
+        println!("✓ Test passed: bulk_create_instances handles mixed operations correctly");
     }
 
     #[tokio::test]
