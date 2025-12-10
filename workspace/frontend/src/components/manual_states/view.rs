@@ -14,7 +14,7 @@ pub fn manual_states() -> Html {
     let show_modal = use_state(|| false);
     let edit_state = use_state(|| None::<ManualAccountStateResponse>);
     let show_delete_confirm = use_state(|| false);
-    let delete_target = use_state(|| None::<i32>);
+    let delete_target = use_state(|| None::<ManualAccountStateResponse>);
     let is_deleting = use_state(|| false);
     let delete_error = use_state(|| None::<String>);
 
@@ -77,9 +77,9 @@ pub fn manual_states() -> Html {
     let on_delete_click = {
         let show_delete_confirm = show_delete_confirm.clone();
         let delete_target = delete_target.clone();
-        Callback::from(move |state_id: i32| {
-            log::info!("Delete button clicked for state ID: {}", state_id);
-            delete_target.set(Some(state_id));
+        Callback::from(move |state: ManualAccountStateResponse| {
+            log::info!("Delete button clicked for state ID: {}", state.id);
+            delete_target.set(Some(state));
             show_delete_confirm.set(true);
         })
     };
@@ -105,7 +105,9 @@ pub fn manual_states() -> Html {
                 return;
             }
 
-            if let Some(state_id) = *delete_target {
+            if let Some(state) = (*delete_target).as_ref() {
+                let state_id = state.id;
+                let account_id = state.account_id;
                 let is_deleting = is_deleting.clone();
                 let delete_error = delete_error.clone();
                 let show_delete_confirm = show_delete_confirm.clone();
@@ -116,8 +118,8 @@ pub fn manual_states() -> Html {
                 delete_error.set(None);
 
                 wasm_bindgen_futures::spawn_local(async move {
-                    log::info!("Deleting manual account state ID: {}", state_id);
-                    match delete_manual_state(state_id).await {
+                    log::info!("Deleting manual account state ID: {} for account ID: {}", state_id, account_id);
+                    match delete_manual_state(account_id, state_id).await {
                         Ok(_) => {
                             log::info!("Manual account state deleted successfully");
                             is_deleting.set(false);
@@ -249,7 +251,7 @@ pub fn manual_states() -> Html {
                                                     .unwrap_or("Unknown Account");
 
                                                 let state_clone_edit = state.clone();
-                                                let state_id_delete = state.id;
+                                                let state_clone_delete = state.clone();
 
                                                 html! {
                                                     <tr key={state.id}>
@@ -270,7 +272,7 @@ pub fn manual_states() -> Html {
                                                                 <button
                                                                     class="btn btn-sm btn-error btn-outline btn-square"
                                                                     title="Delete"
-                                                                    onclick={on_delete_click.reform(move |_| state_id_delete)}
+                                                                    onclick={on_delete_click.reform(move |_| state_clone_delete.clone())}
                                                                 >
                                                                     <i class="fas fa-trash"></i>
                                                                 </button>

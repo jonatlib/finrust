@@ -49,12 +49,12 @@ pub async fn get_all_manual_states() -> Result<Vec<ManualAccountStateResponse>, 
 }
 
 /// Get a specific manual account state by ID
-pub async fn get_manual_state(state_id: i32) -> Result<ManualAccountStateResponse, String> {
-    log::trace!("Fetching manual account state with ID: {}", state_id);
-    let result = api_client::get::<ManualAccountStateResponse>(&format!("/manual-account-states/{}", state_id)).await;
+pub async fn get_manual_state(account_id: i32, state_id: i32) -> Result<ManualAccountStateResponse, String> {
+    log::trace!("Fetching manual account state with ID: {} for account ID: {}", state_id, account_id);
+    let result = api_client::get::<ManualAccountStateResponse>(&format!("/accounts/{}/manual-states/{}", account_id, state_id)).await;
     match &result {
-        Ok(_) => log::info!("Fetched manual account state ID: {}", state_id),
-        Err(e) => log::error!("Failed to fetch manual account state {}: {}", state_id, e),
+        Ok(_) => log::info!("Fetched manual account state ID: {} for account ID: {}", state_id, account_id),
+        Err(e) => log::error!("Failed to fetch manual account state {} for account {}: {}", state_id, account_id, e),
     }
     result
 }
@@ -71,23 +71,23 @@ pub async fn create_manual_state(account_id: i32, request: CreateManualAccountSt
 }
 
 /// Update an existing manual account state
-pub async fn update_manual_state(state_id: i32, request: UpdateManualAccountStateRequest) -> Result<ManualAccountStateResponse, String> {
-    log::debug!("Updating manual account state ID: {}", state_id);
-    let result = api_client::put::<ManualAccountStateResponse, _>(&format!("/manual-account-states/{}", state_id), &request).await;
+pub async fn update_manual_state(account_id: i32, state_id: i32, request: UpdateManualAccountStateRequest) -> Result<ManualAccountStateResponse, String> {
+    log::debug!("Updating manual account state ID: {} for account ID: {}", state_id, account_id);
+    let result = api_client::put::<ManualAccountStateResponse, _>(&format!("/accounts/{}/manual-states/{}", account_id, state_id), &request).await;
     match &result {
-        Ok(state) => log::info!("Successfully updated manual account state ID: {}", state.id),
-        Err(e) => log::error!("Failed to update manual account state {}: {}", state_id, e),
+        Ok(state) => log::info!("Successfully updated manual account state ID: {} for account ID: {}", state.id, account_id),
+        Err(e) => log::error!("Failed to update manual account state {} for account {}: {}", state_id, account_id, e),
     }
     result
 }
 
 /// Delete a manual account state
-pub async fn delete_manual_state(state_id: i32) -> Result<String, String> {
-    log::debug!("Deleting manual account state ID: {}", state_id);
-    let result = api_client::delete::<String>(&format!("/manual-account-states/{}", state_id)).await;
+pub async fn delete_manual_state(account_id: i32, state_id: i32) -> Result<String, String> {
+    log::debug!("Deleting manual account state ID: {} for account ID: {}", state_id, account_id);
+    let result = api_client::delete::<String>(&format!("/accounts/{}/manual-states/{}", account_id, state_id)).await;
     match &result {
-        Ok(_) => log::info!("Successfully deleted manual account state ID: {}", state_id),
-        Err(e) => log::error!("Failed to delete manual account state {}: {}", state_id, e),
+        Ok(_) => log::info!("Successfully deleted manual account state ID: {} for account ID: {}", state_id, account_id),
+        Err(e) => log::error!("Failed to delete manual account state {} for account {}: {}", state_id, account_id, e),
     }
     result
 }

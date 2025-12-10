@@ -90,6 +90,7 @@ pub fn manual_state_modal(props: &ManualStateModalProps) -> Html {
                     // Edit mode - update manual state
                     let existing_state = state.clone().unwrap();
                     let state_id = existing_state.id;
+                    let existing_account_id = existing_state.account_id;
                     let request = UpdateManualAccountStateRequest {
                         date: Some(date),
                         amount: Some(amount),
@@ -97,7 +98,7 @@ pub fn manual_state_modal(props: &ManualStateModalProps) -> Html {
 
                     wasm_bindgen_futures::spawn_local(async move {
                         log::info!("Updating manual account state ID {}", state_id);
-                        match update_manual_state(state_id, request).await {
+                        match update_manual_state(existing_account_id, state_id, request).await {
                             Ok(_) => {
                                 log::info!("Manual account state updated successfully");
                                 is_submitting.set(false);

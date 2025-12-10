@@ -255,7 +255,7 @@ fn render_transaction_row(transaction: &TransactionResponse, account_map: &HashM
     };
 
     html! {
-        <tr key={transaction.id} class="hover:bg-primary hover:bg-opacity-10 cursor-pointer transition-colors duration-150">
+        <tr key={transaction.id} class="cursor-pointer">
             <Link<Route> to={Route::TransactionEdit { id: transaction_id }} classes="contents">
                 <td>
                     <div class="font-semibold">{transaction.date.format("%Y-%m-%d").to_string()}</div>
