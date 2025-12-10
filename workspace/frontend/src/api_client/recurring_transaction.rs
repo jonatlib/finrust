@@ -148,6 +148,25 @@ pub struct CreateRecurringInstanceRequest {
 }
 
 /// Get all recurring transactions
+pub async fn get_recurring_transaction(id: i32) -> Result<RecurringTransactionResponse, String> {
+    log::trace!("Fetching recurring transaction with ID: {}", id);
+
+    let result = api_client::get::<RecurringTransactionResponse>(
+        &format!("/recurring-transactions/{}", id)
+    ).await;
+
+    match result {
+        Ok(transaction) => {
+            log::debug!("Successfully fetched recurring transaction ID: {}", id);
+            Ok(transaction)
+        }
+        Err(e) => {
+            log::error!("Failed to fetch recurring transaction: {}", e);
+            Err(e)
+        }
+    }
+}
+
 pub async fn get_recurring_transactions(
     page: Option<u64>,
     limit: Option<u64>,
@@ -183,20 +202,6 @@ pub async fn get_recurring_transactions(
     match &result {
         Ok(transactions) => log::info!("Fetched {} recurring transactions", transactions.len()),
         Err(e) => log::error!("Failed to fetch recurring transactions: {}", e),
-    }
-    result
-}
-
-/// Get a specific recurring transaction by ID
-pub async fn get_recurring_transaction(id: i32) -> Result<RecurringTransactionResponse, String> {
-    log::trace!("Fetching recurring transaction with ID: {}", id);
-    let result = api_client::get::<RecurringTransactionResponse>(
-        &format!("/recurring-transactions/{}", id)
-    ).await;
-
-    match &result {
-        Ok(transaction) => log::info!("Fetched recurring transaction: {} (ID: {})", transaction.name, transaction.id),
-        Err(e) => log::error!("Failed to fetch recurring transaction {}: {}", id, e),
     }
     result
 }

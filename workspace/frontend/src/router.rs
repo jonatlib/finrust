@@ -13,6 +13,7 @@ use crate::pages::transactions::TransactionsPage;
 use crate::pages::transaction_edit::TransactionEditPage;
 use crate::pages::manual_states::ManualStatesPage;
 use crate::pages::recurring::RecurringPage;
+use crate::pages::recurring_detail::RecurringDetailPage;
 use crate::pages::instances::InstancesPage;
 
 #[derive(Debug, Clone, Routable, PartialEq)]
@@ -33,6 +34,8 @@ pub enum Route {
     ManualStates,
     #[at("/recurring")]
     Recurring,
+    #[at("/recurring/:id")]
+    RecurringDetail { id: i32 },
     #[at("/instances")]
     Instances,
     #[at("/budgets")]
@@ -80,6 +83,10 @@ pub fn switch(routes: Route) -> Html {
         Route::Recurring => {
             log::trace!("Rendering Recurring page");
             html! { <RecurringPage /> }
+        }
+        Route::RecurringDetail { id } => {
+            log::trace!("Rendering Recurring Detail page for ID: {}", id);
+            html! { <RecurringDetailPage id={id} /> }
         }
         Route::Instances => {
             log::trace!("Rendering Instances page");

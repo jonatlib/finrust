@@ -1,6 +1,6 @@
 mod list;
 mod view;
-mod instance_edit_modal;
+pub mod instance_edit_modal;
 
 pub use list::InstancesList;
 pub use view::Instances;

@@ -1,7 +1,9 @@
 use yew::prelude::*;
+use yew_router::prelude::*;
 use crate::api_client::recurring_transaction::get_recurring_transactions;
 use crate::common::fetch_hook::use_fetch_with_refetch;
 use crate::hooks::FetchState;
+use crate::router::Route;
 
 #[derive(Properties, PartialEq)]
 pub struct RecurringListProps {
@@ -90,7 +92,12 @@ pub fn recurring_list(props: &RecurringListProps) -> Html {
                                     html! {
                                         <tr>
                                             <td class="font-bold">
-                                                {&t.name}
+                                                <Link<Route>
+                                                    to={Route::RecurringDetail { id: t.id }}
+                                                    classes="link link-hover link-primary"
+                                                >
+                                                    {&t.name}
+                                                </Link<Route>>
                                                 if let Some(desc) = &t.description {
                                                     <div class="text-xs font-normal opacity-50">
                                                         {desc}

@@ -1,6 +1,6 @@
 use yew::prelude::*;
 use yew_router::prelude::*;
-use crate::api_client::recurring_transaction::{RecurringInstanceResponse, get_recurring_instances, delete_recurring_instance};
+use crate::api_client::recurring_transaction::{RecurringInstanceResponse, get_recurring_instances, delete_recurring_instance, update_recurring_instance, UpdateRecurringInstanceRequest};
 use crate::common::fetch_hook::use_fetch_with_refetch;
 use crate::common::toast::ToastContext;
 use crate::hooks::FetchState;
@@ -101,12 +101,20 @@ pub fn instances_list(props: &InstancesListProps) -> Html {
                                         })
                                     };
 
+                                    let instance_id = instance.id;
+                                    let current_status = instance.status.clone();
+                                    let status_refetch = refetch.clone();
+                                    let status_toast_ctx = toast_ctx.clone();
+                                    let instance_paid_date = instance.paid_date.clone();
+                                    let instance_paid_amount = instance.paid_amount.clone();
+                                    let instance_expected_amount = instance.expected_amount.clone();
+
                                     html! {
                                         <tr>
                                             <td>
                                                 {if let Some(name) = &instance.recurring_transaction_name {
                                                     html! {
-                                                        <Link<Route> to={Route::Recurring} classes="link link-hover link-primary">
+                                                        <Link<Route> to={Route::RecurringDetail { id: instance.recurring_transaction_id }} classes="link link-hover link-primary">
                                                             {name}
                                                         </Link<Route>>
                                                     }
@@ -184,6 +192,88 @@ pub fn instances_list(props: &InstancesListProps) -> Html {
                                             </td>
                                             <td>
                                                 <div class="flex gap-2">
+                                                    <div class="dropdown dropdown-end">
+                                                        <button
+                                                            tabindex="0"
+                                                            class="btn btn-sm btn-outline btn-square"
+                                                            title="Change Status"
+                                                        >
+                                                            <i class="fas fa-sync-alt"></i>
+                                                        </button>
+                                                        <ul tabindex="0" class="dropdown-content menu p-2 shadow bg-base-100 rounded-box w-40 z-50">
+                                                            {
+                                                                vec!["Pending", "Paid", "Skipped"].into_iter().map(|status| {
+                                                                    let id = instance_id;
+                                                                    let is_current = status == current_status.as_str();
+                                                                    let on_status_click = {
+                                                                        let status = status.to_string();
+                                                                        let refetch = status_refetch.clone();
+                                                                        let toast_ctx = status_toast_ctx.clone();
+                                                                        let paid_date = instance_paid_date.clone();
+                                                                        let paid_amount = instance_paid_amount.clone();
+                                                                        let expected_amount = instance_expected_amount.clone();
+                                                                        Callback::from(move |_: MouseEvent| {
+                                                                            let id = id;
+                                                                            let status = status.clone();
+                                                                            let refetch = refetch.clone();
+                                                                            let toast_ctx = toast_ctx.clone();
+                                                                            let paid_date = paid_date.clone();
+                                                                            let paid_amount = paid_amount.clone();
+                                                                            let expected_amount = expected_amount.clone();
+
+                                                                            wasm_bindgen_futures::spawn_local(async move {
+                                                                                // If changing to Paid status, ensure paid_date and paid_amount are set
+                                                                                let (final_paid_date, final_paid_amount) = if status == "Paid" {
+                                                                                    let pd = if paid_date.is_none() {
+                                                                                        Some(chrono::Local::now().format("%Y-%m-%d").to_string())
+                                                                                    } else {
+                                                                                        paid_date
+                                                                                    };
+                                                                                    let pa = if paid_amount.is_none() {
+                                                                                        Some(expected_amount)
+                                                                                    } else {
+                                                                                        paid_amount
+                                                                                    };
+                                                                                    (pd, pa)
+                                                                                } else {
+                                                                                    (None, None)
+                                                                                };
+
+                                                                                let request = UpdateRecurringInstanceRequest {
+                                                                                    status: Some(status.clone()),
+                                                                                    due_date: None,
+                                                                                    expected_amount: None,
+                                                                                    paid_date: final_paid_date,
+                                                                                    paid_amount: final_paid_amount,
+                                                                                };
+                                                                                match update_recurring_instance(id, request).await {
+                                                                                    Ok(_) => {
+                                                                                        toast_ctx.show_success(format!("Status changed to {}", status));
+                                                                                        refetch.emit(());
+                                                                                    }
+                                                                                    Err(e) => {
+                                                                                        toast_ctx.show_error(format!("Failed to update status: {}", e));
+                                                                                    }
+                                                                                }
+                                                                            });
+                                                                        })
+                                                                    };
+                                                                    html! {
+                                                                        <li>
+                                                                            <a onclick={on_status_click} class={if is_current { "active" } else { "" }}>
+                                                                                {status}
+                                                                                {if is_current {
+                                                                                    html! { <i class="fas fa-check ml-2"></i> }
+                                                                                } else {
+                                                                                    html! { <></> }
+                                                                                }}
+                                                                            </a>
+                                                                        </li>
+                                                                    }
+                                                                }).collect::<Html>()
+                                                            }
+                                                        </ul>
+                                                    </div>
                                                     <button
                                                         class="btn btn-sm btn-ghost btn-square"
                                                         title="Edit"

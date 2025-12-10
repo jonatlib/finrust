@@ -46,6 +46,11 @@ pub fn breadcrumb() -> Html {
                 BreadcrumbItem { label: "Home".to_string(), route: Route::Dashboard },
                 BreadcrumbItem { label: "Recurring".to_string(), route: Route::Recurring }
             ],
+            Route::RecurringDetail { id } => vec![
+                BreadcrumbItem { label: "Home".to_string(), route: Route::Dashboard },
+                BreadcrumbItem { label: "Recurring".to_string(), route: Route::Recurring },
+                BreadcrumbItem { label: format!("Recurring #{}", id), route: Route::RecurringDetail { id } }
+            ],
             Route::Instances => vec![
                 BreadcrumbItem { label: "Home".to_string(), route: Route::Dashboard },
                 BreadcrumbItem { label: "Instances".to_string(), route: Route::Instances }
