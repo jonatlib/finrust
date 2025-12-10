@@ -286,6 +286,7 @@ mod integration_tests {
             owner_id: 1,
             include_in_statistics: Some(true),
             ledger_name: Some("test_ledger".to_string()),
+            account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
         };
 
         // Send POST request to create account
@@ -329,6 +330,7 @@ mod integration_tests {
             owner_id: 1,
             include_in_statistics: Some(false),
             ledger_name: None,
+            account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
         };
 
         let create_response = server
@@ -368,6 +370,7 @@ mod integration_tests {
             owner_id: 0, // This owner doesn't exist
             include_in_statistics: Some(true),
             ledger_name: Some("main_account".to_string()),
+            account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
         };
 
         // Send POST request to create account
@@ -441,6 +444,7 @@ mod integration_tests {
             owner_id: 1,
             include_in_statistics: Some(true),
             ledger_name: Some("target_account".to_string()),
+            account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
         };
 
         let account_response = server
@@ -540,6 +544,7 @@ mod integration_tests {
             owner_id: 2,
             include_in_statistics: Some(true),
             ledger_name: Some("specific_ledger".to_string()),
+            account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
         };
 
         let create_response = server
@@ -585,6 +590,7 @@ mod integration_tests {
             owner_id: 1,
             include_in_statistics: Some(true),
             ledger_name: None,
+            account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
         };
 
         let create_response = server
@@ -603,6 +609,7 @@ mod integration_tests {
             currency_code: Some("EUR".to_string()),
             include_in_statistics: Some(false),
             ledger_name: Some("updated_ledger".to_string()),
+            account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
         };
 
         let response = server
@@ -652,6 +659,7 @@ mod integration_tests {
             owner_id: 1,
             include_in_statistics: Some(true),
             ledger_name: None,
+            account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
         };
 
         let create_response = server
@@ -708,6 +716,7 @@ mod integration_tests {
             currency_code: None,
             include_in_statistics: None,
             ledger_name: None,
+            account_kind: None,
         };
 
         let response = server
@@ -750,6 +759,7 @@ mod integration_tests {
             owner_id: 1,
             include_in_statistics: Some(true),
             ledger_name: Some("test_ledger_1".to_string()),
+            account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
         };
 
         let account2_request = CreateAccountRequest {
@@ -759,6 +769,7 @@ mod integration_tests {
             owner_id: 1,
             include_in_statistics: Some(true),
             ledger_name: Some("test_ledger_2".to_string()),
+            account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
         };
 
         // Create accounts
@@ -1205,7 +1216,6 @@ mod integration_tests {
         use crate::schemas::ApiResponse;
         use model::entities::{recurring_transaction, recurring_transaction_instance, account};
         use sea_orm::{ActiveModelTrait, Set};
-        use chrono::NaiveDate;
 
         // Setup test server and state
         let app_state = setup_test_app_state().await;
@@ -1216,9 +1226,11 @@ mod integration_tests {
         let test_account = account::ActiveModel {
             name: Set("Test Account for Missing Instances".to_string()),
             description: Set(Some("Account for testing missing instances".to_string())),
-            balance: Set(rust_decimal::Decimal::new(100000, 0)),
-            user_id: Set(1),
+            currency_code: Set("USD".to_string()),
+            owner_id: Set(1),
+            include_in_statistics: Set(true),
             ledger_name: Set(Some("test_missing_ledger".to_string())),
+            account_kind: Set(model::entities::account::AccountKind::RealAccount),
             ..Default::default()
         };
         let account = test_account.insert(&app_state.db).await.expect("Failed to create account");
@@ -1282,7 +1294,7 @@ mod integration_tests {
 
         // Find the pending instance
         let pending_info = response_body.data.iter()
-            .find(|i| i.due_date == one_month_ago.to_string())
+            .find(|i| i.due_date == one_month_ago)
             .expect("Should find pending instance");
         assert!(pending_info.is_pending, "Instance from last month should be marked as pending");
         assert_eq!(pending_info.instance_id, Some(pending.id), "Should have instance ID");
@@ -1304,7 +1316,6 @@ mod integration_tests {
         use crate::schemas::ApiResponse;
         use model::entities::{recurring_transaction, recurring_transaction_instance, account};
         use sea_orm::{ActiveModelTrait, Set, EntityTrait};
-        use chrono::NaiveDate;
 
         // Setup test server and state
         let app_state = setup_test_app_state().await;
@@ -1315,9 +1326,11 @@ mod integration_tests {
         let test_account = account::ActiveModel {
             name: Set("Test Account for Bulk Create".to_string()),
             description: Set(Some("Account for testing bulk create".to_string())),
-            balance: Set(rust_decimal::Decimal::new(100000, 0)),
-            user_id: Set(1),
+            currency_code: Set("USD".to_string()),
+            owner_id: Set(1),
+            include_in_statistics: Set(true),
             ledger_name: Set(Some("test_bulk_ledger".to_string())),
+            account_kind: Set(model::entities::account::AccountKind::RealAccount),
             ..Default::default()
         };
         let account = test_account.insert(&app_state.db).await.expect("Failed to create account");
@@ -1340,21 +1353,19 @@ mod integration_tests {
         let recurring_transaction = recurring_tx.insert(&app_state.db).await.expect("Failed to create recurring transaction");
 
         // Test 1: Create new instances as pending
-        let date1 = start_date.to_string();
-        let date2 = (start_date + chrono::Duration::days(30)).to_string();
+        let date1 = start_date;
+        let date2 = start_date + chrono::Duration::days(30);
 
         let bulk_request = BulkCreateInstancesRequest {
             instances: vec![
                 BulkInstanceItem {
                     recurring_transaction_id: recurring_transaction.id,
-                    due_date: date1.clone(),
-                    expected_amount: "-99.9".to_string(),
+                    due_date: date1,
                     instance_id: None,
                 },
                 BulkInstanceItem {
                     recurring_transaction_id: recurring_transaction.id,
-                    due_date: date2.clone(),
-                    expected_amount: "-99.9".to_string(),
+                    due_date: date2,
                     instance_id: None,
                 },
             ],
@@ -1369,9 +1380,9 @@ mod integration_tests {
         response.assert_status(StatusCode::CREATED);
         let response_body: ApiResponse<BulkCreateInstancesResponse> = response.json();
         assert!(response_body.success);
-        assert_eq!(response_body.data.created, 2, "Should create 2 new instances");
-        assert_eq!(response_body.data.updated, 0, "Should not update any instances");
-        assert_eq!(response_body.data.skipped, 0, "Should not skip any instances");
+        assert_eq!(response_body.data.created_count, 2, "Should create 2 new instances");
+        assert_eq!(response_body.data.updated_count, 0, "Should not update any instances");
+        assert_eq!(response_body.data.skipped_count, 0, "Should not skip any instances");
 
         // Verify instances were created as Pending
         let instances = recurring_transaction_instance::Entity::find()
@@ -1390,7 +1401,6 @@ mod integration_tests {
         use crate::schemas::ApiResponse;
         use model::entities::{recurring_transaction, recurring_transaction_instance, account};
         use sea_orm::{ActiveModelTrait, Set, EntityTrait};
-        use chrono::NaiveDate;
 
         // Setup test server and state
         let app_state = setup_test_app_state().await;
@@ -1401,9 +1411,11 @@ mod integration_tests {
         let test_account = account::ActiveModel {
             name: Set("Test Account for Update".to_string()),
             description: Set(Some("Account for testing update".to_string())),
-            balance: Set(rust_decimal::Decimal::new(100000, 0)),
-            user_id: Set(1),
+            currency_code: Set("USD".to_string()),
+            owner_id: Set(1),
+            include_in_statistics: Set(true),
             ledger_name: Set(Some("test_update_ledger".to_string())),
+            account_kind: Set(model::entities::account::AccountKind::RealAccount),
             ..Default::default()
         };
         let account = test_account.insert(&app_state.db).await.expect("Failed to create account");
@@ -1442,8 +1454,7 @@ mod integration_tests {
             instances: vec![
                 BulkInstanceItem {
                     recurring_transaction_id: recurring_transaction.id,
-                    due_date: start_date.to_string(),
-                    expected_amount: "-150".to_string(),
+                    due_date: start_date,
                     instance_id: Some(pending.id),
                 },
             ],
@@ -1458,9 +1469,9 @@ mod integration_tests {
         response.assert_status(StatusCode::CREATED);
         let response_body: ApiResponse<BulkCreateInstancesResponse> = response.json();
         assert!(response_body.success);
-        assert_eq!(response_body.data.created, 0, "Should not create new instances");
-        assert_eq!(response_body.data.updated, 1, "Should update 1 instance");
-        assert_eq!(response_body.data.skipped, 0, "Should not skip any instances");
+        assert_eq!(response_body.data.created_count, 0, "Should not create new instances");
+        assert_eq!(response_body.data.updated_count, 1, "Should update 1 instance");
+        assert_eq!(response_body.data.skipped_count, 0, "Should not skip any instances");
 
         // Verify instance was updated to Paid
         let updated_instance = recurring_transaction_instance::Entity::find_by_id(pending.id)
@@ -1482,7 +1493,6 @@ mod integration_tests {
         use crate::schemas::ApiResponse;
         use model::entities::{recurring_transaction, recurring_transaction_instance, account};
         use sea_orm::{ActiveModelTrait, Set, EntityTrait};
-        use chrono::NaiveDate;
 
         // Setup test server and state
         let app_state = setup_test_app_state().await;
@@ -1493,9 +1503,11 @@ mod integration_tests {
         let test_account = account::ActiveModel {
             name: Set("Test Account for Skip".to_string()),
             description: Set(Some("Account for testing skip".to_string())),
-            balance: Set(rust_decimal::Decimal::new(100000, 0)),
-            user_id: Set(1),
+            currency_code: Set("USD".to_string()),
+            owner_id: Set(1),
+            include_in_statistics: Set(true),
             ledger_name: Set(Some("test_skip_ledger".to_string())),
+            account_kind: Set(model::entities::account::AccountKind::RealAccount),
             ..Default::default()
         };
         let account = test_account.insert(&app_state.db).await.expect("Failed to create account");
@@ -1534,8 +1546,7 @@ mod integration_tests {
             instances: vec![
                 BulkInstanceItem {
                     recurring_transaction_id: recurring_transaction.id,
-                    due_date: start_date.to_string(),
-                    expected_amount: "-50".to_string(),
+                    due_date: start_date,
                     instance_id: Some(pending.id),
                 },
             ],
@@ -1550,9 +1561,9 @@ mod integration_tests {
         response.assert_status(StatusCode::CREATED);
         let response_body: ApiResponse<BulkCreateInstancesResponse> = response.json();
         assert!(response_body.success);
-        assert_eq!(response_body.data.created, 0, "Should not create new instances");
-        assert_eq!(response_body.data.updated, 0, "Should not update instances");
-        assert_eq!(response_body.data.skipped, 1, "Should skip 1 instance");
+        assert_eq!(response_body.data.created_count, 0, "Should not create new instances");
+        assert_eq!(response_body.data.updated_count, 0, "Should not update instances");
+        assert_eq!(response_body.data.skipped_count, 1, "Should skip 1 instance");
 
         // Verify instance remains Pending and unchanged
         let instance = recurring_transaction_instance::Entity::find_by_id(pending.id)
@@ -1573,7 +1584,6 @@ mod integration_tests {
         use crate::schemas::ApiResponse;
         use model::entities::{recurring_transaction, recurring_transaction_instance, account};
         use sea_orm::{ActiveModelTrait, Set, EntityTrait};
-        use chrono::NaiveDate;
 
         // Setup test server and state
         let app_state = setup_test_app_state().await;
@@ -1584,9 +1594,11 @@ mod integration_tests {
         let test_account = account::ActiveModel {
             name: Set("Test Account for Mixed".to_string()),
             description: Set(Some("Account for testing mixed operations".to_string())),
-            balance: Set(rust_decimal::Decimal::new(100000, 0)),
-            user_id: Set(1),
+            currency_code: Set("USD".to_string()),
+            owner_id: Set(1),
+            include_in_statistics: Set(true),
             ledger_name: Set(Some("test_mixed_ledger".to_string())),
+            account_kind: Set(model::entities::account::AccountKind::RealAccount),
             ..Default::default()
         };
         let account = test_account.insert(&app_state.db).await.expect("Failed to create account");
@@ -1641,22 +1653,19 @@ mod integration_tests {
                 // This should be updated to paid
                 BulkInstanceItem {
                     recurring_transaction_id: recurring_transaction.id,
-                    due_date: date1.to_string(),
-                    expected_amount: "-80".to_string(),
+                    due_date: date1,
                     instance_id: Some(pending1_saved.id),
                 },
                 // This should be skipped (pending -> pending)
                 BulkInstanceItem {
                     recurring_transaction_id: recurring_transaction.id,
-                    due_date: date2.to_string(),
-                    expected_amount: "-80".to_string(),
+                    due_date: date2,
                     instance_id: Some(pending2_saved.id),
                 },
                 // This should be created as new paid
                 BulkInstanceItem {
                     recurring_transaction_id: recurring_transaction.id,
-                    due_date: date3.to_string(),
-                    expected_amount: "-80".to_string(),
+                    due_date: date3,
                     instance_id: None,
                 },
             ],
@@ -1671,9 +1680,9 @@ mod integration_tests {
         response.assert_status(StatusCode::CREATED);
         let response_body: ApiResponse<BulkCreateInstancesResponse> = response.json();
         assert!(response_body.success);
-        assert_eq!(response_body.data.created, 1, "Should create 1 new instance");
-        assert_eq!(response_body.data.updated, 1, "Should update 1 instance");
-        assert_eq!(response_body.data.skipped, 1, "Should skip 1 instance");
+        assert_eq!(response_body.data.created_count, 1, "Should create 1 new instance");
+        assert_eq!(response_body.data.updated_count, 1, "Should update 1 instance");
+        assert_eq!(response_body.data.skipped_count, 1, "Should skip 1 instance");
 
         // Verify results
         let all_instances = recurring_transaction_instance::Entity::find()
@@ -1712,6 +1721,7 @@ mod integration_tests {
             owner_id: 1,
             include_in_statistics: Some(true),
             ledger_name: Some("test_manual_state".to_string()),
+            account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
         };
 
         let account_response = server
@@ -1795,6 +1805,7 @@ mod integration_tests {
             owner_id: 1,
             include_in_statistics: Some(true),
             ledger_name: Some("test_manual_states".to_string()),
+            account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
         };
 
         let account_response = server
@@ -1864,6 +1875,7 @@ mod integration_tests {
             owner_id: 1,
             include_in_statistics: Some(true),
             ledger_name: Some("test_manual_state".to_string()),
+            account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
         };
 
         let account_response = server
@@ -1923,6 +1935,7 @@ mod integration_tests {
             owner_id: 1,
             include_in_statistics: Some(true),
             ledger_name: Some("test_manual_state".to_string()),
+            account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
         };
 
         let account_response = server
@@ -1963,6 +1976,7 @@ mod integration_tests {
             owner_id: 1,
             include_in_statistics: Some(true),
             ledger_name: Some("test_manual_state".to_string()),
+            account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
         };
 
         let account_response = server
@@ -2030,6 +2044,7 @@ mod integration_tests {
             owner_id: 1,
             include_in_statistics: Some(true),
             ledger_name: Some("test_manual_state".to_string()),
+            account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
         };
 
         let account_response = server
@@ -2076,6 +2091,7 @@ mod integration_tests {
             owner_id: 1,
             include_in_statistics: Some(true),
             ledger_name: Some("test_manual_state".to_string()),
+            account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
         };
 
         let account_response = server
@@ -2133,6 +2149,7 @@ mod integration_tests {
             owner_id: 1,
             include_in_statistics: Some(true),
             ledger_name: Some("test_manual_state".to_string()),
+            account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
         };
 
         let account_response = server
@@ -2175,6 +2192,7 @@ mod integration_tests {
             owner_id: 1,
             include_in_statistics: Some(true),
             ledger_name: Some("test_imported".to_string()),
+            account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
         };
 
         let account_response = server
@@ -2246,6 +2264,7 @@ mod integration_tests {
             owner_id: 1,
             include_in_statistics: Some(true),
             ledger_name: Some("test_imported".to_string()),
+            account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
         };
 
         let account_response = server
@@ -2304,6 +2323,7 @@ mod integration_tests {
             owner_id: 1,
             include_in_statistics: Some(true),
             ledger_name: Some("test_imported".to_string()),
+            account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
         };
 
         let account_response = server
@@ -2360,6 +2380,7 @@ mod integration_tests {
             owner_id: 1,
             include_in_statistics: Some(true),
             ledger_name: Some("test_imported".to_string()),
+            account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
         };
 
         let account_response = server
@@ -2426,6 +2447,7 @@ mod integration_tests {
             owner_id: 1,
             include_in_statistics: Some(true),
             ledger_name: Some("test_imported".to_string()),
+            account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
         };
 
         let account_response = server
@@ -2485,6 +2507,7 @@ mod integration_tests {
             owner_id: 1,
             include_in_statistics: Some(true),
             ledger_name: Some("test_imported".to_string()),
+            account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
         };
 
         let account_response = server
@@ -2572,6 +2595,7 @@ mod integration_tests {
             owner_id: 1,
             include_in_statistics: Some(true),
             ledger_name: Some("test_imported".to_string()),
+            account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
         };
 
         let account_response = server
@@ -2682,6 +2706,7 @@ mod integration_tests {
             owner_id: 1,
             include_in_statistics: Some(true),
             ledger_name: Some("test_imported".to_string()),
+            account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
         };
 
         let account_response = server
@@ -2761,6 +2786,7 @@ mod integration_tests {
             owner_id: 1,
             include_in_statistics: Some(true),
             ledger_name: Some("test_reconcile".to_string()),
+            account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
         };
 
         let account_response = server
@@ -2869,6 +2895,7 @@ mod integration_tests {
             owner_id: 1,
             include_in_statistics: Some(true),
             ledger_name: Some("test_reconcile".to_string()),
+            account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
         };
 
         let account_response = server
@@ -2931,6 +2958,7 @@ mod integration_tests {
             owner_id: 1,
             include_in_statistics: Some(true),
             ledger_name: Some("test_reconcile".to_string()),
+            account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
         };
 
         let account_response = server
@@ -3064,6 +3092,7 @@ mod integration_tests {
             owner_id: 1,
             include_in_statistics: Some(true),
             ledger_name: Some("test_filter".to_string()),
+            account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
         };
 
         let account_response = server
