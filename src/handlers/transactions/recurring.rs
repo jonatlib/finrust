@@ -801,3 +801,154 @@ pub async fn delete_recurring_transaction(
         }
     }
 }
+
+/// Missing instance information
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct MissingInstanceInfo {
+    pub recurring_transaction_id: i32,
+    pub recurring_transaction_name: String,
+    pub due_date: NaiveDate,
+    pub expected_amount: Decimal,
+}
+
+/// Query parameters for getting missing instances
+#[derive(Debug, Deserialize, IntoParams, Validate)]
+pub struct MissingInstancesQuery {
+    /// Start date for the range (defaults to 6 months ago)
+    pub start_date: Option<NaiveDate>,
+    /// End date for the range (defaults to today)
+    pub end_date: Option<NaiveDate>,
+    /// Optional recurring transaction ID to filter by
+    pub recurring_transaction_id: Option<i32>,
+}
+
+/// Get missing instances for recurring transactions
+#[utoipa::path(
+    get,
+    path = "/api/v1/recurring-transactions/missing-instances",
+    tag = "recurring-transactions",
+    params(MissingInstancesQuery),
+    responses(
+        (status = 200, description = "Missing instances retrieved successfully", body = ApiResponse<Vec<MissingInstanceInfo>>),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    )
+)]
+#[instrument(skip(state))]
+pub async fn get_missing_instances(
+    Valid(Query(query)): Valid<Query<MissingInstancesQuery>>,
+    State(state): State<AppState>,
+) -> Result<(StatusCode, Json<ApiResponse<Vec<MissingInstanceInfo>>>), (StatusCode, Json<ErrorResponse>)> {
+    trace!("Fetching missing instances with query: {:?}", query);
+
+    let today = chrono::Local::now().date_naive();
+    let start_date = query.start_date.unwrap_or_else(|| today - chrono::Duration::days(180));
+    let end_date = query.end_date.unwrap_or(today);
+
+    // Fetch recurring transactions
+    let recurring_transactions = if let Some(rt_id) = query.recurring_transaction_id {
+        // Fetch specific recurring transaction
+        match recurring_transaction::Entity::find_by_id(rt_id).one(&state.db).await {
+            Ok(Some(rt)) => vec![rt],
+            Ok(None) => {
+                return Err((
+                    StatusCode::NOT_FOUND,
+                    Json(ErrorResponse {
+                        error: format!("Recurring transaction with id {} not found", rt_id),
+                        code: "NOT_FOUND".to_string(),
+                        success: false,
+                    }),
+                ));
+            }
+            Err(e) => {
+                error!("Database error while fetching recurring transaction: {}", e);
+                return Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorResponse {
+                        error: "Failed to fetch recurring transaction".to_string(),
+                        code: "DATABASE_ERROR".to_string(),
+                        success: false,
+                    }),
+                ));
+            }
+        }
+    } else {
+        // Fetch all recurring transactions
+        match recurring_transaction::Entity::find().all(&state.db).await {
+            Ok(rts) => rts,
+            Err(e) => {
+                error!("Database error while fetching recurring transactions: {}", e);
+                return Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorResponse {
+                        error: "Failed to fetch recurring transactions".to_string(),
+                        code: "DATABASE_ERROR".to_string(),
+                        success: false,
+                    }),
+                ));
+            }
+        }
+    };
+
+    let mut missing_instances = Vec::new();
+
+    // For each recurring transaction, generate expected dates and check for missing instances
+    for rt in recurring_transactions {
+        // Use the transaction generator to get all expected transaction dates
+        let transactions = rt.generate_transactions(start_date, end_date, today, &state.db).await;
+
+        // Get the unique dates from the transactions (for the target account)
+        let mut expected_dates: std::collections::HashSet<NaiveDate> = std::collections::HashSet::new();
+        for transaction in transactions {
+            if transaction.account() == rt.target_account_id {
+                expected_dates.insert(transaction.date());
+            }
+        }
+
+        // Fetch existing instances for this recurring transaction in the date range
+        let existing_instances = match recurring_transaction_instance::Entity::find()
+            .filter(recurring_transaction_instance::Column::RecurringTransactionId.eq(rt.id))
+            .filter(recurring_transaction_instance::Column::DueDate.gte(start_date))
+            .filter(recurring_transaction_instance::Column::DueDate.lte(end_date))
+            .all(&state.db)
+            .await
+        {
+            Ok(instances) => instances,
+            Err(e) => {
+                error!("Database error while fetching instances: {}", e);
+                continue; // Skip this recurring transaction
+            }
+        };
+
+        // Build a set of existing instance dates
+        let existing_dates: std::collections::HashSet<NaiveDate> = existing_instances
+            .iter()
+            .map(|instance| instance.due_date)
+            .collect();
+
+        // Find missing dates (expected but not existing)
+        for expected_date in expected_dates {
+            if !existing_dates.contains(&expected_date) && expected_date <= today {
+                missing_instances.push(MissingInstanceInfo {
+                    recurring_transaction_id: rt.id,
+                    recurring_transaction_name: rt.name.clone(),
+                    due_date: expected_date,
+                    expected_amount: rt.amount,
+                });
+            }
+        }
+    }
+
+    // Sort by due date
+    missing_instances.sort_by(|a, b| a.due_date.cmp(&b.due_date));
+
+    info!("Found {} missing instances", missing_instances.len());
+
+    Ok((
+        StatusCode::OK,
+        Json(ApiResponse {
+            data: missing_instances,
+            message: "Missing instances retrieved successfully".to_string(),
+            success: true,
+        }),
+    ))
+}

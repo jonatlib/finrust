@@ -1,12 +1,13 @@
-use yew::prelude::*;
-use super::list::RecurringList;
-use super::recurring_modal::RecurringModal;
 use super::instance_modal::InstanceModal;
+use super::list::RecurringList;
+use super::missing_instances::MissingInstances;
+use super::recurring_modal::RecurringModal;
 use crate::api_client::recurring_transaction::{
-    RecurringTransactionResponse, get_recurring_transaction,
-    create_recurring_instance, CreateRecurringInstanceRequest
+    create_recurring_instance, get_recurring_transaction,
+    CreateRecurringInstanceRequest, RecurringTransactionResponse,
 };
 use crate::common::toast::ToastContext;
+use yew::prelude::*;
 
 #[derive(Properties, PartialEq)]
 pub struct RecurringProps {
@@ -162,6 +163,14 @@ pub fn recurring(props: &RecurringProps) -> Html {
                     <i class="fas fa-plus"></i> {" Add Recurring Transaction"}
                 </button>
             </div>
+
+            <div class="mb-8 mt-6">
+                <MissingInstances
+                    key={*refresh_trigger}
+                    on_instances_created={on_modal_success.clone()}
+                />
+            </div>
+
             <RecurringList
                 key={*refresh_trigger}
                 on_edit={Some(on_edit)}
@@ -169,6 +178,7 @@ pub fn recurring(props: &RecurringProps) -> Html {
                 on_quick_create_instance={Some(on_quick_create_instance)}
                 account_id={props.account_id}
             />
+
             <RecurringModal
                 show={*show_modal}
                 on_close={on_modal_close}

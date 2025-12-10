@@ -367,3 +367,48 @@ pub async fn delete_recurring_instance(id: i32) -> Result<String, String> {
     }
     result
 }
+
+/// Missing instance information
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct MissingInstanceInfo {
+    pub recurring_transaction_id: i32,
+    pub recurring_transaction_name: String,
+    pub due_date: String,
+    pub expected_amount: String,
+}
+
+/// Get missing instances for recurring transactions
+pub async fn get_missing_instances(
+    start_date: Option<String>,
+    end_date: Option<String>,
+    recurring_transaction_id: Option<i32>,
+) -> Result<Vec<MissingInstanceInfo>, String> {
+    log::trace!("Fetching missing instances");
+
+    let mut query_params = Vec::new();
+    if let Some(start) = start_date {
+        query_params.push(format!("start_date={}", start));
+    }
+    if let Some(end) = end_date {
+        query_params.push(format!("end_date={}", end));
+    }
+    if let Some(rt_id) = recurring_transaction_id {
+        query_params.push(format!("recurring_transaction_id={}", rt_id));
+    }
+
+    let query_string = if query_params.is_empty() {
+        String::new()
+    } else {
+        format!("?{}", query_params.join("&"))
+    };
+
+    let result = api_client::get::<Vec<MissingInstanceInfo>>(
+        &format!("/recurring-transactions/missing-instances{}", query_string)
+    ).await;
+
+    match &result {
+        Ok(instances) => log::debug!("Successfully fetched {} missing instances", instances.len()),
+        Err(e) => log::error!("Failed to fetch missing instances: {}", e),
+    }
+    result
+}
