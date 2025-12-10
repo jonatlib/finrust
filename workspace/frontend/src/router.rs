@@ -6,13 +6,13 @@ use crate::components::budgets::Budgets;
 use crate::components::dashboard::Dashboard;
 use crate::components::forecast::Forecast;
 use crate::components::layout::layout::Layout;
-use crate::components::recurring::Recurring;
 use crate::components::reports::Reports;
 use crate::components::settings::Settings;
 use crate::pages::accounts::AccountsPage;
 use crate::pages::transactions::TransactionsPage;
 use crate::pages::transaction_edit::TransactionEditPage;
 use crate::pages::manual_states::ManualStatesPage;
+use crate::pages::recurring::RecurringPage;
 
 #[derive(Debug, Clone, Routable, PartialEq)]
 pub enum Route {
@@ -76,7 +76,7 @@ pub fn switch(routes: Route) -> Html {
         }
         Route::Recurring => {
             log::trace!("Rendering Recurring page");
-            html! { <Layout title="Recurring"><Recurring /></Layout> }
+            html! { <RecurringPage /> }
         }
         Route::Budgets => {
             log::trace!("Rendering Budgets page");
