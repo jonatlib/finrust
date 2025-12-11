@@ -3,7 +3,7 @@ use anyhow::Result;
 use moka::future::Cache;
 use sea_orm::Database;
 use std::time::Duration;
-use tracing::{info, debug, trace, error};
+use tracing::{debug, error, info, trace};
 
 /// Initialize application configuration and state with provided database URL
 pub async fn initialize_app_state_with_url(database_url: &str) -> Result<AppState> {
@@ -37,9 +37,9 @@ pub async fn initialize_app_state_with_url(database_url: &str) -> Result<AppStat
     trace!("Initializing application cache");
     let cache = Cache::builder()
         .max_capacity(1000)
-        .time_to_live(Duration::from_secs(300)) // 5 minutes
+        .time_to_live(Duration::from_secs(5)) // 5 minutes
         .build();
-    debug!("Cache initialized with max_capacity=1000, ttl=300s");
+    debug!("Cache initialized with max_capacity=1000, ttl=5s");
 
     let app_state = AppState { db, cache };
     info!("Application state initialized successfully");

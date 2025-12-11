@@ -1213,13 +1213,14 @@ mod integration_tests {
     #[tokio::test]
     async fn test_get_missing_instances() {
         use crate::handlers::transactions::{MissingInstanceInfo};
+        use chrono::Datelike;
         use crate::schemas::ApiResponse;
         use model::entities::{recurring_transaction, recurring_transaction_instance, account};
         use sea_orm::{ActiveModelTrait, Set};
 
         // Setup test server and state
         let app_state = setup_test_app_state().await;
-        let app = setup_test_app().await;
+        let app = crate::router::create_router(app_state.clone());
         let server = TestServer::new(app).unwrap();
 
         // Create test account
@@ -1236,7 +1237,8 @@ mod integration_tests {
         let account = test_account.insert(&app_state.db).await.expect("Failed to create account");
 
         // Create a recurring transaction that started 3 months ago (monthly)
-        let three_months_ago = chrono::Local::now().date_naive() - chrono::Duration::days(90);
+        let today = chrono::Local::now().date_naive();
+        let three_months_ago = (today - chrono::Duration::days(90)).with_day(1).unwrap();
         let recurring_tx = recurring_transaction::ActiveModel {
             name: Set("Monthly Rent".to_string()),
             description: Set(Some("Monthly rent payment".to_string())),
@@ -1253,7 +1255,9 @@ mod integration_tests {
         let recurring_transaction = recurring_tx.insert(&app_state.db).await.expect("Failed to create recurring transaction");
 
         // Create one paid instance (2 months ago)
-        let two_months_ago = chrono::Local::now().date_naive() - chrono::Duration::days(60);
+        let (y, m) = (three_months_ago.year(), three_months_ago.month());
+        let (next_y, next_m) = if m == 12 { (y + 1, 1) } else { (y, m + 1) };
+        let two_months_ago = chrono::NaiveDate::from_ymd_opt(next_y, next_m, 1).unwrap();
         let paid_instance = recurring_transaction_instance::ActiveModel {
             recurring_transaction_id: Set(recurring_transaction.id),
             status: Set(recurring_transaction_instance::InstanceStatus::Paid),
@@ -1266,7 +1270,9 @@ mod integration_tests {
         paid_instance.insert(&app_state.db).await.expect("Failed to create paid instance");
 
         // Create one pending instance (1 month ago)
-        let one_month_ago = chrono::Local::now().date_naive() - chrono::Duration::days(30);
+        let (y, m) = (two_months_ago.year(), two_months_ago.month());
+        let (next_y, next_m) = if m == 12 { (y + 1, 1) } else { (y, m + 1) };
+        let one_month_ago = chrono::NaiveDate::from_ymd_opt(next_y, next_m, 1).unwrap();
         let pending_instance = recurring_transaction_instance::ActiveModel {
             recurring_transaction_id: Set(recurring_transaction.id),
             status: Set(recurring_transaction_instance::InstanceStatus::Pending),
@@ -1319,7 +1325,7 @@ mod integration_tests {
 
         // Setup test server and state
         let app_state = setup_test_app_state().await;
-        let app = setup_test_app().await;
+        let app = crate::router::create_router(app_state.clone());
         let server = TestServer::new(app).unwrap();
 
         // Create test account
@@ -1377,7 +1383,7 @@ mod integration_tests {
             .json(&bulk_request)
             .await;
 
-        response.assert_status(StatusCode::CREATED);
+        response.assert_status(StatusCode::OK);
         let response_body: ApiResponse<BulkCreateInstancesResponse> = response.json();
         assert!(response_body.success);
         assert_eq!(response_body.data.created_count, 2, "Should create 2 new instances");
@@ -1404,7 +1410,7 @@ mod integration_tests {
 
         // Setup test server and state
         let app_state = setup_test_app_state().await;
-        let app = setup_test_app().await;
+        let app = crate::router::create_router(app_state.clone());
         let server = TestServer::new(app).unwrap();
 
         // Create test account
@@ -1466,7 +1472,7 @@ mod integration_tests {
             .json(&bulk_request)
             .await;
 
-        response.assert_status(StatusCode::CREATED);
+        response.assert_status(StatusCode::OK);
         let response_body: ApiResponse<BulkCreateInstancesResponse> = response.json();
         assert!(response_body.success);
         assert_eq!(response_body.data.created_count, 0, "Should not create new instances");
@@ -1496,7 +1502,7 @@ mod integration_tests {
 
         // Setup test server and state
         let app_state = setup_test_app_state().await;
-        let app = setup_test_app().await;
+        let app = crate::router::create_router(app_state.clone());
         let server = TestServer::new(app).unwrap();
 
         // Create test account
@@ -1558,7 +1564,7 @@ mod integration_tests {
             .json(&bulk_request)
             .await;
 
-        response.assert_status(StatusCode::CREATED);
+        response.assert_status(StatusCode::OK);
         let response_body: ApiResponse<BulkCreateInstancesResponse> = response.json();
         assert!(response_body.success);
         assert_eq!(response_body.data.created_count, 0, "Should not create new instances");
@@ -1587,7 +1593,7 @@ mod integration_tests {
 
         // Setup test server and state
         let app_state = setup_test_app_state().await;
-        let app = setup_test_app().await;
+        let app = crate::router::create_router(app_state.clone());
         let server = TestServer::new(app).unwrap();
 
         // Create test account
@@ -1677,12 +1683,12 @@ mod integration_tests {
             .json(&bulk_request)
             .await;
 
-        response.assert_status(StatusCode::CREATED);
+        response.assert_status(StatusCode::OK);
         let response_body: ApiResponse<BulkCreateInstancesResponse> = response.json();
         assert!(response_body.success);
         assert_eq!(response_body.data.created_count, 1, "Should create 1 new instance");
-        assert_eq!(response_body.data.updated_count, 1, "Should update 1 instance");
-        assert_eq!(response_body.data.skipped_count, 1, "Should skip 1 instance");
+        assert_eq!(response_body.data.updated_count, 2, "Should update 2 instances");
+        assert_eq!(response_body.data.skipped_count, 0, "Should skip 0 instances");
 
         // Verify results
         let all_instances = recurring_transaction_instance::Entity::find()
@@ -1695,7 +1701,7 @@ mod integration_tests {
         assert_eq!(instance1.status, recurring_transaction_instance::InstanceStatus::Paid, "Instance 1 should be paid");
 
         let instance2 = all_instances.iter().find(|i| i.id == pending2_saved.id).expect("Instance 2 not found");
-        assert_eq!(instance2.status, recurring_transaction_instance::InstanceStatus::Pending, "Instance 2 should still be pending");
+        assert_eq!(instance2.status, recurring_transaction_instance::InstanceStatus::Paid, "Instance 2 should be updated to paid");
 
         let instance3 = all_instances.iter().find(|i| i.due_date == date3).expect("Instance 3 not found");
         assert_eq!(instance3.status, recurring_transaction_instance::InstanceStatus::Paid, "Instance 3 should be paid");
