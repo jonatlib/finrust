@@ -94,14 +94,14 @@ pub fn missing_instances(props: &MissingInstancesProps) -> Html {
                             is_creating.set(false);
 
                             let mut messages = Vec::new();
-                            if response.created > 0 {
-                                messages.push(format!("{} created", response.created));
+                            if response.created_count > 0 {
+                                messages.push(format!("{} created", response.created_count));
                             }
-                            if response.updated > 0 {
-                                messages.push(format!("{} updated", response.updated));
+                            if response.updated_count > 0 {
+                                messages.push(format!("{} updated", response.updated_count));
                             }
-                            if response.skipped > 0 {
-                                messages.push(format!("{} skipped", response.skipped));
+                            if response.skipped_count > 0 {
+                                messages.push(format!("{} skipped", response.skipped_count));
                             }
 
                             if !messages.is_empty() {

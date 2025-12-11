@@ -436,9 +436,9 @@ pub struct BulkCreateInstancesRequest {
 /// Response for bulk creating instances
 #[derive(Debug, Deserialize)]
 pub struct BulkCreateInstancesResponse {
-    pub created: i32,
-    pub updated: i32,
-    pub skipped: i32,
+    pub created_count: i32,
+    pub updated_count: i32,
+    pub skipped_count: i32,
 }
 
 /// Bulk create recurring transaction instances
@@ -453,7 +453,7 @@ pub async fn bulk_create_instances(
 
     match &result {
         Ok(response) => log::info!("Bulk create completed: {} created, {} updated, {} skipped",
-            response.created, response.updated, response.skipped),
+            response.created_count, response.updated_count, response.skipped_count),
         Err(e) => log::error!("Failed to bulk create instances: {}", e),
     }
     result
