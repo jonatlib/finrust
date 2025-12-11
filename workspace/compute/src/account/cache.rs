@@ -61,7 +61,7 @@ pub struct AccountStateCacheCalculator<
 }
 
 impl<T: AccountStateCalculator, C: Cached<ComputeStateKey, DataFrame>>
-    AccountStateCacheCalculator<T, C>
+AccountStateCacheCalculator<T, C>
 {
     /// Creates a new cache calculator wrapping the provided calculator with a custom cache store.
     ///
@@ -103,7 +103,7 @@ impl<T: AccountStateCalculator, C: Cached<ComputeStateKey, DataFrame>>
 }
 
 impl<T: AccountStateCalculator>
-    AccountStateCacheCalculator<T, TimedSizedCache<ComputeStateKey, DataFrame>>
+AccountStateCacheCalculator<T, TimedSizedCache<ComputeStateKey, DataFrame>>
 {
     /// Creates a new cache calculator wrapping the provided calculator.
     ///
@@ -145,7 +145,7 @@ impl<T: AccountStateCalculator>
 
 #[async_trait]
 impl<T: AccountStateCalculator + Send + Sync, C: Cached<ComputeStateKey, DataFrame> + Send + Sync>
-    AccountStateCalculator for AccountStateCacheCalculator<T, C>
+AccountStateCalculator for AccountStateCacheCalculator<T, C>
 {
     async fn compute_account_state(
         &self,
@@ -193,6 +193,7 @@ mod tests {
     use super::*;
     use crate::account::balance::BalanceCalculator;
     use crate::account::testing::*;
+    use model::entities::account::AccountKind;
     use std::time::Duration;
     use tokio::time::sleep;
 
@@ -248,6 +249,7 @@ mod tests {
             owner_id: 1,
             include_in_statistics: true,
             ledger_name: None,
+            account_kind: AccountKind::RealAccount,
         };
         let account2 = account::Model {
             id: 2,
@@ -257,6 +259,7 @@ mod tests {
             owner_id: 1,
             include_in_statistics: true,
             ledger_name: None,
+            account_kind: AccountKind::RealAccount,
         };
 
         let date1 = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap();
