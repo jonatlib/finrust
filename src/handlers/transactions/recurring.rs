@@ -9,10 +9,10 @@ use chrono::NaiveDate;
 use model::entities::{recurring_transaction, recurring_transaction_instance};
 use model::transaction::{Tag, TransactionGenerator};
 use rust_decimal::Decimal;
-use sea_orm::{ActiveModelTrait, EntityTrait, Set, PaginatorTrait, QueryOrder, QueryFilter, ColumnTrait};
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, Set};
 use serde::{Deserialize, Serialize};
-use tracing::{instrument, error, warn, info, debug, trace};
-use utoipa::{ToSchema, IntoParams};
+use tracing::{debug, error, info, instrument, trace, warn};
+use utoipa::{IntoParams, ToSchema};
 use validator::Validate;
 
 /// Tag information for API responses
@@ -128,7 +128,7 @@ impl RecurringTransactionResponse {
         // Use the get_tag_for_transaction method from the TransactionGenerator trait
         let tags = model.get_tag_for_transaction(db, true).await;
         let tag_infos: Vec<TagInfo> = tags.into_iter().map(TagInfo::from).collect();
-        
+
         let mut response = Self::from(model);
         response.tags = tag_infos;
         Ok(response)
@@ -302,7 +302,7 @@ pub async fn create_recurring_instance(
     match new_instance.insert(&state.db).await {
         Ok(instance) => {
             info!("Successfully created recurring transaction instance with ID: {}", instance.id);
-            
+
             match RecurringInstanceResponse::with_tags(instance.clone(), &state.db).await {
                 Ok(instance_response) => {
                     let response = ApiResponse {
@@ -399,7 +399,7 @@ pub async fn create_recurring_transaction(
     match new_transaction.insert(&state.db).await {
         Ok(transaction) => {
             info!("Successfully created recurring transaction with ID: {}", transaction.id);
-            
+
             match RecurringTransactionResponse::with_tags(transaction.clone(), &state.db).await {
                 Ok(transaction_response) => {
                     let response = ApiResponse {
@@ -477,7 +477,7 @@ pub async fn get_recurring_transactions(
     {
         Ok(transactions) => {
             info!("Successfully retrieved {} recurring transactions", transactions.len());
-            
+
             let mut response_data = Vec::new();
             for transaction in transactions {
                 match RecurringTransactionResponse::with_tags(transaction.clone(), &state.db).await {
@@ -535,7 +535,7 @@ pub async fn get_recurring_transaction(
     {
         Ok(Some(transaction)) => {
             info!("Successfully retrieved recurring transaction: {}", transaction.name);
-            
+
             match RecurringTransactionResponse::with_tags(transaction.clone(), &state.db).await {
                 Ok(transaction_response) => {
                     let response = ApiResponse {
@@ -690,7 +690,7 @@ pub async fn update_recurring_transaction(
     match update_model.update(&state.db).await {
         Ok(updated_transaction) => {
             info!("Successfully updated recurring transaction with ID: {}", updated_transaction.id);
-            
+
             match RecurringTransactionResponse::with_tags(updated_transaction.clone(), &state.db).await {
                 Ok(transaction_response) => {
                     let response = ApiResponse {
@@ -845,8 +845,8 @@ pub async fn get_missing_instances(
     trace!("Fetching missing instances with query: {:?}", query);
 
     let today = chrono::Local::now().date_naive();
-    let start_date = query.start_date.unwrap_or_else(|| today - chrono::Duration::days(180));
-    let end_date = query.end_date.unwrap_or(today);
+    let start_date = query.start_date.unwrap_or_else(|| today - chrono::Duration::days(31 * 13));
+    let end_date = query.end_date.unwrap_or(today + chrono::Duration::days(1));
 
     // Fetch recurring transactions
     let recurring_transactions = if let Some(rt_id) = query.recurring_transaction_id {
@@ -1105,7 +1105,7 @@ pub async fn bulk_create_instances(
                 skipped_count,
             },
             message: format!("Processed {} instances: {} created, {} updated, {} skipped",
-                created_count + updated_count + skipped_count, created_count, updated_count, skipped_count),
+                             created_count + updated_count + skipped_count, created_count, updated_count, skipped_count),
             success: true,
         }),
     ))
