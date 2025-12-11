@@ -41,3 +41,16 @@ pub async fn get_account_statistics(account_id: i32) -> Result<AccountStatistics
 
     result
 }
+
+pub async fn get_all_accounts_statistics() -> Result<Vec<AccountStatisticsCollection>, String> {
+    log::trace!("Fetching statistics for all accounts");
+    let result = api_client::get::<Vec<AccountStatisticsCollection>>("/accounts/statistics").await;
+
+    if let Err(ref e) = result {
+        log::error!("Failed to fetch all accounts statistics: {}", e);
+    } else {
+        log::info!("Successfully fetched statistics for all accounts");
+    }
+
+    result
+}

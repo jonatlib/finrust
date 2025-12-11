@@ -43,3 +43,24 @@ pub async fn get_account_timeseries(
 
     result
 }
+
+pub async fn get_all_accounts_timeseries(
+    start_date: NaiveDate,
+    end_date: NaiveDate,
+) -> Result<AccountStateTimeseries, String> {
+    log::trace!("Fetching timeseries for all accounts from {} to {}", start_date, end_date);
+    let result = api_client::get::<AccountStateTimeseries>(
+        &format!(
+            "/accounts/timeseries?start_date={}&end_date={}",
+            start_date, end_date
+        )
+    ).await;
+
+    if let Err(ref e) = result {
+        log::error!("Failed to fetch all accounts timeseries: {}", e);
+    } else {
+        log::info!("Successfully fetched timeseries for all accounts");
+    }
+
+    result
+}
