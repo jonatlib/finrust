@@ -1,6 +1,6 @@
 use crate::schemas::{ApiResponse, AppState, ErrorResponse};
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::Json,
 };
@@ -214,11 +214,22 @@ pub async fn create_account(
     }
 }
 
+/// Query parameters for get_accounts
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct GetAccountsQuery {
+    /// Include accounts that are excluded from statistics
+    #[serde(default)]
+    pub include_ignored: bool,
+}
+
 /// Get all accounts
 #[utoipa::path(
     get,
     path = "/api/v1/accounts",
     tag = "accounts",
+    params(
+        ("include_ignored" = Option<bool>, Query, description = "Include accounts excluded from statistics"),
+    ),
     responses(
         (status = 200, description = "Accounts retrieved successfully", body = ApiResponse<Vec<AccountResponse>>),
         (status = 500, description = "Internal server error", body = ErrorResponse)
@@ -227,8 +238,9 @@ pub async fn create_account(
 #[instrument]
 pub async fn get_accounts(
     State(state): State<AppState>,
+    Query(query): Query<GetAccountsQuery>,
 ) -> Result<Json<ApiResponse<Vec<AccountResponse>>>, StatusCode> {
-    trace!("Entering get_accounts function");
+    trace!("Entering get_accounts function with include_ignored={}", query.include_ignored);
     debug!("Fetching all accounts from database");
 
     match account::Entity::find().all(&state.db).await {
@@ -236,14 +248,16 @@ pub async fn get_accounts(
             let account_count = accounts.len();
             debug!("Retrieved {} accounts from database", account_count);
 
-            let account_responses: Vec<AccountResponse> = accounts
+            let filtered_accounts: Vec<AccountResponse> = accounts
                 .into_iter()
+                .filter(|a| query.include_ignored || a.include_in_statistics)
                 .map(AccountResponse::from)
                 .collect();
 
-            info!("Successfully retrieved {} accounts", account_count);
+            let filtered_count = filtered_accounts.len();
+            info!("Successfully retrieved {} accounts (filtered from {} total)", filtered_count, account_count);
             let response = ApiResponse {
-                data: account_responses,
+                data: filtered_accounts,
                 message: "Accounts retrieved successfully".to_string(),
                 success: true,
             };
@@ -256,6 +270,14 @@ pub async fn get_accounts(
     }
 }
 
+/// Query parameters for get_account
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct GetAccountQuery {
+    /// Include account even if excluded from statistics
+    #[serde(default)]
+    pub include_ignored: bool,
+}
+
 /// Get a specific account by ID
 #[utoipa::path(
     get,
@@ -263,6 +285,7 @@ pub async fn get_accounts(
     tag = "accounts",
     params(
         ("account_id" = i32, Path, description = "Account ID"),
+        ("include_ignored" = Option<bool>, Query, description = "Include account even if excluded from statistics"),
     ),
     responses(
         (status = 200, description = "Account retrieved successfully", body = ApiResponse<AccountResponse>),
@@ -274,13 +297,20 @@ pub async fn get_accounts(
 pub async fn get_account(
     Path(account_id): Path<i32>,
     State(state): State<AppState>,
+    Query(query): Query<GetAccountQuery>,
 ) -> Result<Json<ApiResponse<AccountResponse>>, StatusCode> {
-    trace!("Entering get_account function for account_id: {}", account_id);
+    trace!("Entering get_account function for account_id: {}, include_ignored={}", account_id, query.include_ignored);
     debug!("Fetching account with ID: {}", account_id);
 
     match account::Entity::find_by_id(account_id).one(&state.db).await {
         Ok(Some(account_model)) => {
-            info!("Successfully retrieved account with ID: {}, name: {}", 
+            // Check if the account should be filtered
+            if !query.include_ignored && !account_model.include_in_statistics {
+                warn!("Account with ID {} is excluded from statistics and include_ignored=false", account_id);
+                return Err(StatusCode::NOT_FOUND);
+            }
+
+            info!("Successfully retrieved account with ID: {}, name: {}",
                   account_model.id, account_model.name);
             let response = ApiResponse {
                 data: AccountResponse::from(account_model),

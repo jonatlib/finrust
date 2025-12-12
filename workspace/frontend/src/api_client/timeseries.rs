@@ -27,13 +27,29 @@ pub async fn get_account_timeseries(
     start_date: NaiveDate,
     end_date: NaiveDate,
 ) -> Result<AccountStateTimeseries, String> {
-    log::trace!("Fetching timeseries for account ID: {} from {} to {}", account_id, start_date, end_date);
-    let result = api_client::get::<AccountStateTimeseries>(
-        &format!(
+    get_account_timeseries_with_ignored(account_id, start_date, end_date, false).await
+}
+
+pub async fn get_account_timeseries_with_ignored(
+    account_id: i32,
+    start_date: NaiveDate,
+    end_date: NaiveDate,
+    include_ignored: bool,
+) -> Result<AccountStateTimeseries, String> {
+    log::trace!("Fetching timeseries for account ID: {} from {} to {} (include_ignored={})",
+        account_id, start_date, end_date, include_ignored);
+    let url = if include_ignored {
+        format!(
+            "/accounts/{}/timeseries?start_date={}&end_date={}&include_ignored=true",
+            account_id, start_date, end_date
+        )
+    } else {
+        format!(
             "/accounts/{}/timeseries?start_date={}&end_date={}",
             account_id, start_date, end_date
         )
-    ).await;
+    };
+    let result = api_client::get::<AccountStateTimeseries>(&url).await;
 
     if let Err(ref e) = result {
         log::error!("Failed to fetch account timeseries: {}", e);

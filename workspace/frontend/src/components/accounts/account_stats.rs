@@ -1,5 +1,5 @@
 use yew::prelude::*;
-use crate::api_client::statistics::{get_account_statistics, AccountStatisticsCollection};
+use crate::api_client::statistics::{get_account_statistics_with_ignored, AccountStatisticsCollection};
 use crate::common::fetch_hook::use_fetch_with_refetch;
 use crate::hooks::FetchState;
 
@@ -11,7 +11,7 @@ pub struct Props {
 #[function_component(AccountStats)]
 pub fn account_stats(props: &Props) -> Html {
     let account_id = props.account_id;
-    let (fetch_state, _refetch) = use_fetch_with_refetch(move || get_account_statistics(account_id));
+    let (fetch_state, _refetch) = use_fetch_with_refetch(move || get_account_statistics_with_ignored(account_id, true));
 
     html! {
         <div class="card bg-base-100 shadow mt-6">

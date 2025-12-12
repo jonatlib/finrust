@@ -1,5 +1,5 @@
 use yew::prelude::*;
-use crate::api_client::account::{get_accounts, AccountResponse, AccountKind};
+use crate::api_client::account::{get_accounts_with_ignored, AccountResponse, AccountKind};
 use crate::common::fetch_hook::use_fetch_with_refetch;
 use crate::hooks::FetchState;
 use super::account_card::AccountCard;
@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 #[function_component(Accounts)]
 pub fn accounts() -> Html {
     log::trace!("Accounts component rendering");
-    let (fetch_state, refetch) = use_fetch_with_refetch(get_accounts);
+    let (fetch_state, refetch) = use_fetch_with_refetch(|| get_accounts_with_ignored(true));
     let show_modal = use_state(|| false);
 
     log::debug!("Accounts component state: loading={}, success={}, error={}",

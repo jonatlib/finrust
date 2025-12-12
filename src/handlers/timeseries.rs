@@ -69,9 +69,9 @@ pub async fn get_account_timeseries(
         }
     };
 
-    // Only include accounts that are marked for statistics
-    if !account_model.include_in_statistics {
-        warn!("Account with ID {} is not included in statistics", account_id);
+    // Only include accounts that are marked for statistics (unless include_ignored is true)
+    if !query.include_ignored && !account_model.include_in_statistics {
+        warn!("Account with ID {} is not included in statistics and include_ignored=false", account_id);
         return Err(StatusCode::NOT_FOUND);
     }
 

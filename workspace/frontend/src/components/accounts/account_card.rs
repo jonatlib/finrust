@@ -1,6 +1,7 @@
 use yew::prelude::*;
 use yew_router::prelude::*;
-use crate::api_client::account::{AccountResponse, get_account_statistics};
+use crate::api_client::account::AccountResponse;
+use crate::api_client::statistics::get_account_statistics_with_ignored;
 use crate::common::fetch_hook::use_fetch_with_refetch;
 use crate::hooks::FetchState;
 use crate::Route;
@@ -17,7 +18,7 @@ pub fn account_card(props: &Props) -> Html {
     let navigator = use_navigator().unwrap();
 
     // Fetch statistics for this account
-    let (stats_state, _refetch) = use_fetch_with_refetch(move || get_account_statistics(account_id));
+    let (stats_state, _refetch) = use_fetch_with_refetch(move || get_account_statistics_with_ignored(account_id, true));
 
     log::debug!("Rendering account card for: {} (ID: {}), stats state={:?}",
         account.name, account.id,

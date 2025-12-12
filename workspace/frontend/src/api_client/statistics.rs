@@ -28,10 +28,17 @@ pub enum TimePeriod {
 }
 
 pub async fn get_account_statistics(account_id: i32) -> Result<AccountStatisticsCollection, String> {
-    log::trace!("Fetching statistics for account ID: {}", account_id);
-    let result = api_client::get::<AccountStatisticsCollection>(
-        &format!("/accounts/{}/statistics", account_id)
-    ).await;
+    get_account_statistics_with_ignored(account_id, false).await
+}
+
+pub async fn get_account_statistics_with_ignored(account_id: i32, include_ignored: bool) -> Result<AccountStatisticsCollection, String> {
+    log::trace!("Fetching statistics for account ID: {} (include_ignored={})", account_id, include_ignored);
+    let url = if include_ignored {
+        format!("/accounts/{}/statistics?include_ignored=true", account_id)
+    } else {
+        format!("/accounts/{}/statistics", account_id)
+    };
+    let result = api_client::get::<AccountStatisticsCollection>(&url).await;
 
     if let Err(ref e) = result {
         log::error!("Failed to fetch account statistics: {}", e);

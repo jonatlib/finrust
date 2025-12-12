@@ -1,6 +1,6 @@
 use yew::prelude::*;
 use yew_router::prelude::*;
-use crate::api_client::account::{get_account, delete_account};
+use crate::api_client::account::{get_account_with_ignored, delete_account};
 use crate::common::fetch_hook::use_fetch_with_refetch;
 use crate::hooks::FetchState;
 use super::account_modal::AccountModal;
@@ -18,7 +18,7 @@ pub fn account_edit(props: &Props) -> Html {
     let account_id = props.account_id;
     let navigator = use_navigator().unwrap();
 
-    let (fetch_state, refetch) = use_fetch_with_refetch(move || get_account(account_id));
+    let (fetch_state, refetch) = use_fetch_with_refetch(move || get_account_with_ignored(account_id, true));
     let show_edit_modal = use_state(|| false);
     let show_delete_confirm = use_state(|| false);
     let is_deleting = use_state(|| false);

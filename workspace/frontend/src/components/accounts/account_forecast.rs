@@ -1,5 +1,5 @@
 use yew::prelude::*;
-use crate::api_client::timeseries::{get_account_timeseries, AccountStateTimeseries};
+use crate::api_client::timeseries::{get_account_timeseries_with_ignored, AccountStateTimeseries};
 use crate::common::fetch_hook::use_fetch_with_refetch;
 use crate::hooks::FetchState;
 use chrono::Local;
@@ -29,7 +29,7 @@ pub fn account_forecast(props: &Props) -> Html {
     let end_date = start_date + chrono::Duration::days(13 * 30);
 
     let (fetch_state, _refetch) = use_fetch_with_refetch(move || {
-        get_account_timeseries(account_id, start_date, end_date)
+        get_account_timeseries_with_ignored(account_id, start_date, end_date, true)
     });
 
     html! {

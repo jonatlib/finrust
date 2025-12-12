@@ -36,6 +36,9 @@ pub struct StatisticsQuery {
     pub start_date: Option<NaiveDate>,
     /// End date for custom range (YYYY-MM-DD)
     pub end_date: Option<NaiveDate>,
+    /// Include accounts excluded from statistics
+    #[serde(default)]
+    pub include_ignored: bool,
 }
 
 /// Query parameters for timeseries endpoints
@@ -46,6 +49,9 @@ pub struct TimeseriesQuery {
     pub start_date: NaiveDate,
     /// End date for timeseries (YYYY-MM-DD)
     pub end_date: NaiveDate,
+    /// Include accounts excluded from statistics
+    #[serde(default)]
+    pub include_ignored: bool,
 }
 
 fn validate_timeseries_dates(query: &TimeseriesQuery) -> Result<(), validator::ValidationError> {

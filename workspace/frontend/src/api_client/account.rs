@@ -102,8 +102,18 @@ pub struct UpdateAccountRequest {
 
 /// Get all accounts
 pub async fn get_accounts() -> Result<Vec<AccountResponse>, String> {
-    log::trace!("Fetching all accounts");
-    let result = api_client::get::<Vec<AccountResponse>>("/accounts").await;
+    get_accounts_with_ignored(false).await
+}
+
+/// Get all accounts with optional include_ignored parameter
+pub async fn get_accounts_with_ignored(include_ignored: bool) -> Result<Vec<AccountResponse>, String> {
+    log::trace!("Fetching all accounts (include_ignored={})", include_ignored);
+    let url = if include_ignored {
+        "/accounts?include_ignored=true"
+    } else {
+        "/accounts"
+    };
+    let result = api_client::get::<Vec<AccountResponse>>(url).await;
     match &result {
         Ok(accounts) => log::info!("Fetched {} accounts", accounts.len()),
         Err(e) => log::error!("Failed to fetch accounts: {}", e),
@@ -113,8 +123,18 @@ pub async fn get_accounts() -> Result<Vec<AccountResponse>, String> {
 
 /// Get a specific account by ID
 pub async fn get_account(account_id: i32) -> Result<AccountResponse, String> {
-    log::trace!("Fetching account with ID: {}", account_id);
-    let result = api_client::get::<AccountResponse>(&format!("/accounts/{}", account_id)).await;
+    get_account_with_ignored(account_id, false).await
+}
+
+/// Get a specific account by ID with optional include_ignored parameter
+pub async fn get_account_with_ignored(account_id: i32, include_ignored: bool) -> Result<AccountResponse, String> {
+    log::trace!("Fetching account with ID: {} (include_ignored={})", account_id, include_ignored);
+    let url = if include_ignored {
+        format!("/accounts/{}?include_ignored=true", account_id)
+    } else {
+        format!("/accounts/{}", account_id)
+    };
+    let result = api_client::get::<AccountResponse>(&url).await;
     match &result {
         Ok(account) => log::info!("Fetched account: {} (ID: {})", account.name, account.id),
         Err(e) => log::error!("Failed to fetch account {}: {}", account_id, e),
