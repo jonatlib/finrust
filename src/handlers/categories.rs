@@ -5,8 +5,10 @@ use axum::{
     response::Json,
 };
 use chrono::NaiveDate;
-use model::entities::{category, account};
-use sea_orm::{ActiveModelTrait, EntityTrait, Set};
+use model::entities::{category, account, one_off_transaction};
+use sea_orm::{ActiveModelTrait, EntityTrait, Set, ColumnTrait, QueryFilter};
+use rust_decimal::Decimal;
+use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use tracing::{instrument, error, warn, info, debug};
 use utoipa::{ToSchema, IntoParams};
@@ -67,11 +69,10 @@ pub struct CategoryStatsQuery {
 /// Category statistics response
 #[derive(Debug, Serialize, ToSchema)]
 pub struct CategoryStatsResponse {
-    pub date: String,
-    pub account: i32,
     pub category_id: i32,
     pub category_name: String,
-    pub amount: f64,
+    pub total_amount: String,
+    pub transaction_count: i64,
 }
 
 /// Create a new category
@@ -625,14 +626,83 @@ pub async fn get_category_stats(
         }
     };
 
-    // TODO: Implement transaction generation and category statistics computation
-    // This requires implementing the TransactionGenerator trait for account::Model
-    // For now, return an empty list
-    warn!("Category statistics not fully implemented yet");
+    // Get all transactions in the date range with categories
+    let transactions = match one_off_transaction::Entity::find()
+        .filter(one_off_transaction::Column::Date.between(query.start_date, query.end_date))
+        .filter(one_off_transaction::Column::CategoryId.is_not_null())
+        .all(&state.db)
+        .await
+    {
+        Ok(txns) => txns,
+        Err(e) => {
+            error!("Failed to fetch transactions: {}", e);
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "Failed to fetch transactions".to_string(),
+                    code: "ERROR".to_string(),
+                    success: false,
+                }),
+            ));
+        }
+    };
+
+    // Get all categories to map IDs to names
+    let categories = match category::Entity::find().all(&state.db).await {
+        Ok(cats) => cats,
+        Err(e) => {
+            error!("Failed to fetch categories: {}", e);
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "Failed to fetch categories".to_string(),
+                    code: "ERROR".to_string(),
+                    success: false,
+                }),
+            ));
+        }
+    };
+
+    // Build category name map
+    let category_map: HashMap<i32, String> = categories
+        .into_iter()
+        .map(|cat| (cat.id, cat.name))
+        .collect();
+
+    // Aggregate statistics by category
+    let mut stats_map: HashMap<i32, (Decimal, i64)> = HashMap::new();
+
+    for txn in transactions {
+        if let Some(category_id) = txn.category_id {
+            let entry = stats_map.entry(category_id).or_insert((Decimal::ZERO, 0));
+            entry.0 += txn.amount;
+            entry.1 += 1;
+        }
+    }
+
+    // Convert to response format
+    let stats: Vec<CategoryStatsResponse> = stats_map
+        .into_iter()
+        .map(|(category_id, (total_amount, count))| {
+            let category_name = category_map
+                .get(&category_id)
+                .cloned()
+                .unwrap_or_else(|| format!("Category {}", category_id));
+
+            CategoryStatsResponse {
+                category_id,
+                category_name,
+                total_amount: total_amount.to_string(),
+                transaction_count: count,
+            }
+        })
+        .collect();
+
+    info!("Computed statistics for {} categories", stats.len());
 
     Ok(Json(ApiResponse {
-        data: Vec::new(),
-        message: "Category statistics feature is not yet fully implemented".to_string(),
+        data: stats,
+        message: "Success".to_string(),
         success: true,
     }))
 }
