@@ -1,9 +1,10 @@
 use yew::prelude::*;
 use std::collections::HashMap;
+use std::rc::Rc;
 use crate::api_client::category::{get_categories, CategoryResponse};
 use crate::common::fetch_hook::use_fetch_with_refetch;
 use crate::hooks::FetchState;
-use super::category_card::CategoryCard;
+use super::tree_item::TreeItem;
 use super::category_modal::CategoryModal;
 
 #[function_component(Categories)]
@@ -16,33 +17,25 @@ pub fn categories() -> Html {
     log::debug!("Categories component state: loading={}, success={}, error={}",
         fetch_state.is_loading(), fetch_state.is_success(), fetch_state.is_error());
 
-    // Build parent name lookup
-    let parent_lookup: Option<HashMap<i32, String>> = match &*fetch_state {
-        FetchState::Success(categories) => {
-            let mut lookup = HashMap::new();
-            for category in categories {
-                lookup.insert(category.id, category.name.clone());
-            }
-            Some(lookup)
-        },
-        _ => None,
-    };
-
-    // Group categories into root and children
-    let (root_categories, child_categories): (Vec<CategoryResponse>, Vec<CategoryResponse>) = match &*fetch_state {
+    // Build tree structure: map parent_id -> list of children
+    let (root_categories, children_map): (Vec<CategoryResponse>, HashMap<i32, Vec<CategoryResponse>>) = match &*fetch_state {
         FetchState::Success(categories) => {
             let mut roots = Vec::new();
-            let mut children = Vec::new();
+            let mut children_map: HashMap<i32, Vec<CategoryResponse>> = HashMap::new();
+
             for category in categories {
                 if category.parent_id.is_none() {
                     roots.push(category.clone());
-                } else {
-                    children.push(category.clone());
+                } else if let Some(parent_id) = category.parent_id {
+                    children_map.entry(parent_id)
+                        .or_insert_with(Vec::new)
+                        .push(category.clone());
                 }
             }
-            (roots, children)
+
+            (roots, children_map)
         },
-        _ => (Vec::new(), Vec::new()),
+        _ => (Vec::new(), HashMap::new()),
     };
 
     let on_open_modal = {
@@ -144,52 +137,28 @@ pub fn categories() -> Html {
                                 </div>
                             }
                         } else {
-                            html! {
-                                <div class="space-y-6">
-                                    // Root Categories
-                                    if !root_categories.is_empty() {
-                                        <div>
-                                            <h3 class="text-xl font-semibold mb-3">{"Root Categories"}</h3>
-                                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                                { for root_categories.iter().map(|category| {
-                                                    log::trace!("Rendering root category card for: {}", category.name);
-                                                    html! {
-                                                        <CategoryCard
-                                                            key={category.id}
-                                                            category={category.clone()}
-                                                            on_edit={on_edit_category.clone()}
-                                                            on_delete_success={on_delete_success.clone()}
-                                                            parent_name={None::<String>}
-                                                        />
-                                                    }
-                                                })}
-                                            </div>
-                                        </div>
-                                    }
+                            let children_map_rc = Rc::new(children_map);
 
-                                    // Child Categories
-                                    if !child_categories.is_empty() {
-                                        <div>
-                                            <h3 class="text-xl font-semibold mb-3">{"Subcategories"}</h3>
-                                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                                { for child_categories.iter().map(|category| {
-                                                    log::trace!("Rendering child category card for: {}", category.name);
-                                                    let parent_name = category.parent_id
-                                                        .and_then(|pid| parent_lookup.as_ref()
-                                                            .and_then(|lookup| lookup.get(&pid).cloned()));
-                                                    html! {
-                                                        <CategoryCard
-                                                            key={category.id}
-                                                            category={category.clone()}
-                                                            on_edit={on_edit_category.clone()}
-                                                            on_delete_success={on_delete_success.clone()}
-                                                            parent_name={parent_name}
-                                                        />
-                                                    }
-                                                })}
-                                            </div>
+                            html! {
+                                <div class="card bg-base-100 shadow">
+                                    <div class="card-body">
+                                        <h3 class="text-lg font-semibold mb-4">{"Category Tree"}</h3>
+                                        <div class="category-tree space-y-1">
+                                            { for root_categories.iter().map(|category| {
+                                                log::trace!("Rendering tree for root category: {}", category.name);
+                                                html! {
+                                                    <TreeItem
+                                                        key={category.id}
+                                                        category={category.clone()}
+                                                        children_map={children_map_rc.clone()}
+                                                        on_edit={on_edit_category.clone()}
+                                                        on_delete_success={on_delete_success.clone()}
+                                                        level={0}
+                                                    />
+                                                }
+                                            })}
                                         </div>
-                                    }
+                                    </div>
                                 </div>
                             }
                         }
