@@ -1,5 +1,5 @@
 pub mod accounts;
-//pub mod categories;
+pub mod categories;
 pub mod health;
 pub mod manual_account_states;
 pub mod recurring_income;

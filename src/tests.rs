@@ -3230,4 +3230,536 @@ mod integration_tests {
             .collect();
         assert!(unreconciled_transactions.len() >= 1);
     }
+
+    // ==================== Category Tests ====================
+
+    #[tokio::test]
+    async fn test_create_category() {
+        use crate::handlers::categories::CreateCategoryRequest;
+
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // Create a root category
+        let create_request = CreateCategoryRequest {
+            name: "Groceries".to_string(),
+            description: Some("Food and household items".to_string()),
+            parent_id: None,
+        };
+
+        let response = server
+            .post("/api/v1/categories")
+            .json(&create_request)
+            .await;
+
+        response.assert_status(StatusCode::CREATED);
+        let body: ApiResponse<serde_json::Value> = response.json();
+        assert!(body.success);
+        assert_eq!(body.message, "Success");
+        assert_eq!(body.data["name"], "Groceries");
+        assert_eq!(body.data["description"], "Food and household items");
+        assert!(body.data["parent_id"].is_null());
+        assert!(body.data["id"].as_i64().unwrap() > 0);
+    }
+
+    #[tokio::test]
+    async fn test_create_category_with_parent() {
+        use crate::handlers::categories::CreateCategoryRequest;
+
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // Create parent category
+        let parent_request = CreateCategoryRequest {
+            name: "Shopping".to_string(),
+            description: None,
+            parent_id: None,
+        };
+
+        let parent_response = server
+            .post("/api/v1/categories")
+            .json(&parent_request)
+            .await;
+        parent_response.assert_status(StatusCode::CREATED);
+        let parent_body: ApiResponse<serde_json::Value> = parent_response.json();
+        let parent_id = parent_body.data["id"].as_i64().unwrap() as i32;
+
+        // Create child category
+        let child_request = CreateCategoryRequest {
+            name: "Electronics".to_string(),
+            description: Some("Electronic devices and accessories".to_string()),
+            parent_id: Some(parent_id),
+        };
+
+        let response = server
+            .post("/api/v1/categories")
+            .json(&child_request)
+            .await;
+
+        response.assert_status(StatusCode::CREATED);
+        let body: ApiResponse<serde_json::Value> = response.json();
+        assert!(body.success);
+        assert_eq!(body.data["name"], "Electronics");
+        assert_eq!(body.data["parent_id"], parent_id);
+    }
+
+    #[tokio::test]
+    async fn test_create_category_with_invalid_parent() {
+        use crate::handlers::categories::CreateCategoryRequest;
+
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // Try to create category with non-existent parent
+        let create_request = CreateCategoryRequest {
+            name: "Invalid Category".to_string(),
+            description: None,
+            parent_id: Some(99999),
+        };
+
+        let response = server
+            .post("/api/v1/categories")
+            .json(&create_request)
+            .await;
+
+        response.assert_status(StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn test_create_duplicate_category() {
+        use crate::handlers::categories::CreateCategoryRequest;
+
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // Create first category
+        let create_request = CreateCategoryRequest {
+            name: "Utilities".to_string(),
+            description: None,
+            parent_id: None,
+        };
+
+        let first_response = server
+            .post("/api/v1/categories")
+            .json(&create_request)
+            .await;
+        first_response.assert_status(StatusCode::CREATED);
+
+        // Try to create duplicate
+        let duplicate_response = server
+            .post("/api/v1/categories")
+            .json(&create_request)
+            .await;
+
+        duplicate_response.assert_status(StatusCode::CONFLICT);
+    }
+
+    #[tokio::test]
+    async fn test_get_categories() {
+        use crate::handlers::categories::CreateCategoryRequest;
+
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // Create a few categories
+        let categories = vec![
+            CreateCategoryRequest {
+                name: "Transport".to_string(),
+                description: Some("Transportation expenses".to_string()),
+                parent_id: None,
+            },
+            CreateCategoryRequest {
+                name: "Entertainment".to_string(),
+                description: None,
+                parent_id: None,
+            },
+        ];
+
+        for category in categories {
+            let response = server
+                .post("/api/v1/categories")
+                .json(&category)
+                .await;
+            response.assert_status(StatusCode::CREATED);
+        }
+
+        // Get all categories
+        let response = server.get("/api/v1/categories").await;
+
+        response.assert_status(StatusCode::OK);
+        let body: ApiResponse<Vec<serde_json::Value>> = response.json();
+        assert!(body.success);
+        assert_eq!(body.message, "Success");
+        assert!(body.data.len() >= 2);
+
+        // Verify our categories are in the list
+        let transport = body.data.iter().find(|c| c["name"] == "Transport");
+        assert!(transport.is_some());
+        assert_eq!(transport.unwrap()["description"], "Transportation expenses");
+    }
+
+    #[tokio::test]
+    async fn test_get_category_by_id() {
+        use crate::handlers::categories::CreateCategoryRequest;
+
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // Create a category
+        let create_request = CreateCategoryRequest {
+            name: "Healthcare".to_string(),
+            description: Some("Medical expenses".to_string()),
+            parent_id: None,
+        };
+
+        let create_response = server
+            .post("/api/v1/categories")
+            .json(&create_request)
+            .await;
+        create_response.assert_status(StatusCode::CREATED);
+        let create_body: ApiResponse<serde_json::Value> = create_response.json();
+        let category_id = create_body.data["id"].as_i64().unwrap();
+
+        // Get category by ID
+        let response = server
+            .get(&format!("/api/v1/categories/{}", category_id))
+            .await;
+
+        response.assert_status(StatusCode::OK);
+        let body: ApiResponse<serde_json::Value> = response.json();
+        assert!(body.success);
+        assert_eq!(body.message, "Success");
+        assert_eq!(body.data["id"], category_id);
+        assert_eq!(body.data["name"], "Healthcare");
+        assert_eq!(body.data["description"], "Medical expenses");
+    }
+
+    #[tokio::test]
+    async fn test_get_category_not_found() {
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        let response = server.get("/api/v1/categories/99999").await;
+
+        response.assert_status(StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_update_category() {
+        use crate::handlers::categories::{CreateCategoryRequest, UpdateCategoryRequest};
+
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // Create a category
+        let create_request = CreateCategoryRequest {
+            name: "OldName".to_string(),
+            description: Some("Old description".to_string()),
+            parent_id: None,
+        };
+
+        let create_response = server
+            .post("/api/v1/categories")
+            .json(&create_request)
+            .await;
+        create_response.assert_status(StatusCode::CREATED);
+        let create_body: ApiResponse<serde_json::Value> = create_response.json();
+        let category_id = create_body.data["id"].as_i64().unwrap();
+
+        // Update category
+        let update_request = UpdateCategoryRequest {
+            name: Some("NewName".to_string()),
+            description: Some("New description".to_string()),
+            parent_id: None,
+        };
+
+        let response = server
+            .put(&format!("/api/v1/categories/{}", category_id))
+            .json(&update_request)
+            .await;
+
+        response.assert_status(StatusCode::OK);
+        let body: ApiResponse<serde_json::Value> = response.json();
+        assert!(body.success);
+        assert_eq!(body.message, "Success");
+        assert_eq!(body.data["id"], category_id);
+        assert_eq!(body.data["name"], "NewName");
+        assert_eq!(body.data["description"], "New description");
+    }
+
+    #[tokio::test]
+    async fn test_update_category_with_parent() {
+        use crate::handlers::categories::{CreateCategoryRequest, UpdateCategoryRequest};
+
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // Create parent category
+        let parent_request = CreateCategoryRequest {
+            name: "ParentCategory".to_string(),
+            description: None,
+            parent_id: None,
+        };
+
+        let parent_response = server
+            .post("/api/v1/categories")
+            .json(&parent_request)
+            .await;
+        parent_response.assert_status(StatusCode::CREATED);
+        let parent_body: ApiResponse<serde_json::Value> = parent_response.json();
+        let parent_id = parent_body.data["id"].as_i64().unwrap() as i32;
+
+        // Create child category without parent
+        let child_request = CreateCategoryRequest {
+            name: "ChildCategory".to_string(),
+            description: None,
+            parent_id: None,
+        };
+
+        let child_response = server
+            .post("/api/v1/categories")
+            .json(&child_request)
+            .await;
+        child_response.assert_status(StatusCode::CREATED);
+        let child_body: ApiResponse<serde_json::Value> = child_response.json();
+        let child_id = child_body.data["id"].as_i64().unwrap();
+
+        // Update child to have parent
+        let update_request = UpdateCategoryRequest {
+            name: None,
+            description: None,
+            parent_id: Some(parent_id),
+        };
+
+        let response = server
+            .put(&format!("/api/v1/categories/{}", child_id))
+            .json(&update_request)
+            .await;
+
+        response.assert_status(StatusCode::OK);
+        let body: ApiResponse<serde_json::Value> = response.json();
+        assert!(body.success);
+        assert_eq!(body.data["parent_id"], parent_id);
+    }
+
+    #[tokio::test]
+    async fn test_update_category_prevent_circular_reference() {
+        use crate::handlers::categories::{CreateCategoryRequest, UpdateCategoryRequest};
+
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // Create a category
+        let create_request = CreateCategoryRequest {
+            name: "SelfReferencing".to_string(),
+            description: None,
+            parent_id: None,
+        };
+
+        let create_response = server
+            .post("/api/v1/categories")
+            .json(&create_request)
+            .await;
+        create_response.assert_status(StatusCode::CREATED);
+        let create_body: ApiResponse<serde_json::Value> = create_response.json();
+        let category_id = create_body.data["id"].as_i64().unwrap() as i32;
+
+        // Try to make it its own parent
+        let update_request = UpdateCategoryRequest {
+            name: None,
+            description: None,
+            parent_id: Some(category_id),
+        };
+
+        let response = server
+            .put(&format!("/api/v1/categories/{}", category_id))
+            .json(&update_request)
+            .await;
+
+        response.assert_status(StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn test_update_category_not_found() {
+        use crate::handlers::categories::UpdateCategoryRequest;
+
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        let update_request = UpdateCategoryRequest {
+            name: Some("NonExistent".to_string()),
+            description: None,
+            parent_id: None,
+        };
+
+        let response = server
+            .put("/api/v1/categories/99999")
+            .json(&update_request)
+            .await;
+
+        response.assert_status(StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_delete_category() {
+        use crate::handlers::categories::CreateCategoryRequest;
+
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // Create a category
+        let create_request = CreateCategoryRequest {
+            name: "ToBeDeleted".to_string(),
+            description: None,
+            parent_id: None,
+        };
+
+        let create_response = server
+            .post("/api/v1/categories")
+            .json(&create_request)
+            .await;
+        create_response.assert_status(StatusCode::CREATED);
+        let create_body: ApiResponse<serde_json::Value> = create_response.json();
+        let category_id = create_body.data["id"].as_i64().unwrap();
+
+        // Delete category
+        let response = server
+            .delete(&format!("/api/v1/categories/{}", category_id))
+            .await;
+
+        response.assert_status(StatusCode::NO_CONTENT);
+
+        // Verify category is deleted
+        let get_response = server
+            .get(&format!("/api/v1/categories/{}", category_id))
+            .await;
+        get_response.assert_status(StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_delete_category_not_found() {
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        let response = server.delete("/api/v1/categories/99999").await;
+
+        response.assert_status(StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_get_category_children() {
+        use crate::handlers::categories::CreateCategoryRequest;
+
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // Create parent category
+        let parent_request = CreateCategoryRequest {
+            name: "ParentWithChildren".to_string(),
+            description: None,
+            parent_id: None,
+        };
+
+        let parent_response = server
+            .post("/api/v1/categories")
+            .json(&parent_request)
+            .await;
+        parent_response.assert_status(StatusCode::CREATED);
+        let parent_body: ApiResponse<serde_json::Value> = parent_response.json();
+        let parent_id = parent_body.data["id"].as_i64().unwrap() as i32;
+
+        // Create child categories
+        let child_names = vec!["Child1", "Child2", "Child3"];
+        for name in &child_names {
+            let child_request = CreateCategoryRequest {
+                name: name.to_string(),
+                description: None,
+                parent_id: Some(parent_id),
+            };
+
+            let response = server
+                .post("/api/v1/categories")
+                .json(&child_request)
+                .await;
+            response.assert_status(StatusCode::CREATED);
+        }
+
+        // Get children
+        let response = server
+            .get(&format!("/api/v1/categories/{}/children", parent_id))
+            .await;
+
+        response.assert_status(StatusCode::OK);
+        let body: ApiResponse<Vec<serde_json::Value>> = response.json();
+        assert!(body.success);
+        assert_eq!(body.message, "Success");
+        assert_eq!(body.data.len(), 3);
+
+        // Verify all children are present
+        for name in child_names {
+            let child = body.data.iter().find(|c| c["name"] == name);
+            assert!(child.is_some());
+            assert_eq!(child.unwrap()["parent_id"], parent_id);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_get_category_children_empty() {
+        use crate::handlers::categories::CreateCategoryRequest;
+
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // Create parent category without children
+        let parent_request = CreateCategoryRequest {
+            name: "ParentWithoutChildren".to_string(),
+            description: None,
+            parent_id: None,
+        };
+
+        let parent_response = server
+            .post("/api/v1/categories")
+            .json(&parent_request)
+            .await;
+        parent_response.assert_status(StatusCode::CREATED);
+        let parent_body: ApiResponse<serde_json::Value> = parent_response.json();
+        let parent_id = parent_body.data["id"].as_i64().unwrap();
+
+        // Get children (should be empty)
+        let response = server
+            .get(&format!("/api/v1/categories/{}/children", parent_id))
+            .await;
+
+        response.assert_status(StatusCode::OK);
+        let body: ApiResponse<Vec<serde_json::Value>> = response.json();
+        assert!(body.success);
+        assert_eq!(body.data.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_get_category_children_not_found() {
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        let response = server
+            .get("/api/v1/categories/99999/children")
+            .await;
+
+        response.assert_status(StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_category_stats_endpoint_exists() {
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        // Test that the endpoint exists and returns OK (even if stubbed)
+        let response = server
+            .get("/api/v1/categories/stats?start_date=2024-01-01&end_date=2024-12-31")
+            .await;
+
+        response.assert_status(StatusCode::OK);
+        let body: ApiResponse<Vec<serde_json::Value>> = response.json();
+        assert!(body.success);
+    }
 }

@@ -1,9 +1,9 @@
 use crate::handlers::{
     accounts::{create_account, delete_account, get_account, get_accounts, update_account},
-    //categories::{
-    //    create_category, delete_category, get_categories, get_category, get_category_children,
-    //    get_category_stats, update_category,
-    //},
+    categories::{
+        create_category, delete_category, get_categories, get_category, get_category_children,
+        get_category_stats, update_category,
+    },
     health::health_check,
     manual_account_states::{
         create_manual_account_state, delete_manual_account_state, get_all_manual_account_states,
@@ -96,15 +96,15 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/tags/:tag_id/children", get(get_tag_children))
         .route("/api/v1/tags/:tag_id/parent/:parent_id", put(link_tag_to_parent))
         .route("/api/v1/tags/:tag_id/parent", delete(unlink_tag_from_parent))
-        // Category CRUD routes (commented out - needs fixing)
-        //.route("/api/v1/categories", post(create_category))
-        //.route("/api/v1/categories", get(get_categories))
-        //.route("/api/v1/categories/:id", get(get_category))
-        //.route("/api/v1/categories/:id", put(update_category))
-        //.route("/api/v1/categories/:id", delete(delete_category))
+        // Category CRUD routes
+        .route("/api/v1/categories", post(create_category))
+        .route("/api/v1/categories", get(get_categories))
+        .route("/api/v1/categories/:id", get(get_category))
+        .route("/api/v1/categories/:id", put(update_category))
+        .route("/api/v1/categories/:id", delete(delete_category))
         // Category tree structure and stats routes
-        //.route("/api/v1/categories/:id/children", get(get_category_children))
-        //.route("/api/v1/categories/stats", get(get_category_stats))
+        .route("/api/v1/categories/:id/children", get(get_category_children))
+        .route("/api/v1/categories/stats", get(get_category_stats))
         // Transaction CRUD routes
         .route("/api/v1/transactions", post(create_transaction))
         .route("/api/v1/transactions", get(get_transactions))
