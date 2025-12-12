@@ -1,5 +1,8 @@
 use crate::api_client::account::AccountResponse;
+use crate::api_client::category::{get_categories, CategoryResponse};
 use crate::api_client::transaction::{create_transaction, update_transaction, CreateTransactionRequest, TransactionResponse, UpdateTransactionRequest};
+use crate::common::fetch_hook::use_fetch_with_refetch;
+use crate::hooks::FetchState;
 use chrono::NaiveDate;
 use rust_decimal::Decimal;
 use std::str::FromStr;
@@ -20,9 +23,16 @@ pub fn transaction_modal(props: &TransactionModalProps) -> Html {
     let form_ref = use_node_ref();
     let is_submitting = use_state(|| false);
     let error_message = use_state(|| None::<String>);
+    let (categories_state, _) = use_fetch_with_refetch(get_categories);
 
     let is_edit_mode = props.transaction.is_some();
     let title = if is_edit_mode { "Edit Transaction" } else { "Add Transaction" };
+
+    // Get categories list
+    let categories_list = match &*categories_state {
+        FetchState::Success(categories) => categories.clone(),
+        _ => vec![],
+    };
 
     let on_submit = {
         let on_close = props.on_close.clone();
@@ -51,6 +61,7 @@ pub fn transaction_modal(props: &TransactionModalProps) -> Html {
                 let source_account_id_str = form_data.get("source_account_id").as_string();
                 let ledger_name = form_data.get("ledger_name").as_string();
                 let include_in_statistics = form_data.get("include_in_statistics").as_string().map(|v| v == "on").unwrap_or(true);
+                let category_id_str = form_data.get("category_id").as_string();
 
                 // Parse amount
                 let amount = match Decimal::from_str(&amount_str) {
@@ -88,6 +99,15 @@ pub fn transaction_modal(props: &TransactionModalProps) -> Html {
                     }
                 });
 
+                // Parse category ID (optional)
+                let category_id = category_id_str.and_then(|s| {
+                    if s.is_empty() || s == "none" {
+                        None
+                    } else {
+                        s.parse::<i32>().ok()
+                    }
+                });
+
                 let is_submitting = is_submitting.clone();
                 let error_message = error_message.clone();
                 let on_close = on_close.clone();
@@ -110,6 +130,7 @@ pub fn transaction_modal(props: &TransactionModalProps) -> Html {
                         source_account_id,
                         ledger_name: if ledger_name.as_ref().map(|l| l.is_empty()).unwrap_or(true) { None } else { ledger_name },
                         linked_import_id: None,
+                        category_id,
                     };
 
                     wasm_bindgen_futures::spawn_local(async move {
@@ -140,6 +161,7 @@ pub fn transaction_modal(props: &TransactionModalProps) -> Html {
                         source_account_id,
                         ledger_name: if ledger_name.as_ref().map(|l| l.is_empty()).unwrap_or(true) { None } else { ledger_name },
                         linked_import_id: None,
+                        category_id,
                     };
 
                     wasm_bindgen_futures::spawn_local(async move {
@@ -184,6 +206,7 @@ pub fn transaction_modal(props: &TransactionModalProps) -> Html {
     let default_source_account = props.transaction.as_ref().and_then(|t| t.source_account_id);
     let default_ledger = props.transaction.as_ref().and_then(|t| t.ledger_name.clone()).unwrap_or_default();
     let default_include_stats = props.transaction.as_ref().map(|t| t.include_in_statistics).unwrap_or(true);
+    let default_category = props.transaction.as_ref().and_then(|t| t.category_id);
 
     html! {
         <dialog class={classes!("modal", props.show.then_some("modal-open"))} id="transaction_modal">
@@ -286,6 +309,25 @@ pub fn transaction_modal(props: &TransactionModalProps) -> Html {
                                         selected={default_source_account == Some(account.id)}
                                     >
                                         {&account.name}
+                                    </option>
+                                }
+                            })}
+                        </select>
+                    </div>
+
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text">{"Category (Optional)"}</span>
+                        </label>
+                        <select name="category_id" class="select select-bordered w-full" disabled={*is_submitting}>
+                            <option value="none" selected={default_category.is_none()}>{"No category"}</option>
+                            { for categories_list.iter().map(|category| {
+                                html! {
+                                    <option
+                                        value={category.id.to_string()}
+                                        selected={default_category == Some(category.id)}
+                                    >
+                                        {&category.name}
                                     </option>
                                 }
                             })}

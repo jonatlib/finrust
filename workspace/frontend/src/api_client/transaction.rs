@@ -24,6 +24,7 @@ pub struct TransactionResponse {
     pub source_account_id: Option<i32>,
     pub ledger_name: Option<String>,
     pub linked_import_id: Option<String>,
+    pub category_id: Option<i32>,
     pub tags: Vec<TagInfo>,
 }
 
@@ -39,6 +40,7 @@ pub struct CreateTransactionRequest {
     pub source_account_id: Option<i32>,
     pub ledger_name: Option<String>,
     pub linked_import_id: Option<String>,
+    pub category_id: Option<i32>,
 }
 
 /// Request body for updating a transaction
@@ -53,6 +55,7 @@ pub struct UpdateTransactionRequest {
     pub source_account_id: Option<i32>,
     pub ledger_name: Option<String>,
     pub linked_import_id: Option<String>,
+    pub category_id: Option<i32>,
 }
 
 /// Get all transactions
