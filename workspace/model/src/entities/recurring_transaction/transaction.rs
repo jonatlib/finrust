@@ -5,11 +5,30 @@ use sea_orm::{
 };
 
 use crate::entities::recurring_transaction::{Model as RecurringTransaction, RecurrencePeriod};
-use crate::entities::{recurring_transaction_instance, tag};
-use crate::transaction::{Tag, Transaction, TransactionGenerator};
+use crate::entities::{category, recurring_transaction_instance, tag};
+use crate::transaction::{Category, Tag, Transaction, TransactionGenerator};
 
 #[async_trait]
 impl TransactionGenerator for RecurringTransaction {
+    async fn get_category_for_transaction(
+        &self,
+        db: &DatabaseConnection,
+        _expand: bool,
+    ) -> Option<Category> {
+        match self.category_id {
+            Some(id) => match category::Entity::find_by_id(id).one(db).await {
+                Ok(Some(cat)) => Some(Category {
+                    id: cat.id,
+                    name: cat.name,
+                    description: cat.description,
+                    parent_id: cat.parent_id,
+                }),
+                _ => None,
+            },
+            None => None,
+        }
+    }
+
     async fn get_tag_for_transaction(
         &self,
         db: &sea_orm::DatabaseConnection,
@@ -424,6 +443,7 @@ async fn add_transaction(
 ) {
     // Load tags for this transaction
     let tags = transaction.get_tag_for_transaction(db, false).await;
+    let category = transaction.get_category_for_transaction(db, false).await;
 
     let mut target_transaction = if tags.is_empty() {
         Transaction::new(date, transaction.amount, transaction.target_account_id)
@@ -435,6 +455,7 @@ async fn add_transaction(
             tags.clone(),
         )
     };
+    target_transaction.set_category(category.clone());
 
     // For recurring transactions: check for linked existing recurring instances
     // If they exist, take paid details from the instance. If not, set to not paid.
@@ -510,6 +531,7 @@ async fn add_transaction(
         } else {
             Transaction::new_with_tags(date, -transaction.amount, source_account_id, tags.clone())
         };
+        source_transaction.set_category(category);
 
         // Apply the same instance-based payment logic to the source transaction
         if let Ok(Some(instance)) = recurring_transaction_instance::Entity::find()

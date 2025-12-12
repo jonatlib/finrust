@@ -34,6 +34,8 @@ pub struct CreateTransactionRequest {
     pub ledger_name: Option<String>,
     /// Linked import ID to prevent duplication
     pub linked_import_id: Option<String>,
+    /// Category ID
+    pub category_id: Option<i32>,
 }
 
 /// Request body for updating a transaction
@@ -57,6 +59,8 @@ pub struct UpdateTransactionRequest {
     pub ledger_name: Option<String>,
     /// Linked import ID to prevent duplication
     pub linked_import_id: Option<String>,
+    /// Category ID
+    pub category_id: Option<i32>,
 }
 
 /// Tag information for API responses
@@ -90,6 +94,7 @@ pub struct TransactionResponse {
     pub source_account_id: Option<i32>,
     pub ledger_name: Option<String>,
     pub linked_import_id: Option<String>,
+    pub category_id: Option<i32>,
     pub tags: Vec<TagInfo>,
 }
 
@@ -106,6 +111,7 @@ impl From<one_off_transaction::Model> for TransactionResponse {
             source_account_id: model.source_account_id,
             ledger_name: model.ledger_name,
             linked_import_id: model.linked_import_id,
+            category_id: model.category_id,
             tags: Vec::new(), // Will be populated by with_tags method
         }
     }
@@ -212,6 +218,7 @@ pub async fn create_transaction(
         source_account_id: Set(request.source_account_id),
         ledger_name: Set(request.ledger_name.clone()),
         linked_import_id: Set(request.linked_import_id.clone()),
+        category_id: Set(request.category_id),
         ..Default::default()
     };
 
@@ -544,6 +551,11 @@ pub async fn update_transaction(
         debug!("Updating transaction linked_import_id to: {:?}", linked_import_id);
         transaction_active.linked_import_id = Set(Some(linked_import_id.clone()));
         updated_fields.push(format!("linked_import_id: {:?}", linked_import_id));
+    }
+    if let Some(category_id) = request.category_id {
+        debug!("Updating transaction category_id to: {:?}", category_id);
+        transaction_active.category_id = Set(Some(category_id));
+        updated_fields.push(format!("category_id: {:?}", category_id));
     }
 
     if updated_fields.is_empty() {

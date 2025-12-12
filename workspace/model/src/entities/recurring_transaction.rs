@@ -4,7 +4,7 @@ use chrono::NaiveDate;
 use rust_decimal::Decimal;
 use sea_orm::entity::prelude::*;
 
-use super::{account, tag};
+use super::{account, category, tag};
 
 /// Enum for recurrence periods.
 #[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum)]
@@ -51,6 +51,8 @@ pub struct Model {
     pub target_account_id: i32,
     /// The optional source account for a transfer (double-entry).
     pub source_account_id: Option<i32>,
+    /// The category of the transaction.
+    pub category_id: Option<i32>,
     /// The name to use when exporting to Ledger CLI format.
     pub ledger_name: Option<String>,
 }
@@ -71,6 +73,13 @@ pub enum Relation {
         on_delete = "SetNull"
     )]
     SourceAccount,
+    #[sea_orm(
+        belongs_to = "category::Entity",
+        from = "Column::CategoryId",
+        to = "category::Column::Id",
+        on_delete = "SetNull"
+    )]
+    Category,
 }
 
 impl Related<tag::Entity> for Entity {

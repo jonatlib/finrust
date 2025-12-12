@@ -1,5 +1,6 @@
 pub mod account;
 pub mod account_stats;
+pub mod categories;
 pub mod error;
 pub mod tags;
 pub mod transaction;

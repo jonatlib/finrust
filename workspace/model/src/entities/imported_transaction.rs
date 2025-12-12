@@ -6,7 +6,7 @@ use sea_orm::entity::prelude::*;
 use std::fmt;
 use tracing::{debug, instrument, trace};
 
-use super::{account, tag};
+use super::{account, category, tag};
 
 /// Enum representing the type of transaction that an imported transaction is reconciled with.
 /// This enum includes the ID of the reconciled transaction directly in its variants.
@@ -74,6 +74,9 @@ pub struct Model {
     /// The ID of the reconciled transaction.
     /// This is nullable because an imported transaction may not be reconciled immediately.
     pub reconciled_transaction_id: Option<i32>,
+
+    /// The category of the transaction.
+    pub category_id: Option<i32>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -85,6 +88,13 @@ pub enum Relation {
         on_delete = "Cascade"
     )]
     Account,
+    #[sea_orm(
+        belongs_to = "category::Entity",
+        from = "Column::CategoryId",
+        to = "category::Column::Id",
+        on_delete = "SetNull"
+    )]
+    Category,
 }
 
 impl Model {

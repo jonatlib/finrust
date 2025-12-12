@@ -5,10 +5,18 @@ use sea_orm::{DatabaseConnection, ModelTrait};
 use crate::entities::recurring_income::Model as RecurringIncome;
 use crate::entities::recurring_transaction::RecurrencePeriod;
 use crate::entities::tag;
-use crate::transaction::{Tag, Transaction, TransactionGenerator};
+use crate::transaction::{Category, Tag, Transaction, TransactionGenerator};
 
 #[async_trait]
 impl TransactionGenerator for RecurringIncome {
+    async fn get_category_for_transaction(
+        &self,
+        _db: &DatabaseConnection,
+        _expand: bool,
+    ) -> Option<Category> {
+        None
+    }
+
     async fn get_tag_for_transaction(
         &self,
         db: &sea_orm::DatabaseConnection,

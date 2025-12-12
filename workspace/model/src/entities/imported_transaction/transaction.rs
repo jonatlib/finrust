@@ -1,12 +1,12 @@
 use async_trait::async_trait;
 use chrono::NaiveDate;
 use sea_orm::{
-    DatabaseConnection, ModelTrait,
+    DatabaseConnection, EntityTrait, ModelTrait,
 };
 
 use super::Model as ImportedTransaction;
-use crate::entities::tag;
-use crate::transaction::{Tag, Transaction, TransactionGenerator};
+use crate::entities::{category, tag};
+use crate::transaction::{Category, Tag, Transaction, TransactionGenerator};
 
 #[async_trait]
 impl TransactionGenerator for ImportedTransaction {
@@ -28,12 +28,14 @@ impl TransactionGenerator for ImportedTransaction {
         if self.has_any_transaction(start, end) {
             // Load tags for this transaction
             let tags = self.get_tag_for_transaction(db, false).await;
+            let category = self.get_category_for_transaction(db, false).await;
 
             let mut transaction = if tags.is_empty() {
                 Transaction::new(self.date, self.amount, self.account_id)
             } else {
                 Transaction::new_with_tags(self.date, self.amount, self.account_id, tags)
             };
+            transaction.set_category(category);
 
             // For one-off transactions: if the transaction date is today or in the past, mark as paid
             if self.date <= today {
@@ -45,6 +47,25 @@ impl TransactionGenerator for ImportedTransaction {
         }
 
         transactions
+    }
+
+    async fn get_category_for_transaction(
+        &self,
+        db: &DatabaseConnection,
+        _expand: bool,
+    ) -> Option<Category> {
+        match self.category_id {
+            Some(id) => match category::Entity::find_by_id(id).one(db).await {
+                Ok(Some(cat)) => Some(Category {
+                    id: cat.id,
+                    name: cat.name,
+                    description: cat.description,
+                    parent_id: cat.parent_id,
+                }),
+                _ => None,
+            },
+            None => None,
+        }
     }
 
     async fn get_tag_for_transaction(&self, db: &DatabaseConnection, expand: bool) -> Vec<Tag> {

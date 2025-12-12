@@ -56,6 +56,8 @@ pub struct CreateRecurringTransactionRequest {
     pub source_account_id: Option<i32>,
     /// Optional ledger name
     pub ledger_name: Option<String>,
+    /// Optional category ID
+    pub category_id: Option<i32>,
 }
 
 /// Request body for updating a recurring transaction
@@ -81,6 +83,8 @@ pub struct UpdateRecurringTransactionRequest {
     pub source_account_id: Option<i32>,
     /// Optional ledger name
     pub ledger_name: Option<String>,
+    /// Optional category ID
+    pub category_id: Option<i32>,
 }
 
 /// Recurring transaction response model
@@ -97,6 +101,7 @@ pub struct RecurringTransactionResponse {
     pub target_account_id: i32,
     pub source_account_id: Option<i32>,
     pub ledger_name: Option<String>,
+    pub category_id: Option<i32>,
     pub tags: Vec<TagInfo>,
 }
 
@@ -114,6 +119,7 @@ impl From<recurring_transaction::Model> for RecurringTransactionResponse {
             target_account_id: model.target_account_id,
             source_account_id: model.source_account_id,
             ledger_name: model.ledger_name,
+            category_id: model.category_id,
             tags: Vec::new(), // Will be populated by with_tags method
         }
     }
@@ -393,6 +399,7 @@ pub async fn create_recurring_transaction(
         target_account_id: Set(request.target_account_id),
         source_account_id: Set(request.source_account_id),
         ledger_name: Set(request.ledger_name),
+        category_id: Set(request.category_id),
         ..Default::default()
     };
 
@@ -685,6 +692,9 @@ pub async fn update_recurring_transaction(
     }
     if let Some(ledger_name) = request.ledger_name {
         update_model.ledger_name = Set(Some(ledger_name));
+    }
+    if let Some(category_id) = request.category_id {
+        update_model.category_id = Set(Some(category_id));
     }
 
     match update_model.update(&state.db).await {

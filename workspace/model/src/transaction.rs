@@ -3,6 +3,15 @@ use chrono::{NaiveDate, NaiveDateTime};
 use rust_decimal::Decimal;
 use sea_orm::DatabaseConnection;
 
+/// Represents a category that can be applied to transactions.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Category {
+    pub id: i32,
+    pub name: String,
+    pub description: Option<String>,
+    pub parent_id: Option<i32>,
+}
+
 /// Represents a tag that can be applied to transactions.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Tag {
@@ -23,6 +32,7 @@ pub struct Transaction {
     amount: Decimal,
     account: i32,
     tags: Vec<Tag>,
+    category: Option<Category>,
     paid_on: Option<NaiveDateTime>,
 }
 
@@ -34,6 +44,7 @@ impl Transaction {
             amount,
             account,
             tags: Vec::new(),
+            category: None,
             paid_on: None,
         }
     }
@@ -45,6 +56,7 @@ impl Transaction {
             amount,
             account,
             tags: vec![tag],
+            category: None,
             paid_on: None,
         }
     }
@@ -56,6 +68,7 @@ impl Transaction {
             amount,
             account,
             tags,
+            category: None,
             paid_on: None,
         }
     }
@@ -80,6 +93,11 @@ impl Transaction {
         &self.tags
     }
 
+    /// Gets the category of the transaction.
+    pub fn category(&self) -> Option<&Category> {
+        self.category.as_ref()
+    }
+
     /// Gets the first tag of the transaction, if any (for backward compatibility).
     pub fn tag(&self) -> Option<&Tag> {
         self.tags.first()
@@ -96,6 +114,11 @@ impl Transaction {
             Some(t) => self.tags = vec![t],
             None => self.tags.clear(),
         }
+    }
+
+    /// Sets the category of the transaction.
+    pub fn set_category(&mut self, category: Option<Category>) {
+        self.category = category;
     }
 
     /// Adds a tag to the transaction.
@@ -140,6 +163,14 @@ pub trait TransactionGenerator {
         today: NaiveDate,
         db: &DatabaseConnection,
     ) -> Vec<Transaction>;
+
+    /// Gets the category for the transaction.
+    /// If expand is true, expands the category to include its parent hierarchy (currently just returns the category).
+    async fn get_category_for_transaction(
+        &self,
+        db: &DatabaseConnection,
+        expand: bool,
+    ) -> Option<Category>;
 
     /// Gets tags for a transaction.
     /// If expand is true, expands all tags to include their parent hierarchy.

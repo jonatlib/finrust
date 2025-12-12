@@ -6,6 +6,7 @@
 pub mod account;
 pub mod account_allowed_user;
 pub mod account_tag;
+pub mod category;
 pub mod imported_transaction;
 pub mod imported_transaction_tag;
 pub mod manual_account_state;
@@ -28,6 +29,7 @@ pub mod prelude {
     pub use super::account::Entity as Account;
     pub use super::account_allowed_user::Entity as AccountAllowedUser;
     pub use super::account_tag::Entity as AccountTag;
+    pub use super::category::Entity as Category;
     pub use super::imported_transaction::Entity as ImportedTransaction;
     pub use super::imported_transaction_tag::Entity as ImportedTransactionTag;
     pub use super::manual_account_state::Entity as ManualAccountState;

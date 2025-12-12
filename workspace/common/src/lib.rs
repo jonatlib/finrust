@@ -59,6 +59,33 @@ pub struct AccountDto {
     pub ledger_name: Option<String>,
 }
 
+// ===================== Categories =====================
+
+/// Request for creating a category.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq)]
+pub struct CreateCategoryRequest {
+    pub name: String,
+    pub description: Option<String>,
+    pub parent_id: Option<i32>,
+}
+
+/// Request for updating a category.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq, Default)]
+pub struct UpdateCategoryRequest {
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub parent_id: Option<i32>,
+}
+
+/// Category response model.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq)]
+pub struct CategoryDto {
+    pub id: i32,
+    pub name: String,
+    pub description: Option<String>,
+    pub parent_id: Option<i32>,
+}
+
 // ===================== Tags =====================
 
 /// Request for creating a tag (mirrors backend).

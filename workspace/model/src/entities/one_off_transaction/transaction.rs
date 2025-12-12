@@ -1,12 +1,12 @@
 use async_trait::async_trait;
 use chrono::NaiveDate;
 use sea_orm::{
-    DatabaseConnection, ModelTrait,
+    DatabaseConnection, EntityTrait, ModelTrait,
 };
 
 use super::Model as OneOffTransaction;
-use crate::entities::tag;
-use crate::transaction::{Tag, Transaction, TransactionGenerator};
+use crate::entities::{category, tag};
+use crate::transaction::{Category, Tag, Transaction, TransactionGenerator};
 
 #[async_trait]
 impl TransactionGenerator for OneOffTransaction {
@@ -28,6 +28,7 @@ impl TransactionGenerator for OneOffTransaction {
         if self.has_any_transaction(start, end) {
             // Load tags for this transaction
             let tags = self.get_tag_for_transaction(db, false).await;
+            let category = self.get_category_for_transaction(db, false).await;
 
             let mut target_transaction = if tags.is_empty() {
                 Transaction::new(self.date, self.amount, self.target_account_id)
@@ -39,6 +40,7 @@ impl TransactionGenerator for OneOffTransaction {
                     tags.clone(),
                 )
             };
+            target_transaction.set_category(category.clone());
 
             // For one-off transactions: if the transaction date is today or in the past, mark as paid
             if self.date <= today {
@@ -56,6 +58,7 @@ impl TransactionGenerator for OneOffTransaction {
                 } else {
                     Transaction::new_with_tags(self.date, -self.amount, source_account_id, tags)
                 };
+                source_transaction.set_category(category);
 
                 // Apply the same payment logic to the source transaction
                 if self.date <= today {
@@ -68,6 +71,25 @@ impl TransactionGenerator for OneOffTransaction {
         }
 
         transactions
+    }
+
+    async fn get_category_for_transaction(
+        &self,
+        db: &DatabaseConnection,
+        _expand: bool,
+    ) -> Option<Category> {
+        match self.category_id {
+            Some(id) => match category::Entity::find_by_id(id).one(db).await {
+                Ok(Some(cat)) => Some(Category {
+                    id: cat.id,
+                    name: cat.name,
+                    description: cat.description,
+                    parent_id: cat.parent_id,
+                }),
+                _ => None,
+            },
+            None => None,
+        }
     }
 
     async fn get_tag_for_transaction(&self, db: &DatabaseConnection, expand: bool) -> Vec<Tag> {
@@ -138,6 +160,7 @@ mod tests {
             source_account_id: None,
             ledger_name: None,
             linked_import_id: None,
+            category_id: None,
         };
 
         // Date range includes the transaction date
@@ -188,6 +211,7 @@ mod tests {
             source_account_id: None,
             ledger_name: None,
             linked_import_id: None,
+            category_id: None,
         };
 
         let today = NaiveDate::from_ymd_opt(2023, 1, 20).unwrap(); // Set today to Jan 20, 2023
@@ -221,9 +245,9 @@ mod tests {
             source_account_id: Some(1),
             ledger_name: None,
             linked_import_id: None,
+            category_id: None,
         };
 
-        let today = NaiveDate::from_ymd_opt(2023, 1, 25).unwrap(); // Set today to Jan 25, 2023
         let transactions = transfer
             .generate_transactions(
                 NaiveDate::from_ymd_opt(2023, 1, 1).unwrap(),

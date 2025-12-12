@@ -4,7 +4,7 @@ use chrono::NaiveDate;
 use rust_decimal::Decimal;
 use sea_orm::entity::prelude::*;
 
-use super::{imported_transaction, recurring_transaction};
+use super::{category, imported_transaction, recurring_transaction};
 
 /// Represents the status of a single recurring transaction instance.
 #[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum)]
@@ -48,6 +48,9 @@ pub struct Model {
 
     /// A link to the bank-imported transaction that fulfilled this instance.
     pub reconciled_imported_transaction_id: Option<i32>,
+
+    /// The category of the instance.
+    pub category_id: Option<i32>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -69,6 +72,14 @@ pub enum Relation {
         on_delete = "SetNull"
     )]
     ImportedTransaction,
+
+    #[sea_orm(
+        belongs_to = "category::Entity",
+        from = "Column::CategoryId",
+        to = "category::Column::Id",
+        on_delete = "SetNull"
+    )]
+    Category,
 }
 
 impl ActiveModelBehavior for ActiveModel {}

@@ -7,11 +7,54 @@ use sea_orm::{
 use crate::entities::recurring_transaction_instance::{
     InstanceStatus, Model as RecurringTransactionInstance,
 };
-use crate::entities::tag;
-use crate::transaction::{Tag, Transaction, TransactionGenerator};
+use crate::entities::{category, recurring_transaction, tag};
+use crate::transaction::{Category, Tag, Transaction, TransactionGenerator};
 
 #[async_trait]
 impl TransactionGenerator for RecurringTransactionInstance {
+    async fn get_category_for_transaction(
+        &self,
+        db: &DatabaseConnection,
+        _expand: bool,
+    ) -> Option<Category> {
+        // 1. Try instance category
+        if let Some(category_id) = self.category_id {
+            if let Ok(Some(cat)) = category::Entity::find_by_id(category_id).one(db).await {
+                return Some(Category {
+                    id: cat.id,
+                    name: cat.name,
+                    description: cat.description,
+                    parent_id: cat.parent_id,
+                });
+            }
+        }
+
+        // 2. Fallback to parent recurring transaction category
+        let recurring_transaction =
+            match crate::entities::recurring_transaction::Entity::find_by_id(
+                self.recurring_transaction_id,
+            )
+            .one(db)
+            .await
+            {
+                Ok(Some(transaction)) => transaction,
+                _ => return None,
+            };
+
+        if let Some(category_id) = recurring_transaction.category_id {
+            if let Ok(Some(cat)) = category::Entity::find_by_id(category_id).one(db).await {
+                return Some(Category {
+                    id: cat.id,
+                    name: cat.name,
+                    description: cat.description,
+                    parent_id: cat.parent_id,
+                });
+            }
+        }
+
+        None
+    }
+
     async fn get_tag_for_transaction(&self, db: &DatabaseConnection, expand: bool) -> Vec<Tag> {
         // Query the database for tags associated with the parent recurring transaction
         // First, we need to get the recurring transaction
@@ -104,6 +147,7 @@ impl TransactionGenerator for RecurringTransactionInstance {
         if self.has_any_transaction(start, end) {
             // Load tags for this transaction
             let tags = self.get_tag_for_transaction(db, false).await;
+            let category = self.get_category_for_transaction(db, false).await;
 
             match self.status {
                 InstanceStatus::Paid => {
@@ -121,6 +165,7 @@ impl TransactionGenerator for RecurringTransactionInstance {
                     } else {
                         Transaction::new_with_tags(date, amount, account_id, tags)
                     };
+                    transaction.set_category(category.clone());
 
                     // For paid instances, always mark as paid using the paid date or due date
                     transaction.set_paid_on(Some(date.and_hms_opt(0, 0, 0).unwrap()));
@@ -140,6 +185,7 @@ impl TransactionGenerator for RecurringTransactionInstance {
                             tags,
                         )
                     };
+                    transaction.set_category(category);
 
                     // For pending instances: only mark as paid if the due date is today or in the past
                     if self.due_date <= today {

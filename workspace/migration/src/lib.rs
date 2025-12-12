@@ -5,6 +5,7 @@ mod m20220101_000001_create_table;
 mod m20230101_000002_create_recurring_transaction_instance;
 mod m20230101_000003_update_imported_transaction_type;
 mod m20250101_000001_add_account_kind;
+mod m20251212_000001_add_categories;
 
 pub struct Migrator;
 
@@ -16,6 +17,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20230101_000002_create_recurring_transaction_instance::Migration),
             Box::new(m20230101_000003_update_imported_transaction_type::Migration),
             Box::new(m20250101_000001_add_account_kind::Migration),
+            Box::new(m20251212_000001_add_categories::Migration),
         ]
     }
 }

@@ -28,6 +28,8 @@ pub struct CreateImportedTransactionRequest {
     pub import_hash: String,
     /// Raw transaction data as JSON for auditing
     pub raw_data: Option<serde_json::Value>,
+    /// Optional category ID
+    pub category_id: Option<i32>,
 }
 
 /// Request body for updating an imported transaction
@@ -41,6 +43,8 @@ pub struct UpdateImportedTransactionRequest {
     pub amount: Option<Decimal>,
     /// Raw transaction data as JSON
     pub raw_data: Option<serde_json::Value>,
+    /// Optional category ID
+    pub category_id: Option<i32>,
 }
 
 /// Request body for reconciling an imported transaction
@@ -83,6 +87,7 @@ pub struct ImportedTransactionResponse {
     pub reconciled_transaction_type: Option<String>,
     pub reconciled_transaction_id: Option<i32>,
     pub reconciled_transaction_info: Option<ReconciledTransactionInfo>,
+    pub category_id: Option<i32>,
     pub tags: Vec<TagInfo>,
 }
 
@@ -145,6 +150,7 @@ impl From<imported_transaction::Model> for ImportedTransactionResponse {
             reconciled_transaction_type,
             reconciled_transaction_id: model.reconciled_transaction_id,
             reconciled_transaction_info,
+            category_id: model.category_id,
             tags: Vec::new(), // Will be populated by with_tags method
         }
     }
@@ -254,6 +260,7 @@ pub async fn create_imported_transaction(
         raw_data: Set(request.raw_data.map(sea_orm::JsonValue::from)),
         reconciled_transaction_type: Set(None),
         reconciled_transaction_id: Set(None),
+        category_id: Set(request.category_id),
         ..Default::default()
     };
 
@@ -532,6 +539,9 @@ pub async fn update_imported_transaction(
     }
     if let Some(raw_data) = request.raw_data {
         imported_transaction_update.raw_data = Set(Some(sea_orm::JsonValue::from(raw_data)));
+    }
+    if let Some(category_id) = request.category_id {
+        imported_transaction_update.category_id = Set(Some(category_id));
     }
 
     trace!("Attempting to update imported transaction in database");

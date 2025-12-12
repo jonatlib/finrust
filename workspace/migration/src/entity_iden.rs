@@ -20,6 +20,7 @@ pub trait EntityIden: EntityTrait {
 /// Implement EntityIden for all entity types.
 impl EntityIden for User {}
 impl EntityIden for Tag {}
+impl EntityIden for Category {}
 impl EntityIden for Account {}
 impl EntityIden for AccountTag {}
 impl EntityIden for AccountAllowedUser {}

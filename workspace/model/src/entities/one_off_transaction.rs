@@ -2,7 +2,7 @@ use chrono::NaiveDate;
 use rust_decimal::Decimal;
 use sea_orm::entity::prelude::*;
 
-use super::{account, tag};
+use super::{account, category, tag};
 
 pub mod transaction;
 
@@ -27,6 +27,8 @@ pub struct Model {
     /// The optional source account for a transfer (double-entry).
     /// If set, this transaction represents a movement of funds.
     pub source_account_id: Option<i32>,
+    /// The category of the transaction.
+    pub category_id: Option<i32>,
     /// The name to use when exporting to Ledger CLI format.
     pub ledger_name: Option<String>,
     // An optional field to link to an imported transaction to prevent duplication.
@@ -49,6 +51,13 @@ pub enum Relation {
         on_delete = "SetNull"
     )]
     SourceAccount,
+    #[sea_orm(
+        belongs_to = "category::Entity",
+        from = "Column::CategoryId",
+        to = "category::Column::Id",
+        on_delete = "SetNull"
+    )]
+    Category,
 }
 
 impl Related<tag::Entity> for Entity {
