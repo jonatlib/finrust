@@ -2,6 +2,7 @@ use yew::prelude::*;
 use super::stats::Stats;
 use super::chart::{NetWorthChart, BalanceBreakdownChart};
 use super::activity::RecentActivity;
+use super::category_stats::CategoryStats;
 
 #[function_component(Dashboard)]
 pub fn dashboard() -> Html {
@@ -28,6 +29,7 @@ pub fn dashboard() -> Html {
                     <BalanceBreakdownChart />
                 </div>
             </div>
+            <CategoryStats />
         </>
     }
 }

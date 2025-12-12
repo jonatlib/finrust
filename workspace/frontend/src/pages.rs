@@ -5,3 +5,4 @@ pub mod manual_states;
 pub mod recurring;
 pub mod recurring_detail;
 pub mod instances;
+pub mod categories;

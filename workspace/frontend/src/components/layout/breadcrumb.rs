@@ -55,6 +55,10 @@ pub fn breadcrumb() -> Html {
                 BreadcrumbItem { label: "Home".to_string(), route: Route::Dashboard },
                 BreadcrumbItem { label: "Instances".to_string(), route: Route::Instances }
             ],
+            Route::Categories => vec![
+                BreadcrumbItem { label: "Home".to_string(), route: Route::Dashboard },
+                BreadcrumbItem { label: "Categories".to_string(), route: Route::Categories }
+            ],
             Route::Budgets => vec![
                 BreadcrumbItem { label: "Home".to_string(), route: Route::Dashboard },
                 BreadcrumbItem { label: "Budgets".to_string(), route: Route::Budgets }
