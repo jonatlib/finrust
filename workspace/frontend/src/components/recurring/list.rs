@@ -1,6 +1,8 @@
 use yew::prelude::*;
 use yew_router::prelude::*;
+use std::collections::HashMap;
 use crate::api_client::recurring_transaction::get_recurring_transactions;
+use crate::api_client::category::get_categories;
 use crate::common::fetch_hook::use_fetch_with_refetch;
 use crate::hooks::FetchState;
 use crate::router::Route;
@@ -24,6 +26,17 @@ pub fn recurring_list(props: &RecurringListProps) -> Html {
         get_recurring_transactions(None, None, account_id, None)
     });
 
+    let (categories_state, _) = use_fetch_with_refetch(get_categories);
+
+    // Build category ID -> name map
+    let category_map: HashMap<i32, String> = match &*categories_state {
+        FetchState::Success(categories) => categories
+            .iter()
+            .map(|cat| (cat.id, cat.name.clone()))
+            .collect(),
+        _ => HashMap::new(),
+    };
+
     let format_currency = |amount: &str| -> String {
         match amount.parse::<f64>() {
             Ok(val) => format!("${:.2}", val.abs()),
@@ -44,6 +57,7 @@ pub fn recurring_list(props: &RecurringListProps) -> Html {
                                     <th>{"Amount"}</th>
                                     <th>{"Start Date"}</th>
                                     <th>{"End Date"}</th>
+                                    <th>{"Category"}</th>
                                     <th>{"Tags"}</th>
                                     <th>{"Actions"}</th>
                                 </tr>
@@ -114,6 +128,18 @@ pub fn recurring_list(props: &RecurringListProps) -> Html {
                                             </td>
                                             <td>{&t.start_date}</td>
                                             <td>{t.end_date.as_ref().unwrap_or(&"-".to_string())}</td>
+                                            <td>
+                                                {if let Some(category_id) = t.category_id {
+                                                    html! {
+                                                        <span class="badge badge-sm badge-info badge-outline">
+                                                            <i class="fas fa-tag mr-1"></i>
+                                                            {category_map.get(&category_id).map(|name| name.as_str()).unwrap_or("Unknown")}
+                                                        </span>
+                                                    }
+                                                } else {
+                                                    html! { <span class="text-xs text-gray-500">{"—"}</span> }
+                                                }}
+                                            </td>
                                             <td>
                                                 <div class="flex flex-wrap gap-1">
                                                     { for t.tags.iter().map(|tag| html! {

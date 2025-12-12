@@ -1,5 +1,6 @@
 use super::transaction_modal::TransactionModal;
 use crate::api_client::account::get_accounts;
+use crate::api_client::category::get_categories;
 use crate::api_client::transaction::{delete_transaction, get_transaction};
 use crate::common::fetch_hook::use_fetch_with_refetch;
 use crate::hooks::FetchState;
@@ -20,6 +21,7 @@ pub fn transaction_edit(props: &Props) -> Html {
 
     let (fetch_state, refetch) = use_fetch_with_refetch(move || get_transaction(transaction_id));
     let (accounts_state, _) = use_fetch_with_refetch(get_accounts);
+    let (categories_state, _) = use_fetch_with_refetch(get_categories);
     let show_edit_modal = use_state(|| false);
     let show_delete_confirm = use_state(|| false);
     let is_deleting = use_state(|| false);
@@ -30,6 +32,15 @@ pub fn transaction_edit(props: &Props) -> Html {
         FetchState::Success(accounts) => accounts
             .iter()
             .map(|acc| (acc.id, acc.name.clone()))
+            .collect(),
+        _ => HashMap::new(),
+    };
+
+    // Build category ID -> name map
+    let category_map: HashMap<i32, String> = match &*categories_state {
+        FetchState::Success(categories) => categories
+            .iter()
+            .map(|cat| (cat.id, cat.name.clone()))
             .collect(),
         _ => HashMap::new(),
     };
@@ -276,6 +287,19 @@ pub fn transaction_edit(props: &Props) -> Html {
                                                     html! { <div class="badge badge-ghost"><i class="fas fa-times"></i>{" Excluded"}</div> }
                                                 }}
                                             </div>
+                                            {if let Some(category_id) = transaction.category_id {
+                                                html! {
+                                                    <div>
+                                                        <div class="text-sm text-gray-500">{"Category"}</div>
+                                                        <div class="badge badge-info badge-outline">
+                                                            <i class="fas fa-tag mr-1"></i>
+                                                            {category_map.get(&category_id).map(|name| name.as_str()).unwrap_or("Unknown Category")}
+                                                        </div>
+                                                    </div>
+                                                }
+                                            } else {
+                                                html! {}
+                                            }}
                                             {if let Some(ledger) = &transaction.ledger_name {
                                                 html! {
                                                     <div>

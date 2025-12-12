@@ -3,10 +3,12 @@ use yew_router::prelude::*;
 use crate::components::layout::layout::Layout;
 use crate::router::Route;
 use crate::api_client::recurring_transaction::{get_recurring_transaction, get_recurring_instances, delete_recurring_transaction, delete_recurring_instance, update_recurring_instance, UpdateRecurringInstanceRequest};
+use crate::api_client::category::get_categories;
 use crate::common::fetch_hook::use_fetch_with_refetch;
 use crate::common::toast::ToastContext;
 use crate::hooks::FetchState;
 use crate::components::instances::instance_edit_modal::InstanceEditModal;
+use std::collections::HashMap;
 
 #[derive(Properties, PartialEq)]
 pub struct RecurringDetailPageProps {
@@ -28,6 +30,18 @@ pub fn recurring_detail_page(props: &RecurringDetailPageProps) -> Html {
     let (instances_state, instances_refetch) = use_fetch_with_refetch(move || {
         get_recurring_instances(None, None, Some(id), None)
     });
+
+    // Fetch categories
+    let (categories_state, _) = use_fetch_with_refetch(get_categories);
+
+    // Build category ID -> name map
+    let category_map: HashMap<i32, String> = match &*categories_state {
+        FetchState::Success(categories) => categories
+            .iter()
+            .map(|cat| (cat.id, cat.name.clone()))
+            .collect(),
+        _ => HashMap::new(),
+    };
 
     let edit_instance = use_state(|| None::<crate::api_client::recurring_transaction::RecurringInstanceResponse>);
     let show_edit_modal = use_state(|| false);
@@ -239,6 +253,24 @@ pub fn recurring_detail_page(props: &RecurringDetailPageProps) -> Html {
                                         </div>
                                     </div>
                                 </div>
+
+                                {if let Some(category_id) = transaction.category_id {
+                                    html! {
+                                        <div>
+                                            <div class="stat bg-base-200 rounded-box">
+                                                <div class="stat-title">{"Category"}</div>
+                                                <div class="stat-value text-lg">
+                                                    <span class="badge badge-info badge-lg">
+                                                        <i class="fas fa-tag mr-1"></i>
+                                                        {category_map.get(&category_id).map(|name| name.as_str()).unwrap_or("Unknown Category")}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                } else {
+                                    html! { <></> }
+                                }}
                             </div>
 
                             {if !transaction.tags.is_empty() {

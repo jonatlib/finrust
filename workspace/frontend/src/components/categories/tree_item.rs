@@ -1,12 +1,15 @@
 use yew::prelude::*;
 use std::collections::HashMap;
 use std::rc::Rc;
-use crate::api_client::category::CategoryResponse;
+use crate::api_client::category::{CategoryResponse, CategoryStatistics};
+use rust_decimal::Decimal;
+use std::str::FromStr;
 
 #[derive(Properties, PartialEq)]
 pub struct TreeItemProps {
     pub category: CategoryResponse,
     pub children_map: Rc<HashMap<i32, Vec<CategoryResponse>>>,
+    pub stats_map: Rc<HashMap<i32, CategoryStatistics>>,
     pub on_edit: Callback<CategoryResponse>,
     pub on_delete_success: Callback<()>,
     pub level: usize,
@@ -107,6 +110,24 @@ pub fn tree_item(props: &TreeItemProps) -> Html {
                     }
                 </div>
 
+                // Statistics
+                if let Some(stats) = props.stats_map.get(&props.category.id) {
+                    <div class="flex flex-col items-end mr-4">
+                        <div class={format!("font-semibold {}",
+                            if let Ok(amount) = Decimal::from_str(&stats.total_amount) {
+                                if amount < Decimal::ZERO { "text-error" } else { "text-success" }
+                            } else {
+                                "text-base-content"
+                            }
+                        )}>
+                            {format!("${}", &stats.total_amount)}
+                        </div>
+                        <div class="text-xs text-gray-500">
+                            {format!("{} transactions", stats.transaction_count)}
+                        </div>
+                    </div>
+                }
+
                 // Children count badge
                 if has_children {
                     <div class="badge badge-sm badge-ghost mr-2">
@@ -146,6 +167,7 @@ pub fn tree_item(props: &TreeItemProps) -> Html {
                                 key={child.id}
                                 category={child.clone()}
                                 children_map={props.children_map.clone()}
+                                stats_map={props.stats_map.clone()}
                                 on_edit={props.on_edit.clone()}
                                 on_delete_success={props.on_delete_success.clone()}
                                 level={props.level + 1}

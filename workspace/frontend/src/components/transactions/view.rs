@@ -3,6 +3,7 @@ use yew_router::prelude::*;
 use std::collections::HashMap;
 use crate::api_client::transaction::{get_transactions, TransactionResponse};
 use crate::api_client::account::get_accounts;
+use crate::api_client::category::get_categories;
 use crate::common::fetch_hook::use_fetch_with_refetch;
 use crate::hooks::FetchState;
 use super::transaction_modal::TransactionModal;
@@ -27,6 +28,7 @@ pub fn transactions() -> Html {
     log::trace!("Transactions component rendering");
     let (fetch_state, refetch) = use_fetch_with_refetch(get_transactions);
     let (accounts_state, _) = use_fetch_with_refetch(get_accounts);
+    let (categories_state, _) = use_fetch_with_refetch(get_categories);
     let show_modal = use_state(|| false);
     let sort_column = use_state(|| SortColumn::Date);
     let sort_direction = use_state(|| SortDirection::Descending);
@@ -39,6 +41,15 @@ pub fn transactions() -> Html {
         FetchState::Success(accounts) => accounts
             .iter()
             .map(|acc| (acc.id, acc.name.clone()))
+            .collect(),
+        _ => HashMap::new(),
+    };
+
+    // Build category ID -> name map
+    let category_map: HashMap<i32, String> = match &*categories_state {
+        FetchState::Success(categories) => categories
+            .iter()
+            .map(|cat| (cat.id, cat.name.clone()))
             .collect(),
         _ => HashMap::new(),
     };
@@ -165,12 +176,13 @@ pub fn transactions() -> Html {
                                                 {render_sortable_header("Transaction", SortColumn::Name, current_sort_column, current_sort_direction, on_sort.clone())}
                                                 {render_sortable_header("Account", SortColumn::Account, current_sort_column, current_sort_direction, on_sort.clone())}
                                                 {render_sortable_header("Amount", SortColumn::Amount, current_sort_column, current_sort_direction, on_sort.clone())}
+                                                <th>{"Category"}</th>
                                                 <th>{"Tags"}</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             { for sorted_transactions.iter().map(|transaction| {
-                                                render_transaction_row(transaction, &account_map)
+                                                render_transaction_row(transaction, &account_map, &category_map)
                                             })}
                                         </tbody>
                                     </table>
@@ -220,7 +232,7 @@ fn render_sortable_header(
     }
 }
 
-fn render_transaction_row(transaction: &TransactionResponse, account_map: &HashMap<i32, String>) -> Html {
+fn render_transaction_row(transaction: &TransactionResponse, account_map: &HashMap<i32, String>, category_map: &HashMap<i32, String>) -> Html {
     let amount_class = if transaction.amount >= rust_decimal::Decimal::ZERO {
         "text-success"
     } else {
@@ -280,6 +292,18 @@ fn render_transaction_row(transaction: &TransactionResponse, account_map: &HashM
                 </td>
                 <td class={classes!("font-mono", "font-semibold", amount_class)}>
                     {format_amount(transaction.amount)}
+                </td>
+                <td>
+                    {if let Some(category_id) = transaction.category_id {
+                        html! {
+                            <span class="badge badge-sm badge-info badge-outline">
+                                <i class="fas fa-tag mr-1"></i>
+                                {category_map.get(&category_id).map(|name| name.as_str()).unwrap_or("Unknown")}
+                            </span>
+                        }
+                    } else {
+                        html! { <span class="text-xs text-gray-500">{"—"}</span> }
+                    }}
                 </td>
                 <td>
                     <div class="flex gap-1 flex-wrap">

@@ -1,11 +1,12 @@
 use yew::prelude::*;
 use std::collections::HashMap;
 use std::rc::Rc;
-use crate::api_client::category::{get_categories, CategoryResponse};
+use crate::api_client::category::{get_categories, get_category_stats, CategoryResponse, CategoryStatistics};
 use crate::common::fetch_hook::use_fetch_with_refetch;
 use crate::hooks::FetchState;
 use super::tree_item::TreeItem;
 use super::category_modal::CategoryModal;
+use chrono::{Datelike, NaiveDate};
 
 #[function_component(Categories)]
 pub fn categories() -> Html {
@@ -13,6 +14,19 @@ pub fn categories() -> Html {
     let (fetch_state, refetch) = use_fetch_with_refetch(get_categories);
     let show_modal = use_state(|| false);
     let selected_category = use_state(|| None::<CategoryResponse>);
+
+    // Get current year start and end dates for stats
+    let now = chrono::Local::now().naive_local();
+    let start_date = NaiveDate::from_ymd_opt(now.year(), 1, 1).unwrap().to_string();
+    let end_date = NaiveDate::from_ymd_opt(now.year(), 12, 31).unwrap().to_string();
+
+    let (stats_state, _stats_refetch) = use_fetch_with_refetch(move || {
+        let start_date = start_date.clone();
+        let end_date = end_date.clone();
+        async move {
+            get_category_stats(&start_date, &end_date).await
+        }
+    });
 
     log::debug!("Categories component state: loading={}, success={}, error={}",
         fetch_state.is_loading(), fetch_state.is_success(), fetch_state.is_error());
@@ -36,6 +50,14 @@ pub fn categories() -> Html {
             (roots, children_map)
         },
         _ => (Vec::new(), HashMap::new()),
+    };
+
+    // Build stats map: category_id -> CategoryStatistics
+    let stats_map: HashMap<i32, CategoryStatistics> = match &*stats_state {
+        FetchState::Success(stats) => {
+            stats.iter().map(|stat| (stat.category_id, stat.clone())).collect()
+        },
+        _ => HashMap::new(),
     };
 
     let on_open_modal = {
@@ -138,6 +160,7 @@ pub fn categories() -> Html {
                             }
                         } else {
                             let children_map_rc = Rc::new(children_map);
+                            let stats_map_rc = Rc::new(stats_map);
 
                             html! {
                                 <div class="card bg-base-100 shadow">
@@ -151,6 +174,7 @@ pub fn categories() -> Html {
                                                         key={category.id}
                                                         category={category.clone()}
                                                         children_map={children_map_rc.clone()}
+                                                        stats_map={stats_map_rc.clone()}
                                                         on_edit={on_edit_category.clone()}
                                                         on_delete_success={on_delete_success.clone()}
                                                         level={0}
