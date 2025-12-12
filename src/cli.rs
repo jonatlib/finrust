@@ -3,7 +3,7 @@ use clap::{Parser, Subcommand};
 
 pub mod commands;
 
-use commands::{init_database, serve};
+use commands::{import_django, init_database, serve};
 
 #[derive(Parser)]
 #[command(name = "finrust")]
@@ -52,6 +52,28 @@ pub enum Commands {
         #[arg(short, long, env = "DATABASE_URL")]
         database_url: String,
     },
+    /// Import data from Django JSON dump
+    ///
+    /// Imports accounts, categories, tags, recurring transactions,
+    /// one-off transactions, and manual account states from a Django
+    /// application dump.
+    ImportDjango {
+        /// Path to the Django JSON dump file
+        #[arg(short, long)]
+        json_path: String,
+
+        /// Database URL
+        ///
+        /// For SQLite databases, use:
+        ///   - sqlite:///absolute/path/to/database.sqlite (absolute path)
+        ///
+        /// Examples:
+        ///   SQLite: sqlite:///path/to/database.sqlite
+        ///   PostgreSQL: postgresql://user:password@localhost/dbname
+        ///   MySQL: mysql://user:password@localhost/dbname
+        #[arg(short, long, env = "DATABASE_URL", default_value = "sqlite://finrust.db")]
+        database_url: String,
+    },
 }
 
 impl Cli {
@@ -62,6 +84,9 @@ impl Cli {
             }
             Commands::InitDb { database_url } => {
                 init_database(&database_url).await?;
+            }
+            Commands::ImportDjango { json_path, database_url } => {
+                import_django(&json_path, &database_url).await?;
             }
         }
         Ok(())
