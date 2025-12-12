@@ -409,6 +409,7 @@ mod integration_tests {
             source_account_id: None,
             ledger_name: Some("test_ledger".to_string()),
             linked_import_id: None,
+            category_id: None,
         };
 
         // Send POST request to create transaction
@@ -466,6 +467,7 @@ mod integration_tests {
             source_account_id: Some(888), // This account doesn't exist
             ledger_name: Some("test_ledger".to_string()),
             linked_import_id: None,
+            category_id: None,
         };
 
         // Send POST request to create transaction
@@ -801,6 +803,7 @@ mod integration_tests {
             source_account_id: None,
             ledger_name: Some("test_ledger_1".to_string()),
             linked_import_id: None,
+            category_id: None,
         };
 
         // Account 2: 100,000 on 2025-01-01
@@ -814,6 +817,7 @@ mod integration_tests {
             source_account_id: None,
             ledger_name: Some("test_ledger_2".to_string()),
             linked_import_id: None,
+            category_id: None,
         };
 
         // Create initial balance transactions
@@ -840,6 +844,7 @@ mod integration_tests {
             source_account_id: None,
             ledger_name: Some("test_ledger_1".to_string()),
             linked_import_id: None,
+            category_id: None,
         };
 
         let update1_response = server
@@ -867,6 +872,7 @@ mod integration_tests {
                 source_account_id: None,
                 ledger_name: Some("test_ledger_1".to_string()),
                 linked_import_id: None,
+                category_id: None,
             };
 
             let tx_response = server
@@ -887,6 +893,7 @@ mod integration_tests {
             source_account_id: None,
             ledger_name: Some("test_ledger_1".to_string()),
             linked_import_id: None,
+            category_id: None,
         };
 
         let jan_response = server
@@ -906,6 +913,7 @@ mod integration_tests {
             source_account_id: None,
             ledger_name: Some("test_ledger_2".to_string()),
             linked_import_id: None,
+            category_id: None,
         };
 
         let acc2_response = server
@@ -925,6 +933,7 @@ mod integration_tests {
             source_account_id: Some(account1_id),
             ledger_name: Some("test_transfer".to_string()),
             linked_import_id: None,
+            category_id: None,
         };
 
         let transfer_response = server
@@ -2221,6 +2230,7 @@ mod integration_tests {
                 "category": "Food",
                 "merchant_id": "12345"
             })),
+            category_id: None,
         };
 
         let response = server
@@ -2289,6 +2299,7 @@ mod integration_tests {
             amount: Decimal::new(-2550, 2), // -$25.50
             import_hash: "duplicate_hash_123".to_string(),
             raw_data: None,
+            category_id: None,
         };
 
         let response1 = server
@@ -2349,6 +2360,7 @@ mod integration_tests {
                 amount: Decimal::new(-1000 * i, 2),
                 import_hash: format!("hash_{}", i),
                 raw_data: None,
+                category_id: None,
             };
 
             let response = server
@@ -2405,6 +2417,7 @@ mod integration_tests {
             amount: Decimal::new(-2550, 2),
             import_hash: "filter_test_hash".to_string(),
             raw_data: None,
+            category_id: None,
         };
 
         let response = server
@@ -2473,6 +2486,7 @@ mod integration_tests {
                 amount: Decimal::new(-1000 * i, 2),
                 import_hash: format!("account_hash_{}", i),
                 raw_data: None,
+                category_id: None,
             };
 
             let response = server
@@ -2532,6 +2546,7 @@ mod integration_tests {
             amount: Decimal::new(-2550, 2),
             import_hash: "get_test_hash".to_string(),
             raw_data: Some(serde_json::json!({"test": "data"})),
+            category_id: None,
         };
 
         let create_response = server
@@ -2620,6 +2635,7 @@ mod integration_tests {
             amount: Decimal::new(-2550, 2),
             import_hash: "update_test_hash".to_string(),
             raw_data: None,
+            category_id: None,
         };
 
         let create_response = server
@@ -2637,6 +2653,7 @@ mod integration_tests {
             description: Some("Updated Description".to_string()),
             amount: Some(Decimal::new(-3000, 2)), // -$30.00
             raw_data: Some(serde_json::json!({"updated": "data"})),
+            category_id: None,
         };
 
         let response = server
@@ -2683,6 +2700,7 @@ mod integration_tests {
             description: Some("Updated Description".to_string()),
             amount: Some(Decimal::new(-3000, 2)),
             raw_data: None,
+            category_id: None,
         };
 
         let response = server
@@ -2731,6 +2749,7 @@ mod integration_tests {
             amount: Decimal::new(-2550, 2),
             import_hash: "delete_test_hash".to_string(),
             raw_data: None,
+            category_id: None,
         };
 
         let create_response = server
@@ -2814,6 +2833,7 @@ mod integration_tests {
             source_account_id: None,
             ledger_name: Some("test_reconcile".to_string()),
             linked_import_id: None,
+            category_id: None,
         };
 
         let transaction_response = server
@@ -2835,6 +2855,7 @@ mod integration_tests {
                 "original_description": "GROCERY STORE XYZ",
                 "category": "Food"
             })),
+            category_id: None,
         };
 
         let create_response = server
@@ -2920,6 +2941,7 @@ mod integration_tests {
             amount: Decimal::new(-2550, 2),
             import_hash: "invalid_type_test_hash".to_string(),
             raw_data: None,
+            category_id: None,
         };
 
         let create_response = server
@@ -2986,6 +3008,7 @@ mod integration_tests {
             source_account_id: None,
             ledger_name: Some("test_reconcile".to_string()),
             linked_import_id: None,
+            category_id: None,
         };
 
         let transaction_response = server
@@ -3004,6 +3027,7 @@ mod integration_tests {
             amount: Decimal::new(-2550, 2), // -$25.50
             import_hash: "clear_reconcile_test_hash".to_string(),
             raw_data: None,
+            category_id: None,
         };
 
         let create_response = server
@@ -3120,6 +3144,7 @@ mod integration_tests {
             source_account_id: None,
             ledger_name: Some("test_filter".to_string()),
             linked_import_id: None,
+            category_id: None,
         };
 
         let transaction_response = server
@@ -3138,6 +3163,7 @@ mod integration_tests {
             amount: Decimal::new(-2550, 2),
             import_hash: "filter_reconciled_hash".to_string(),
             raw_data: None,
+            category_id: None,
         };
 
         let create_response1 = server
@@ -3155,6 +3181,7 @@ mod integration_tests {
             amount: Decimal::new(-1000, 2),
             import_hash: "filter_unreconciled_hash".to_string(),
             raw_data: None,
+            category_id: None,
         };
 
         let create_response2 = server

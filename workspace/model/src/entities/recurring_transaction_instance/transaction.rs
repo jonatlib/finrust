@@ -222,6 +222,7 @@ mod tests {
             paid_date: Some(NaiveDate::from_ymd_opt(2023, 1, 14).unwrap()),
             paid_amount: Some(Decimal::new(-1000, 0)),
             reconciled_imported_transaction_id: None,
+            category_id: None,
         };
 
         // Pending instance
@@ -234,6 +235,7 @@ mod tests {
             paid_date: None,
             paid_amount: None,
             reconciled_imported_transaction_id: None,
+            category_id: None,
         };
 
         // Skipped instance
@@ -246,6 +248,7 @@ mod tests {
             paid_date: None,
             paid_amount: None,
             reconciled_imported_transaction_id: None,
+            category_id: None,
         };
 
         // Test paid instance
@@ -290,6 +293,7 @@ mod tests {
             paid_date: Some(NaiveDate::from_ymd_opt(2023, 1, 14).unwrap()),
             paid_amount: Some(Decimal::new(-950, 0)), // Slightly different from expected
             reconciled_imported_transaction_id: None,
+            category_id: None,
         };
 
         // Generate transactions for the paid instance
@@ -322,6 +326,7 @@ mod tests {
             paid_date: None,
             paid_amount: None,
             reconciled_imported_transaction_id: None,
+            category_id: None,
         };
 
         // Generate transactions for the pending instance
@@ -354,6 +359,7 @@ mod tests {
             paid_date: None,
             paid_amount: None,
             reconciled_imported_transaction_id: None,
+            category_id: None,
         };
 
         // Generate transactions for the skipped instance

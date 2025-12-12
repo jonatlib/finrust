@@ -136,6 +136,7 @@ mod tests {
             raw_data: None,
             reconciled_transaction_type: None,
             reconciled_transaction_id: None,
+            category_id: None,
         };
 
         // Date range includes the transaction date
@@ -184,6 +185,7 @@ mod tests {
             raw_data: None,
             reconciled_transaction_type: None,
             reconciled_transaction_id: None,
+            category_id: None,
         };
 
         let today = NaiveDate::from_ymd_opt(2023, 1, 20).unwrap(); // Set today to Jan 20, 2023
@@ -221,6 +223,7 @@ mod tests {
             raw_data: None,
             reconciled_transaction_type: None,
             reconciled_transaction_id: None,
+            category_id: None,
         };
 
         // Test with expand=false (should return empty since no tags are set up in the mock DB)

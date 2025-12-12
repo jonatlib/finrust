@@ -179,18 +179,20 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_expand_broken_hierarchy() {
+    async fn test_expand_with_null_parent() {
         let db = setup_test_db().await;
 
-        // Create a category pointing to a non-existent parent
-        let child_category =
-            create_test_category(&db, 2, "Groceries", Some("Food and groceries"), Some(999)).await;
+        // Create a category with no parent (NULL parent_id)
+        let root_category =
+            create_test_category(&db, 1, "Groceries", Some("Food and groceries"), None).await;
 
-        // Expand should only return the child category since parent doesn't exist
-        let expanded = child_category.expand(&db).await.unwrap();
+        // Expand should only return the category itself since it has no parent
+        let expanded = root_category.expand(&db).await.unwrap();
 
         assert_eq!(expanded.len(), 1);
-        assert_eq!(expanded[0].id, 2);
+        assert_eq!(expanded[0].id, 1);
+        assert_eq!(expanded[0].name, "Groceries");
+        assert_eq!(expanded[0].parent_id, None);
     }
 
     #[tokio::test]
