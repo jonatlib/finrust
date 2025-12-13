@@ -93,9 +93,20 @@ pub async fn get_past_due_transactions(
         .await?;
 
     let mut result = Vec::new();
-    let instance_map: HashSet<(i32, NaiveDate)> = recurring_transaction_instance::Entity::find()
+    // Only consider instances that are Paid or Skipped
+    // Pending instances are not yet handled, so they should be included in unpaid
+    let instances = recurring_transaction_instance::Entity::find()
+        .filter(
+            Condition::any()
+                .add(recurring_transaction_instance::Column::Status.eq(recurring_transaction_instance::InstanceStatus::Paid))
+                .add(recurring_transaction_instance::Column::Status.eq(recurring_transaction_instance::InstanceStatus::Skipped)),
+        )
         .all(db)
-        .await?
+        .await?;
+
+    debug!("Loaded {} paid/skipped instances for past-due check", instances.len());
+
+    let instance_map: HashSet<(i32, NaiveDate)> = instances
         .into_iter()
         .map(|i| (i.recurring_transaction_id, i.due_date))
         .collect();
@@ -105,15 +116,20 @@ pub async fn get_past_due_transactions(
         let occurrences =
             generate_occurrences(tx.start_date, tx.end_date, &tx.period, tx.start_date, today);
 
-        for date in occurrences {
-            if !instance_map.contains(&(tx.id, date)) {
-                let new_date = today + future_offset;
-                trace!(
-                    "Moving past unpaid occurrence from {} to {} for recurring transaction id={}",
-                    date, new_date, tx.id
-                );
-                result.push((new_date, tx.clone()));
-            }
+        // Collect all unpaid occurrences
+        let unpaid_dates: Vec<NaiveDate> = occurrences
+            .into_iter()
+            .filter(|date| !instance_map.contains(&(tx.id, *date)))
+            .collect();
+
+        // Only include the most recent unpaid occurrence (if any) to avoid lumping all past-due on one date
+        if let Some(&most_recent) = unpaid_dates.iter().max() {
+            let new_date = today + future_offset;
+            debug!(
+                "Found {} unpaid occurrences for tx id={}, using most recent: {} -> {}",
+                unpaid_dates.len(), tx.id, most_recent, new_date
+            );
+            result.push((new_date, tx.clone()));
         }
     }
 

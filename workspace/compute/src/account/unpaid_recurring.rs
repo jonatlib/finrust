@@ -116,6 +116,13 @@ async fn compute_unpaid_recurring(
         let recurring_income =
             get_recurring_income(db, account.id, start_date, today, today, future_offset).await?;
 
+        debug!(
+            "Found {} past-due transactions and {} recurring income for account {}",
+            recurring_transactions.len(),
+            recurring_income.len(),
+            account.id
+        );
+
         for (date, tx) in recurring_transactions {
             let amount = if tx.target_account_id == account.id {
                 tx.amount
