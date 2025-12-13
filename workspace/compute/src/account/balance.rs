@@ -61,22 +61,7 @@ impl AccountStateCalculator for BalanceCalculator {
         let today = self
             .today
             .unwrap_or_else(|| chrono::Local::now().date_naive());
-
-        // BalanceCalculator should only compute historical data (up to today)
-        // If start_date is after today, return empty DataFrame
-        if start_date > today {
-            debug!("Start date {} is after today {}, returning empty DataFrame", start_date, today);
-            let empty_df = DataFrame::new(vec![
-                Series::new("account_id".into(), Vec::<i32>::new()).into(),
-                Series::new("date".into(), Vec::<NaiveDate>::new()).into(),
-                Series::new("balance".into(), Vec::<String>::new()).into(),
-            ])?;
-            return Ok(empty_df);
-        }
-
-        // Cap end_date at today - don't compute future dates
-        let capped_end_date = std::cmp::min(end_date, today);
-        compute_balance(db, accounts, start_date, capped_end_date, today).await
+        compute_balance(db, accounts, start_date, end_date, today).await
     }
 
     fn merge_method(&self) -> MergeMethod {
