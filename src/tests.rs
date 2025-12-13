@@ -1,12 +1,12 @@
 #[cfg(test)]
 mod integration_tests {
-    use crate::test_utils::test_utils::{setup_test_app, setup_test_app_state};
     use crate::handlers::accounts::{CreateAccountRequest, UpdateAccountRequest};
     use crate::handlers::transactions::CreateTransactionRequest;
     use crate::handlers::users::{CreateUserRequest, UpdateUserRequest};
     use crate::schemas::{ApiResponse, TimeseriesQuery};
-    use axum_test::TestServer;
+    use crate::test_utils::test_utils::{setup_test_app, setup_test_app_state};
     use axum::http::StatusCode;
+    use axum_test::TestServer;
     use chrono::NaiveDate;
     use common::AccountStateTimeseries;
     use rust_decimal::Decimal;
@@ -519,12 +519,12 @@ mod integration_tests {
             assert!(!body.is_empty(), "Metrics endpoint should return non-empty response");
 
             // The axum-prometheus library might use a different format, so let's check for basic metrics patterns
-            let has_metrics = body.contains("http_requests") || 
-                             body.contains("axum_") || 
-                             body.contains("_total") ||
-                             body.contains("_duration") ||
-                             body.contains("# HELP") ||
-                             body.contains("# TYPE");
+            let has_metrics = body.contains("http_requests") ||
+                body.contains("axum_") ||
+                body.contains("_total") ||
+                body.contains("_duration") ||
+                body.contains("# HELP") ||
+                body.contains("# TYPE");
 
             assert!(has_metrics, "Response should contain Prometheus-style metrics");
 
@@ -972,6 +972,7 @@ mod integration_tests {
         let timeseries_query = TimeseriesQuery {
             start_date: NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
             end_date: NaiveDate::from_ymd_opt(2025, 12, 31).unwrap(),
+            include_ignored: true,
         };
 
         // Test individual account timeseries first
@@ -1007,36 +1008,36 @@ mod integration_tests {
 
         // Check that account 1 has correct balance after update on 2025-06-10
         let june_data: Vec<_> = timeseries_data.data_points.iter()
-            .filter(|point| point.date >= NaiveDate::from_ymd_opt(2025, 6, 1).unwrap() 
-                         && point.date <= NaiveDate::from_ymd_opt(2025, 6, 30).unwrap()
-                         && point.account_id == account1_id)
+            .filter(|point| point.date >= NaiveDate::from_ymd_opt(2025, 6, 1).unwrap()
+                && point.date <= NaiveDate::from_ymd_opt(2025, 6, 30).unwrap()
+                && point.account_id == account1_id)
             .collect();
 
         if !june_data.is_empty() {
             // Account 1 should have 200,000 after the June update
             let june_balance = june_data.last().unwrap().balance;
             assert!(june_balance >= Decimal::new(19000000, 2), // Should be around 200,000
-                   "Account 1 balance in June should be around 200,000, got: {}", june_balance);
+                    "Account 1 balance in June should be around 200,000, got: {}", june_balance);
         }
 
         // Check balance after some recurring transactions
         let oct_data: Vec<_> = timeseries_data.data_points.iter()
-            .filter(|point| point.date >= NaiveDate::from_ymd_opt(2025, 10, 12).unwrap() 
-                         && point.date <= NaiveDate::from_ymd_opt(2025, 10, 31).unwrap()
-                         && point.account_id == account1_id)
+            .filter(|point| point.date >= NaiveDate::from_ymd_opt(2025, 10, 12).unwrap()
+                && point.date <= NaiveDate::from_ymd_opt(2025, 10, 31).unwrap()
+                && point.account_id == account1_id)
             .collect();
 
         if !oct_data.is_empty() {
             // Account 1 should have 199,000 after first recurring transaction
             let oct_balance = oct_data.last().unwrap().balance;
-            assert!(oct_balance <= Decimal::new(19900000, 2) && oct_balance >= Decimal::new(19800000, 2), 
-                   "Account 1 balance in October should be around 199,000, got: {}", oct_balance);
+            assert!(oct_balance <= Decimal::new(19900000, 2) && oct_balance >= Decimal::new(19800000, 2),
+                    "Account 1 balance in October should be around 199,000, got: {}", oct_balance);
         }
 
         // Verify that the transfer affected both accounts correctly
         let jan_21_data: Vec<_> = timeseries_data.data_points.iter()
-            .filter(|point| point.date >= NaiveDate::from_ymd_opt(2026, 1, 21).unwrap() 
-                         && point.date <= NaiveDate::from_ymd_opt(2026, 1, 31).unwrap())
+            .filter(|point| point.date >= NaiveDate::from_ymd_opt(2026, 1, 21).unwrap()
+                && point.date <= NaiveDate::from_ymd_opt(2026, 1, 31).unwrap())
             .collect();
 
         if !jan_21_data.is_empty() {
@@ -1093,7 +1094,7 @@ mod integration_tests {
         use chrono::NaiveDate;
         use rust_decimal::Decimal;
         use sea_orm::{ActiveModelTrait, Set};
-        use model::entities::{recurring_transaction, account};
+        use model::entities::{account, recurring_transaction};
 
         // Setup test server and get database connection
         let app_state = setup_test_app_state().await;
@@ -1221,10 +1222,10 @@ mod integration_tests {
 
     #[tokio::test]
     async fn test_get_missing_instances() {
-        use crate::handlers::transactions::{MissingInstanceInfo};
+        use crate::handlers::transactions::MissingInstanceInfo;
         use chrono::Datelike;
         use crate::schemas::ApiResponse;
-        use model::entities::{recurring_transaction, recurring_transaction_instance, account};
+        use model::entities::{account, recurring_transaction, recurring_transaction_instance};
         use sea_orm::{ActiveModelTrait, Set};
 
         // Setup test server and state
@@ -1327,10 +1328,10 @@ mod integration_tests {
 
     #[tokio::test]
     async fn test_bulk_create_instances_new() {
-        use crate::handlers::transactions::{BulkCreateInstancesRequest, BulkInstanceItem, BulkCreateInstancesResponse};
+        use crate::handlers::transactions::{BulkCreateInstancesRequest, BulkCreateInstancesResponse, BulkInstanceItem};
         use crate::schemas::ApiResponse;
-        use model::entities::{recurring_transaction, recurring_transaction_instance, account};
-        use sea_orm::{ActiveModelTrait, Set, EntityTrait};
+        use model::entities::{account, recurring_transaction, recurring_transaction_instance};
+        use sea_orm::{ActiveModelTrait, EntityTrait, Set};
 
         // Setup test server and state
         let app_state = setup_test_app_state().await;
@@ -1412,10 +1413,10 @@ mod integration_tests {
 
     #[tokio::test]
     async fn test_bulk_create_instances_update_pending_to_paid() {
-        use crate::handlers::transactions::{BulkCreateInstancesRequest, BulkInstanceItem, BulkCreateInstancesResponse};
+        use crate::handlers::transactions::{BulkCreateInstancesRequest, BulkCreateInstancesResponse, BulkInstanceItem};
         use crate::schemas::ApiResponse;
-        use model::entities::{recurring_transaction, recurring_transaction_instance, account};
-        use sea_orm::{ActiveModelTrait, Set, EntityTrait};
+        use model::entities::{account, recurring_transaction, recurring_transaction_instance};
+        use sea_orm::{ActiveModelTrait, EntityTrait, Set};
 
         // Setup test server and state
         let app_state = setup_test_app_state().await;
@@ -1504,10 +1505,10 @@ mod integration_tests {
 
     #[tokio::test]
     async fn test_bulk_create_instances_skip_pending() {
-        use crate::handlers::transactions::{BulkCreateInstancesRequest, BulkInstanceItem, BulkCreateInstancesResponse};
+        use crate::handlers::transactions::{BulkCreateInstancesRequest, BulkCreateInstancesResponse, BulkInstanceItem};
         use crate::schemas::ApiResponse;
-        use model::entities::{recurring_transaction, recurring_transaction_instance, account};
-        use sea_orm::{ActiveModelTrait, Set, EntityTrait};
+        use model::entities::{account, recurring_transaction, recurring_transaction_instance};
+        use sea_orm::{ActiveModelTrait, EntityTrait, Set};
 
         // Setup test server and state
         let app_state = setup_test_app_state().await;
@@ -1595,10 +1596,10 @@ mod integration_tests {
 
     #[tokio::test]
     async fn test_bulk_create_instances_mixed_operations() {
-        use crate::handlers::transactions::{BulkCreateInstancesRequest, BulkInstanceItem, BulkCreateInstancesResponse};
+        use crate::handlers::transactions::{BulkCreateInstancesRequest, BulkCreateInstancesResponse, BulkInstanceItem};
         use crate::schemas::ApiResponse;
-        use model::entities::{recurring_transaction, recurring_transaction_instance, account};
-        use sea_orm::{ActiveModelTrait, Set, EntityTrait};
+        use model::entities::{account, recurring_transaction, recurring_transaction_instance};
+        use sea_orm::{ActiveModelTrait, EntityTrait, Set};
 
         // Setup test server and state
         let app_state = setup_test_app_state().await;
@@ -1936,8 +1937,6 @@ mod integration_tests {
 
     #[tokio::test]
     async fn test_get_manual_account_state_not_found() {
-        use crate::handlers::manual_account_states::CreateManualAccountStateRequest;
-
         // Setup test server
         let app = setup_test_app().await;
         let server = TestServer::new(app).unwrap();
@@ -2795,7 +2794,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn test_reconcile_imported_transaction() {
-        use crate::handlers::transactions::{CreateImportedTransactionRequest, ReconcileImportedTransactionRequest, CreateTransactionRequest};
+        use crate::handlers::transactions::{CreateImportedTransactionRequest, CreateTransactionRequest, ReconcileImportedTransactionRequest};
         use chrono::NaiveDate;
         use rust_decimal::Decimal;
 
@@ -2970,7 +2969,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn test_clear_imported_transaction_reconciliation() {
-        use crate::handlers::transactions::{CreateImportedTransactionRequest, ReconcileImportedTransactionRequest, CreateTransactionRequest};
+        use crate::handlers::transactions::{CreateImportedTransactionRequest, CreateTransactionRequest, ReconcileImportedTransactionRequest};
         use chrono::NaiveDate;
         use rust_decimal::Decimal;
 
@@ -3106,7 +3105,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn test_imported_transaction_filtering_by_reconciliation_status() {
-        use crate::handlers::transactions::{CreateImportedTransactionRequest, ReconcileImportedTransactionRequest, CreateTransactionRequest};
+        use crate::handlers::transactions::{CreateImportedTransactionRequest, CreateTransactionRequest, ReconcileImportedTransactionRequest};
         use chrono::NaiveDate;
         use rust_decimal::Decimal;
 
