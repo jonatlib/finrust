@@ -194,11 +194,11 @@ pub fn transactions() -> Html {
                     <label class="label">
                         <span class="label-text">{"Filter by Category"}</span>
                     </label>
-                    <select class="select select-bordered select-sm" onchange={on_category_change}>
-                        <option value="">{"All Categories"}</option>
+                    <select class="select select-bordered select-sm" onchange={on_category_change} value={selected_category.as_ref().map(|id| id.to_string()).unwrap_or_default()}>
+                        <option value="" selected={selected_category.is_none()}>{"All Categories"}</option>
                         {for categories_list.iter().map(|cat| {
                             html! {
-                                <option value={cat.id.to_string()} selected={*selected_category == Some(cat.id)}>
+                                <option value={cat.id.to_string()}>
                                     {&cat.name}
                                 </option>
                             }
