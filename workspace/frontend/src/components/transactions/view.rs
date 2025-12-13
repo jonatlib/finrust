@@ -35,6 +35,8 @@ pub fn transactions() -> Html {
     let sort_direction = use_state(|| SortDirection::Descending);
     let selected_month = use_state(|| None::<(i32, u32)>); // (year, month)
     let selected_category = use_state(|| None::<i32>);
+    let selected_source_account = use_state(|| None::<i32>);
+    let selected_target_account = use_state(|| None::<i32>);
 
     log::debug!("Transactions component state: loading={}, success={}, error={}",
         fetch_state.is_loading(), fetch_state.is_success(), fetch_state.is_error());
@@ -139,6 +141,34 @@ pub fn transactions() -> Html {
         })
     };
 
+    let on_source_account_change = {
+        let selected_source_account = selected_source_account.clone();
+        Callback::from(move |e: Event| {
+            if let Some(target) = e.target_dyn_into::<web_sys::HtmlSelectElement>() {
+                let value = target.value();
+                if value.is_empty() {
+                    selected_source_account.set(None);
+                } else if let Ok(acc_id) = value.parse::<i32>() {
+                    selected_source_account.set(Some(acc_id));
+                }
+            }
+        })
+    };
+
+    let on_target_account_change = {
+        let selected_target_account = selected_target_account.clone();
+        Callback::from(move |e: Event| {
+            if let Some(target) = e.target_dyn_into::<web_sys::HtmlSelectElement>() {
+                let value = target.value();
+                if value.is_empty() {
+                    selected_target_account.set(None);
+                } else if let Ok(acc_id) = value.parse::<i32>() {
+                    selected_target_account.set(Some(acc_id));
+                }
+            }
+        })
+    };
+
     // Get unique months from transactions
     let available_months = match &*fetch_state {
         FetchState::Success(transactions) => {
@@ -163,7 +193,7 @@ pub fn transactions() -> Html {
                 show={*show_modal}
                 on_close={on_close_modal}
                 on_success={on_success}
-                accounts={accounts_list}
+                accounts={accounts_list.clone()}
                 transaction={None}
             />
 
@@ -205,6 +235,38 @@ pub fn transactions() -> Html {
                         })}
                     </select>
                 </div>
+
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">{"Filter by Source Account"}</span>
+                    </label>
+                    <select class="select select-bordered select-sm" onchange={on_source_account_change} value={selected_source_account.as_ref().map(|id| id.to_string()).unwrap_or_default()}>
+                        <option value="" selected={selected_source_account.is_none()}>{"All Source Accounts"}</option>
+                        {for accounts_list.iter().map(|acc| {
+                            html! {
+                                <option value={acc.id.to_string()}>
+                                    {&acc.name}
+                                </option>
+                            }
+                        })}
+                    </select>
+                </div>
+
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">{"Filter by Target Account"}</span>
+                    </label>
+                    <select class="select select-bordered select-sm" onchange={on_target_account_change} value={selected_target_account.as_ref().map(|id| id.to_string()).unwrap_or_default()}>
+                        <option value="" selected={selected_target_account.is_none()}>{"All Target Accounts"}</option>
+                        {for accounts_list.iter().map(|acc| {
+                            html! {
+                                <option value={acc.id.to_string()}>
+                                    {&acc.name}
+                                </option>
+                            }
+                        })}
+                    </select>
+                </div>
             </div>
 
             {
@@ -236,6 +298,18 @@ pub fn transactions() -> Html {
                                 // Filter by category
                                 if let Some(cat_id) = *selected_category {
                                     if t.category_id != Some(cat_id) {
+                                        return false;
+                                    }
+                                }
+                                // Filter by source account
+                                if let Some(src_acc_id) = *selected_source_account {
+                                    if t.source_account_id != Some(src_acc_id) {
+                                        return false;
+                                    }
+                                }
+                                // Filter by target account
+                                if let Some(tgt_acc_id) = *selected_target_account {
+                                    if t.target_account_id != tgt_acc_id {
                                         return false;
                                     }
                                 }
