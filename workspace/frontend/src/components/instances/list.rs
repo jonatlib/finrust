@@ -1,10 +1,26 @@
 use yew::prelude::*;
 use yew_router::prelude::*;
+use std::collections::HashMap;
 use crate::api_client::recurring_transaction::{RecurringInstanceResponse, get_recurring_instances, delete_recurring_instance, update_recurring_instance, UpdateRecurringInstanceRequest};
+use crate::api_client::account::get_accounts;
 use crate::common::fetch_hook::use_fetch_with_refetch;
 use crate::common::toast::ToastContext;
 use crate::hooks::FetchState;
 use crate::router::Route;
+
+#[derive(Clone, Copy, PartialEq)]
+enum SortColumn {
+    RecurringTransaction,
+    Status,
+    DueDate,
+    ExpectedAmount,
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum SortDirection {
+    Ascending,
+    Descending,
+}
 
 #[derive(Properties, PartialEq)]
 pub struct InstancesListProps {
@@ -20,7 +36,19 @@ pub fn instances_list(props: &InstancesListProps) -> Html {
     let (fetch_state, refetch) = use_fetch_with_refetch(move || {
         get_recurring_instances(None, None, recurring_id, None)
     });
+    let (accounts_state, _) = use_fetch_with_refetch(get_accounts);
     let toast_ctx = use_context::<ToastContext>().expect("ToastContext not found");
+
+    let sort_column = use_state(|| SortColumn::DueDate);
+    let sort_direction = use_state(|| SortDirection::Descending);
+    let selected_target_account = use_state(|| None::<i32>);
+    let selected_status = use_state(|| None::<String>);
+
+    // Get accounts list
+    let accounts_list = match &*accounts_state {
+        FetchState::Success(accounts) => accounts.clone(),
+        _ => vec![],
+    };
 
     let format_currency = |amount: &str| -> String {
         match amount.parse::<f64>() {
@@ -29,18 +57,116 @@ pub fn instances_list(props: &InstancesListProps) -> Html {
         }
     };
 
+    let on_sort = {
+        let sort_column = sort_column.clone();
+        let sort_direction = sort_direction.clone();
+        Callback::from(move |column: SortColumn| {
+            if *sort_column == column {
+                sort_direction.set(match *sort_direction {
+                    SortDirection::Ascending => SortDirection::Descending,
+                    SortDirection::Descending => SortDirection::Ascending,
+                });
+            } else {
+                sort_column.set(column);
+                sort_direction.set(SortDirection::Descending);
+            }
+        })
+    };
+
+    let on_target_account_change = {
+        let selected_target_account = selected_target_account.clone();
+        Callback::from(move |e: Event| {
+            if let Some(target) = e.target_dyn_into::<web_sys::HtmlSelectElement>() {
+                let value = target.value();
+                if value.is_empty() {
+                    selected_target_account.set(None);
+                } else if let Ok(acc_id) = value.parse::<i32>() {
+                    selected_target_account.set(Some(acc_id));
+                }
+            }
+        })
+    };
+
+    let on_status_change = {
+        let selected_status = selected_status.clone();
+        Callback::from(move |e: Event| {
+            if let Some(target) = e.target_dyn_into::<web_sys::HtmlSelectElement>() {
+                let value = target.value();
+                if value.is_empty() {
+                    selected_status.set(None);
+                } else {
+                    selected_status.set(Some(value));
+                }
+            }
+        })
+    };
+
     let render_content = || -> Html {
         match &*fetch_state {
             FetchState::Success(instances) if !instances.is_empty() => {
+                // Filter instances
+                let filtered_instances: Vec<_> = instances.iter()
+                    .filter(|i| {
+                        // Filter by target account
+                        if let Some(tgt_acc_id) = *selected_target_account {
+                            if i.target_account_id != Some(tgt_acc_id) {
+                                return false;
+                            }
+                        }
+                        // Filter by status
+                        if let Some(status) = &*selected_status {
+                            if &i.status != status {
+                                return false;
+                            }
+                        }
+                        true
+                    })
+                    .cloned()
+                    .collect();
+
+                if filtered_instances.is_empty() {
+                    return html! {
+                        <div class="text-center py-8">
+                            <p class="text-gray-500">{"No instances found."}</p>
+                        </div>
+                    };
+                }
+
+                // Sort instances
+                let mut sorted_instances = filtered_instances.clone();
+                sorted_instances.sort_by(|a, b| {
+                    let cmp = match *sort_column {
+                        SortColumn::RecurringTransaction => {
+                            let a_name = a.recurring_transaction_name.as_deref().unwrap_or("");
+                            let b_name = b.recurring_transaction_name.as_deref().unwrap_or("");
+                            a_name.to_lowercase().cmp(&b_name.to_lowercase())
+                        },
+                        SortColumn::Status => a.status.to_lowercase().cmp(&b.status.to_lowercase()),
+                        SortColumn::DueDate => a.due_date.cmp(&b.due_date),
+                        SortColumn::ExpectedAmount => {
+                            let a_amt = a.expected_amount.parse::<f64>().unwrap_or(0.0);
+                            let b_amt = b.expected_amount.parse::<f64>().unwrap_or(0.0);
+                            a_amt.partial_cmp(&b_amt).unwrap_or(std::cmp::Ordering::Equal)
+                        },
+                    };
+                    match *sort_direction {
+                        SortDirection::Ascending => cmp,
+                        SortDirection::Descending => cmp.reverse(),
+                    }
+                });
+
+                let current_sort_column = *sort_column;
+                let current_sort_direction = *sort_direction;
+
                 html! {
                     <div class="overflow-x-auto bg-base-100 shadow rounded-box">
                         <table class="table table-zebra">
                             <thead>
                                 <tr>
-                                    <th>{"Recurring Transaction"}</th>
-                                    <th>{"Status"}</th>
-                                    <th>{"Due Date"}</th>
-                                    <th>{"Expected Amount"}</th>
+                                    {render_sortable_header("Recurring Transaction", SortColumn::RecurringTransaction, current_sort_column, current_sort_direction, on_sort.clone())}
+                                    {render_sortable_header("Status", SortColumn::Status, current_sort_column, current_sort_direction, on_sort.clone())}
+                                    {render_sortable_header("Due Date", SortColumn::DueDate, current_sort_column, current_sort_direction, on_sort.clone())}
+                                    {render_sortable_header("Expected Amount", SortColumn::ExpectedAmount, current_sort_column, current_sort_direction, on_sort.clone())}
                                     <th>{"Target Account"}</th>
                                     <th>{"Source Account"}</th>
                                     <th>{"Paid Date"}</th>
@@ -50,7 +176,7 @@ pub fn instances_list(props: &InstancesListProps) -> Html {
                                 </tr>
                             </thead>
                             <tbody>
-                                { for instances.iter().map(|instance| {
+                                { for sorted_instances.iter().map(|instance| {
                                     let expected_amount = match instance.expected_amount.parse::<f64>() {
                                         Ok(val) => val,
                                         Err(_) => 0.0,
@@ -329,7 +455,72 @@ pub fn instances_list(props: &InstancesListProps) -> Html {
 
     html! {
         <div>
+            <div class="flex gap-4 mb-4">
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">{"Filter by Status"}</span>
+                    </label>
+                    <select class="select select-bordered select-sm" onchange={on_status_change} value={selected_status.as_ref().cloned().unwrap_or_default()}>
+                        <option value="" selected={selected_status.is_none()}>{"All Statuses"}</option>
+                        <option value="Pending">{"Pending"}</option>
+                        <option value="Paid">{"Paid"}</option>
+                        <option value="Skipped">{"Skipped"}</option>
+                    </select>
+                </div>
+
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">{"Filter by Target Account"}</span>
+                    </label>
+                    <select class="select select-bordered select-sm" onchange={on_target_account_change} value={selected_target_account.as_ref().map(|id| id.to_string()).unwrap_or_default()}>
+                        <option value="" selected={selected_target_account.is_none()}>{"All Target Accounts"}</option>
+                        {for accounts_list.iter().map(|acc| {
+                            html! {
+                                <option value={acc.id.to_string()}>
+                                    {&acc.name}
+                                </option>
+                            }
+                        })}
+                    </select>
+                </div>
+            </div>
+
             {render_content()}
         </div>
+    }
+}
+
+fn render_sortable_header(
+    label: &str,
+    column: SortColumn,
+    current_sort_column: SortColumn,
+    current_sort_direction: SortDirection,
+    on_sort: Callback<SortColumn>,
+) -> Html {
+    let is_active = current_sort_column == column;
+    let icon = if is_active {
+        match current_sort_direction {
+            SortDirection::Ascending => html! { <i class="fas fa-sort-up ml-1"></i> },
+            SortDirection::Descending => html! { <i class="fas fa-sort-down ml-1"></i> },
+        }
+    } else {
+        html! { <i class="fas fa-sort ml-1 opacity-30"></i> }
+    };
+
+    let onclick = {
+        let column = column;
+        Callback::from(move |e: MouseEvent| {
+            e.prevent_default();
+            on_sort.emit(column);
+        })
+    };
+
+    html! {
+        <th class="cursor-pointer hover:bg-base-200 select-none" onclick={onclick}>
+            <div class="flex items-center gap-1">
+                {label}
+                {icon}
+            </div>
+        </th>
     }
 }
