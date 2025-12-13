@@ -88,17 +88,19 @@ async fn fetch_recurring_income(
 }
 
 /// Fetches instances for a recurring income
+/// Only fetches Paid instances - Pending and Skipped instances are not counted in balance
 async fn fetch_income_instances(
     db: &DatabaseConnection,
     income_id: i32,
 ) -> Result<Vec<recurring_transaction_instance::Model>> {
     let instances = recurring_transaction_instance::Entity::find()
         .filter(recurring_transaction_instance::Column::RecurringTransactionId.eq(income_id))
+        .filter(recurring_transaction_instance::Column::Status.eq(recurring_transaction_instance::InstanceStatus::Paid))
         .all(db)
         .await?;
 
     debug!(
-        "Found {} instances for recurring income id={}",
+        "Found {} paid instances for recurring income id={}",
         instances.len(),
         income_id
     );
