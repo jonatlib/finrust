@@ -108,7 +108,7 @@ pub fn transactions() -> Html {
     let on_month_change = {
         let selected_month = selected_month.clone();
         Callback::from(move |e: Event| {
-            if let Some(target) = e.target_dyn_into::<web_sys::HtmlSelectElement>() {
+            if let Some(target) = e.target_dyn_into::<web_sys::HtmlInputElement>() {
                 let value = target.value();
                 if value.is_empty() {
                     selected_month.set(None);
@@ -182,26 +182,12 @@ pub fn transactions() -> Html {
                     <label class="label">
                         <span class="label-text">{"Filter by Month"}</span>
                     </label>
-                    <select class="select select-bordered select-sm" onchange={on_month_change}>
-                        <option value="">{"All Months"}</option>
-                        {for available_months.iter().map(|&(year, month)| {
-                            let value = format!("{}-{:02}", year, month);
-                            let label = format!("{} {}",
-                                match month {
-                                    1 => "January", 2 => "February", 3 => "March", 4 => "April",
-                                    5 => "May", 6 => "June", 7 => "July", 8 => "August",
-                                    9 => "September", 10 => "October", 11 => "November", 12 => "December",
-                                    _ => "Unknown"
-                                },
-                                year
-                            );
-                            html! {
-                                <option value={value.clone()} selected={*selected_month == Some((year, month))}>
-                                    {label}
-                                </option>
-                            }
-                        })}
-                    </select>
+                    <input
+                        type="month"
+                        class="input input-bordered input-sm"
+                        onchange={on_month_change}
+                        value={selected_month.as_ref().map(|(y, m)| format!("{}-{:02}", y, m)).unwrap_or_default()}
+                    />
                 </div>
 
                 <div class="form-control">
