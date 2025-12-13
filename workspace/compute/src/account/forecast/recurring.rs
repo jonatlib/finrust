@@ -93,14 +93,18 @@ pub async fn get_past_due_transactions(
         .await?;
 
     let mut result = Vec::new();
-    // Load ALL instances (Pending, Paid, Skipped)
-    // If an instance exists, even if Pending, it means it's been accounted for/scheduled
-    // and shouldn't be considered "unpaid past-due"
+    // Only load Paid and Skipped instances
+    // Pending instances are NOT considered paid, so they should show up as unpaid
     let instances = recurring_transaction_instance::Entity::find()
+        .filter(
+            Condition::any()
+                .add(recurring_transaction_instance::Column::Status.eq(recurring_transaction_instance::InstanceStatus::Paid))
+                .add(recurring_transaction_instance::Column::Status.eq(recurring_transaction_instance::InstanceStatus::Skipped)),
+        )
         .all(db)
         .await?;
 
-    debug!("Loaded {} instances (all statuses) for past-due check", instances.len());
+    debug!("Loaded {} paid/skipped instances for past-due check", instances.len());
 
     let instance_map: HashSet<(i32, NaiveDate)> = instances
         .into_iter()

@@ -34,7 +34,7 @@ pub fn default_compute(today: Option<NaiveDate>) -> impl AccountStateCalculator 
     AccountStateCacheCalculator::new(
         MergeCalculator::new(
             vec![
-                // Box::new(balance_calculator),
+                Box::new(balance_calculator),
                 Box::new(unpaid_calculator),
             ],
             MergeMethod::Sum,
