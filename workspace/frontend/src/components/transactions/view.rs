@@ -294,7 +294,8 @@ pub fn transactions() -> Html {
                                             <tr>
                                                 {render_sortable_header("Date", SortColumn::Date, current_sort_column, current_sort_direction, on_sort.clone())}
                                                 {render_sortable_header("Transaction", SortColumn::Name, current_sort_column, current_sort_direction, on_sort.clone())}
-                                                {render_sortable_header("Account", SortColumn::Account, current_sort_column, current_sort_direction, on_sort.clone())}
+                                                <th>{"Source Account"}</th>
+                                                <th>{"Target Account"}</th>
                                                 {render_sortable_header("Amount", SortColumn::Amount, current_sort_column, current_sort_direction, on_sort.clone())}
                                                 <th>{"Category"}</th>
                                                 <th>{"Tags"}</th>
@@ -359,10 +360,14 @@ fn render_transaction_row(transaction: &TransactionResponse, account_map: &HashM
         "text-error"
     };
 
-    let account_name = account_map
+    let target_account_name = account_map
         .get(&transaction.target_account_id)
         .map(|name| name.as_str())
         .unwrap_or("Unknown Account");
+
+    let source_account_name = transaction.source_account_id
+        .and_then(|id| account_map.get(&id))
+        .map(|name| name.as_str());
 
     let transaction_id = transaction.id;
     let format_amount = |amount: rust_decimal::Decimal| -> String {
@@ -408,7 +413,16 @@ fn render_transaction_row(transaction: &TransactionResponse, account_map: &HashM
                     }}
                 </td>
                 <td>
-                    <span class="badge badge-sm badge-ghost">{account_name}</span>
+                    {if let Some(source) = source_account_name {
+                        html! {
+                            <span class="badge badge-sm badge-ghost">{source}</span>
+                        }
+                    } else {
+                        html! { <span class="text-xs text-gray-500">{"—"}</span> }
+                    }}
+                </td>
+                <td>
+                    <span class="badge badge-sm badge-ghost">{target_account_name}</span>
                 </td>
                 <td class={classes!("font-mono", "font-semibold", amount_class)}>
                     {format_amount(transaction.amount)}
