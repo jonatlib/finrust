@@ -27,30 +27,19 @@ pub fn default_compute(today: Option<NaiveDate>) -> impl AccountStateCalculator 
 
     // Create the unpaid recurring calculator
     let unpaid_calculator =
-        UnpaidRecurringCalculator::new_with_sum_merge(today, chrono::Duration::days(7));
+        UnpaidRecurringCalculator::new_with_sum_merge(today, chrono::Duration::days(1));
 
-    // FIXME remove this
+    // Create a merge calculator that combines both calculators
+    // Use Sum merge method to sum the balances from both calculators
     AccountStateCacheCalculator::new(
         MergeCalculator::new(
-            vec![Box::new(balance_calculator)],
+            vec![Box::new(balance_calculator), Box::new(unpaid_calculator)],
             MergeMethod::Sum,
         ),
         20,
         Duration::from_secs(60),
         None,
     )
-
-    // Create a merge calculator that combines both calculators
-    // Use Sum merge method to sum the balances from both calculators
-    // AccountStateCacheCalculator::new(
-    //     MergeCalculator::new(
-    //         vec![Box::new(balance_calculator), Box::new(unpaid_calculator)],
-    //         MergeMethod::Sum,
-    //     ),
-    //     20,
-    //     Duration::from_secs(60),
-    //     None,
-    // )
 }
 
 #[cfg(test)]
