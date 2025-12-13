@@ -48,6 +48,7 @@ features = [
     "Element",
     "HtmlElement",
     "HtmlFormElement",
+    "HtmlSelectElement",
     "FormData",
     "Window",
 ]

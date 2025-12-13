@@ -1,6 +1,7 @@
 use yew::prelude::*;
 use yew_router::prelude::*;
 use std::collections::HashMap;
+use chrono::Datelike;
 use crate::api_client::transaction::{get_transactions, TransactionResponse};
 use crate::api_client::account::get_accounts;
 use crate::api_client::category::get_categories;
@@ -32,6 +33,8 @@ pub fn transactions() -> Html {
     let show_modal = use_state(|| false);
     let sort_column = use_state(|| SortColumn::Date);
     let sort_direction = use_state(|| SortDirection::Descending);
+    let selected_month = use_state(|| None::<(i32, u32)>); // (year, month)
+    let selected_category = use_state(|| None::<i32>);
 
     log::debug!("Transactions component state: loading={}, success={}, error={}",
         fetch_state.is_loading(), fetch_state.is_success(), fetch_state.is_error());
@@ -102,6 +105,58 @@ pub fn transactions() -> Html {
         })
     };
 
+    let on_month_change = {
+        let selected_month = selected_month.clone();
+        Callback::from(move |e: Event| {
+            if let Some(target) = e.target_dyn_into::<web_sys::HtmlSelectElement>() {
+                let value = target.value();
+                if value.is_empty() {
+                    selected_month.set(None);
+                } else {
+                    // Parse "YYYY-MM" format
+                    let parts: Vec<&str> = value.split('-').collect();
+                    if parts.len() == 2 {
+                        if let (Ok(year), Ok(month)) = (parts[0].parse::<i32>(), parts[1].parse::<u32>()) {
+                            selected_month.set(Some((year, month)));
+                        }
+                    }
+                }
+            }
+        })
+    };
+
+    let on_category_change = {
+        let selected_category = selected_category.clone();
+        Callback::from(move |e: Event| {
+            if let Some(target) = e.target_dyn_into::<web_sys::HtmlSelectElement>() {
+                let value = target.value();
+                if value.is_empty() {
+                    selected_category.set(None);
+                } else if let Ok(cat_id) = value.parse::<i32>() {
+                    selected_category.set(Some(cat_id));
+                }
+            }
+        })
+    };
+
+    // Get unique months from transactions
+    let available_months = match &*fetch_state {
+        FetchState::Success(transactions) => {
+            let mut months = std::collections::BTreeSet::new();
+            for t in transactions {
+                months.insert((t.date.year(), t.date.month()));
+            }
+            months.into_iter().collect::<Vec<_>>()
+        },
+        _ => vec![],
+    };
+
+    // Get categories list
+    let categories_list = match &*categories_state {
+        FetchState::Success(categories) => categories.clone(),
+        _ => vec![],
+    };
+
     html! {
         <>
             <TransactionModal
@@ -122,6 +177,50 @@ pub fn transactions() -> Html {
                 </button>
             </div>
 
+            <div class="flex gap-4 mb-4">
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">{"Filter by Month"}</span>
+                    </label>
+                    <select class="select select-bordered select-sm" onchange={on_month_change}>
+                        <option value="">{"All Months"}</option>
+                        {for available_months.iter().map(|&(year, month)| {
+                            let value = format!("{}-{:02}", year, month);
+                            let label = format!("{} {}",
+                                match month {
+                                    1 => "January", 2 => "February", 3 => "March", 4 => "April",
+                                    5 => "May", 6 => "June", 7 => "July", 8 => "August",
+                                    9 => "September", 10 => "October", 11 => "November", 12 => "December",
+                                    _ => "Unknown"
+                                },
+                                year
+                            );
+                            html! {
+                                <option value={value.clone()} selected={*selected_month == Some((year, month))}>
+                                    {label}
+                                </option>
+                            }
+                        })}
+                    </select>
+                </div>
+
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">{"Filter by Category"}</span>
+                    </label>
+                    <select class="select select-bordered select-sm" onchange={on_category_change}>
+                        <option value="">{"All Categories"}</option>
+                        {for categories_list.iter().map(|cat| {
+                            html! {
+                                <option value={cat.id.to_string()} selected={*selected_category == Some(cat.id)}>
+                                    {&cat.name}
+                                </option>
+                            }
+                        })}
+                    </select>
+                </div>
+            </div>
+
             {
                 match &*fetch_state {
                     FetchState::Loading => html! {
@@ -138,7 +237,28 @@ pub fn transactions() -> Html {
                         </div>
                     },
                     FetchState::Success(transactions) => {
-                        if transactions.is_empty() {
+                        // Filter transactions
+                        let filtered_transactions: Vec<_> = transactions.iter()
+                            .filter(|t| {
+                                // Filter by month
+                                if let Some((year, month)) = *selected_month {
+                                    let tx_date = t.date;
+                                    if tx_date.year() != year || tx_date.month() != month {
+                                        return false;
+                                    }
+                                }
+                                // Filter by category
+                                if let Some(cat_id) = *selected_category {
+                                    if t.category_id != Some(cat_id) {
+                                        return false;
+                                    }
+                                }
+                                true
+                            })
+                            .cloned()
+                            .collect();
+
+                        if filtered_transactions.is_empty() {
                             html! {
                                 <div class="text-center py-8">
                                     <p class="text-gray-500">{"No transactions found."}</p>
@@ -146,7 +266,7 @@ pub fn transactions() -> Html {
                             }
                         } else {
                             // Sort transactions
-                            let mut sorted_transactions = transactions.clone();
+                            let mut sorted_transactions = filtered_transactions.clone();
                             sorted_transactions.sort_by(|a, b| {
                                 let cmp = match *sort_column {
                                     SortColumn::Date => a.date.cmp(&b.date),
