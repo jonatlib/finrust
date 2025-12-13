@@ -157,8 +157,6 @@ async fn compute_unpaid_recurring(
 
     let scaffold_df = build_scaffold_df(accounts, start_date, end_date)?;
 
-    // Don't compute cumulative sum - just return the deltas per date
-    // The MergeCalculator will add these deltas to the actual balances
     let result_df = scaffold_df
         .lazy()
         .join(
@@ -170,8 +168,14 @@ async fn compute_unpaid_recurring(
         .drop(["balance"])
         .with_column(col("delta").fill_null(0.0f64))
         .group_by_stable([col("account_id"), col("date")])
-        .agg([col("delta").sum().alias("balance")])
+        .agg([col("delta").sum().alias("delta_sum")])
         .sort(["account_id", "date"], Default::default())
+        .with_column(
+            col("delta_sum")
+                .cum_sum(false)
+                .over([col("account_id")])
+                .alias("balance"),
+        )
         .select([
             col("account_id"),
             col("date"),

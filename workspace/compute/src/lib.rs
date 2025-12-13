@@ -27,7 +27,7 @@ pub fn default_compute(today: Option<NaiveDate>) -> impl AccountStateCalculator 
 
     // Create the unpaid recurring calculator
     let unpaid_calculator =
-        UnpaidRecurringCalculator::new_with_sum_merge(today, chrono::Duration::days(1));
+        UnpaidRecurringCalculator::new_with_sum_merge(today, chrono::Duration::days(0));
 
     // Create a merge calculator that combines both calculators
     // Use Sum merge method to sum the balances from both calculators
