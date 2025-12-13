@@ -5,11 +5,11 @@ pub mod error;
 pub mod tags;
 pub mod transaction;
 
-use crate::account::AccountStateCalculator;
 use crate::account::cache::AccountStateCacheCalculator;
+use crate::account::AccountStateCalculator;
 use account::{
-    MergeMethod, balance::BalanceCalculator, merge::MergeCalculator,
-    unpaid_recurring::UnpaidRecurringCalculator,
+    balance::BalanceCalculator, merge::MergeCalculator, unpaid_recurring::UnpaidRecurringCalculator,
+    MergeMethod,
 };
 use chrono::{NaiveDate, Utc};
 use std::time::Duration;
@@ -29,23 +29,34 @@ pub fn default_compute(today: Option<NaiveDate>) -> impl AccountStateCalculator 
     let unpaid_calculator =
         UnpaidRecurringCalculator::new_with_sum_merge(today, chrono::Duration::days(7));
 
-    // Create a merge calculator that combines both calculators
-    // Use Sum merge method to sum the balances from both calculators
+    // FIXME remove this
     AccountStateCacheCalculator::new(
         MergeCalculator::new(
-            vec![Box::new(balance_calculator), Box::new(unpaid_calculator)],
+            vec![Box::new(balance_calculator)],
             MergeMethod::Sum,
         ),
         20,
         Duration::from_secs(60),
         None,
     )
+
+    // Create a merge calculator that combines both calculators
+    // Use Sum merge method to sum the balances from both calculators
+    // AccountStateCacheCalculator::new(
+    //     MergeCalculator::new(
+    //         vec![Box::new(balance_calculator), Box::new(unpaid_calculator)],
+    //         MergeMethod::Sum,
+    //     ),
+    //     20,
+    //     Duration::from_secs(60),
+    //     None,
+    // )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use account::testing::{ScenarioMergeReal, run_and_assert_scenario};
+    use account::testing::{run_and_assert_scenario, ScenarioMergeReal};
     use tokio;
 
     /// Test using the default compute with the real_merge scenario within range.
