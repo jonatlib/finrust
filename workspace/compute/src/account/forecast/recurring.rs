@@ -93,18 +93,14 @@ pub async fn get_past_due_transactions(
         .await?;
 
     let mut result = Vec::new();
-    // Only consider instances that are Paid or Skipped
-    // Pending instances are not yet handled, so they should be included in unpaid
+    // Load ALL instances (Pending, Paid, Skipped)
+    // If an instance exists, even if Pending, it means it's been accounted for/scheduled
+    // and shouldn't be considered "unpaid past-due"
     let instances = recurring_transaction_instance::Entity::find()
-        .filter(
-            Condition::any()
-                .add(recurring_transaction_instance::Column::Status.eq(recurring_transaction_instance::InstanceStatus::Paid))
-                .add(recurring_transaction_instance::Column::Status.eq(recurring_transaction_instance::InstanceStatus::Skipped)),
-        )
         .all(db)
         .await?;
 
-    debug!("Loaded {} paid/skipped instances for past-due check", instances.len());
+    debug!("Loaded {} instances (all statuses) for past-due check", instances.len());
 
     let instance_map: HashSet<(i32, NaiveDate)> = instances
         .into_iter()
@@ -112,9 +108,14 @@ pub async fn get_past_due_transactions(
         .collect();
 
     for tx in &transactions {
-        // Generate occurrences only in the past, from the transaction's own start date.
+        // Generate occurrences only within the requested date range that are in the past
+        // Use max(tx.start_date, start_date) to respect both the transaction start and request start
+        let occurrence_start = std::cmp::max(tx.start_date, start_date);
+        // Only look at past occurrences (before today)
+        let occurrence_end = today.pred_opt().unwrap_or(today);
+
         let occurrences =
-            generate_occurrences(tx.start_date, tx.end_date, &tx.period, tx.start_date, today);
+            generate_occurrences(tx.start_date, tx.end_date, &tx.period, occurrence_start, occurrence_end);
 
         // Collect all unpaid occurrences
         let unpaid_dates: Vec<NaiveDate> = occurrences

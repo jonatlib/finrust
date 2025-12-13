@@ -855,8 +855,8 @@ pub async fn get_missing_instances(
     trace!("Fetching missing instances with query: {:?}", query);
 
     let today = chrono::Local::now().date_naive();
-    let start_date = query.start_date.unwrap_or_else(|| today - chrono::Duration::days(31 * 13));
-    let end_date = query.end_date.unwrap_or(today + chrono::Duration::days(1));
+    let start_date = query.start_date.unwrap_or_else(|| today - chrono::Duration::days(31 * 16));
+    let end_date = query.end_date.unwrap_or(today + chrono::Duration::days(5));
 
     // Fetch recurring transactions
     let recurring_transactions = if let Some(rt_id) = query.recurring_transaction_id {

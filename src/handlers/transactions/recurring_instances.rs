@@ -9,10 +9,10 @@ use chrono::NaiveDate;
 use model::entities::{recurring_transaction, recurring_transaction_instance};
 use model::transaction::TransactionGenerator;
 use rust_decimal::Decimal;
-use sea_orm::{ActiveModelTrait, EntityTrait, Set, PaginatorTrait, QueryOrder, QueryFilter, ColumnTrait};
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, Set};
 use serde::{Deserialize, Serialize};
-use tracing::{instrument, error, warn, info, debug, trace};
-use utoipa::{ToSchema, IntoParams};
+use tracing::{debug, error, info, instrument, trace, warn};
+use utoipa::{IntoParams, ToSchema};
 use validator::Validate;
 
 use super::recurring::{RecurringInstanceResponse, TagInfo};
@@ -66,7 +66,7 @@ pub async fn get_recurring_instances(
     trace!("Entering get_recurring_instances function");
 
     let page = query.page.unwrap_or(1);
-    let limit = query.limit.unwrap_or(50);
+    let limit = query.limit.unwrap_or(100);
 
     debug!("Fetching recurring instances - page: {}, limit: {}", page, limit);
 
