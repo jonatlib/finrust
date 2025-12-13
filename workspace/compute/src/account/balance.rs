@@ -61,7 +61,22 @@ impl AccountStateCalculator for BalanceCalculator {
         let today = self
             .today
             .unwrap_or_else(|| chrono::Local::now().date_naive());
-        compute_balance(db, accounts, start_date, end_date, today).await
+
+        // BalanceCalculator should only compute historical data (up to today)
+        // If start_date is after today, return empty DataFrame
+        if start_date > today {
+            debug!("Start date {} is after today {}, returning empty DataFrame", start_date, today);
+            let empty_df = DataFrame::new(vec![
+                Series::new("account_id".into(), Vec::<i32>::new()).into(),
+                Series::new("date".into(), Vec::<NaiveDate>::new()).into(),
+                Series::new("balance".into(), Vec::<String>::new()).into(),
+            ])?;
+            return Ok(empty_df);
+        }
+
+        // Cap end_date at today - don't compute future dates
+        let capped_end_date = std::cmp::min(end_date, today);
+        compute_balance(db, accounts, start_date, capped_end_date, today).await
     }
 
     fn merge_method(&self) -> MergeMethod {
@@ -127,63 +142,77 @@ async fn compute_balance(
             )));
         }
 
-        // Find the earliest manual state to use as our starting point
-        let earliest_state = all_manual_states
+        // Find the appropriate starting manual state:
+        // - For historical/current dates: use the latest manual state on or before start_date
+        // - For future dates beyond all manual states: use the latest manual state overall
+        let starting_state = if let Some(latest_state_before_or_at_start) = all_manual_states
             .iter()
-            .min_by_key(|state| state.date)
-            .unwrap(); // Safe to unwrap as we checked for empty above
+            .filter(|state| state.date <= start_date)
+            .max_by_key(|state| state.date)
+        {
+            // We found a manual state on or before start_date, use it
+            latest_state_before_or_at_start
+        } else {
+            // No manual state on or before start_date
+            // This means start_date is before the earliest manual state
+            // Use the earliest manual state
+            all_manual_states
+                .iter()
+                .min_by_key(|state| state.date)
+                .unwrap() // Safe as we checked for empty above
+        };
 
         debug!(
-            "Using earliest manual state for account {}: date={}, amount={}",
-            account.id, earliest_state.date, earliest_state.amount
+            "Using starting manual state for account {}: date={}, amount={}",
+            account.id, starting_state.date, starting_state.amount
         );
 
-        // Initialize balance with the earliest manual state
-        let mut current_balance = earliest_state.amount;
-        // Use the max of earliest_state.date and start_date as our starting point for storing balances
-        let current_date = std::cmp::max(earliest_state.date, start_date);
+        // Initialize balance with the starting manual state
+        let mut current_balance = starting_state.amount;
+        // Use the max of starting_state.date and start_date as our starting point for storing balances
+        let current_date = std::cmp::max(starting_state.date, start_date);
 
-        // Special case: If the earliest manual state is on the same date as a recurring transaction,
+        // Special case: If the starting manual state is on the same date as a recurring transaction,
         // we need to make sure the manual state takes precedence for that date.
-        // We'll handle this by filtering out transactions on the earliest manual state's date.
+        // We'll handle this by filtering out transactions on the starting manual state's date.
         debug!(
-            "Checking for transactions on the earliest manual state date: {}",
-            earliest_state.date
+            "Checking for transactions on the starting manual state date: {}",
+            starting_state.date
         );
 
-        // Get all transactions for this account from the earliest manual state date to the end date
+        // Get all transactions for this account from the starting manual state date to the end date
         trace!(
             "Getting transactions for account {} from {} to {}",
-            account.id, earliest_state.date, end_date
+            account.id, starting_state.date, end_date
         );
         let transactions =
-            get_transactions_for_account(db, account.id, earliest_state.date, end_date).await?;
+            get_transactions_for_account(db, account.id, starting_state.date, end_date).await?;
         debug!(
             "Found {} transactions for account {}",
             transactions.len(),
             account.id
         );
 
-        // Get all imported transactions for this account from the earliest manual state date to the end date
+        // Get all imported transactions for this account from the starting manual state date to the end date
         trace!(
             "Getting imported transactions for account {} from {} to {}",
-            account.id, earliest_state.date, end_date
+            account.id, starting_state.date, end_date
         );
         let imported_transactions =
-            get_imported_transactions(db, account.id, earliest_state.date, end_date).await?;
+            get_imported_transactions(db, account.id, starting_state.date, end_date).await?;
         debug!(
             "Found {} imported transactions for account {}",
             imported_transactions.len(),
             account.id
         );
 
-        // Get all recurring transactions for this account from the earliest manual state date to the end date
+        // Get all recurring transactions for this account from the starting manual state date to the end date
         trace!(
             "Getting recurring transactions for account {} from {} to {} (today={})",
-            account.id, earliest_state.date, end_date, today
+            account.id, starting_state.date, end_date, today
         );
         let recurring_transactions =
-            get_recurring_transactions(db, account.id, earliest_state.date, end_date, today)
+            get_recurring_transactions(db, account.id, starting_state.date, end_date, today)
                 .await?;
         debug!(
             "Found {} recurring transactions for account {}",
@@ -191,13 +220,13 @@ async fn compute_balance(
             account.id
         );
 
-        // Get all recurring income for this account from the earliest manual state date to the end date
+        // Get all recurring income for this account from the starting manual state date to the end date
         trace!(
             "Getting recurring income for account {} from {} to {} (today={})",
-            account.id, earliest_state.date, end_date, today
+            account.id, starting_state.date, end_date, today
         );
         let recurring_income =
-            get_recurring_income(db, account.id, earliest_state.date, end_date, today).await?;
+            get_recurring_income(db, account.id, starting_state.date, end_date, today).await?;
         debug!(
             "Found {} recurring income entries for account {}",
             recurring_income.len(),
@@ -279,11 +308,11 @@ async fn compute_balance(
             }
         }
 
-        // Filter out transactions on the earliest manual state's date
+        // Filter out transactions on the starting manual state's date
         // This ensures that the manual state takes precedence
-        all_transactions.retain(|(date, _)| *date != earliest_state.date);
+        all_transactions.retain(|(date, _)| *date != starting_state.date);
         debug!(
-            "Filtered out transactions on the earliest manual state date. Remaining: {}",
+            "Filtered out transactions on the starting manual state date. Remaining: {}",
             all_transactions.len()
         );
 
@@ -305,7 +334,7 @@ async fn compute_balance(
             "Processing transactions and calculating balance for account {}",
             account.id
         );
-        let mut date = earliest_state.date;
+        let mut date = starting_state.date;
         let mut tx_index = 0;
 
         while date <= end_date {
