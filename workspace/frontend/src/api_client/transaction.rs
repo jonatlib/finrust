@@ -26,6 +26,8 @@ pub struct TransactionResponse {
     pub linked_import_id: Option<String>,
     pub category_id: Option<i32>,
     pub tags: Vec<TagInfo>,
+    pub scenario_id: Option<i32>,
+    pub is_simulated: bool,
 }
 
 /// Request body for creating a new transaction
@@ -58,6 +60,8 @@ pub struct UpdateTransactionRequest {
     pub ledger_name: Option<String>,
     pub linked_import_id: Option<String>,
     pub category_id: Option<i32>,
+    pub scenario_id: Option<i32>,
+    pub is_simulated: Option<bool>,
 }
 
 /// Get all transactions
