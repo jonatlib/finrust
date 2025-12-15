@@ -6,20 +6,25 @@ use tracing::{debug, instrument, trace};
 use crate::error::Result;
 
 /// Gets all one-off transactions for the account within the given date range.
-#[instrument(skip(db), fields(account_id = account_id, start_date = %start_date, end_date = %end_date
+///
+/// # Scenario Context
+/// - `None`: Fetch only real transactions (is_simulated = false)
+/// - `Some(id)`: Fetch real transactions OR simulated transactions belonging to the scenario
+#[instrument(skip(db), fields(account_id = account_id, start_date = %start_date, end_date = %end_date, scenario_context = ?scenario_context
 ))]
 pub async fn get_transactions_for_account(
     db: &DatabaseConnection,
     account_id: i32,
     start_date: NaiveDate,
     end_date: NaiveDate,
+    scenario_context: Option<i32>,
 ) -> Result<Vec<one_off_transaction::Model>> {
     trace!(
-        "Getting one-off transactions for account_id={} from {} to {}",
-        account_id, start_date, end_date
+        "Getting one-off transactions for account_id={} from {} to {} (scenario_context={:?})",
+        account_id, start_date, end_date, scenario_context
     );
 
-    let transactions = one_off_transaction::Entity::find()
+    let mut query = one_off_transaction::Entity::find()
         .filter(
             Condition::any()
                 .add(one_off_transaction::Column::TargetAccountId.eq(account_id))
@@ -29,9 +34,29 @@ pub async fn get_transactions_for_account(
             Condition::all()
                 .add(one_off_transaction::Column::Date.gte(start_date))
                 .add(one_off_transaction::Column::Date.lte(end_date)),
-        )
-        .all(db)
-        .await?;
+        );
+
+    // Apply scenario filtering
+    query = match scenario_context {
+        None => {
+            // Standard mode: only real transactions
+            query.filter(one_off_transaction::Column::IsSimulated.eq(false))
+        }
+        Some(scenario_id) => {
+            // Scenario mode: real OR (simulated AND belongs to this scenario)
+            query.filter(
+                Condition::any()
+                    .add(one_off_transaction::Column::IsSimulated.eq(false))
+                    .add(
+                        Condition::all()
+                            .add(one_off_transaction::Column::IsSimulated.eq(true))
+                            .add(one_off_transaction::Column::ScenarioId.eq(scenario_id)),
+                    ),
+            )
+        }
+    };
+
+    let transactions = query.all(db).await?;
 
     debug!(
         "Found {} one-off transactions for account_id={} from {} to {}",

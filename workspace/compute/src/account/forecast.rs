@@ -22,6 +22,8 @@ pub struct ForecastCalculator {
     initial_balance: Decimal,
     /// The date to use as "today" for determining which recurring transactions to include.
     today: Option<NaiveDate>,
+    /// The active scenario ID for what-if analysis. None means only real transactions.
+    scenario_context: Option<i32>,
 }
 
 impl ForecastCalculator {
@@ -31,6 +33,7 @@ impl ForecastCalculator {
             merge_method,
             initial_balance: Decimal::ZERO,
             today: None,
+            scenario_context: None,
         }
     }
 
@@ -40,6 +43,7 @@ impl ForecastCalculator {
             merge_method,
             initial_balance,
             today: None,
+            scenario_context: None,
         }
     }
 
@@ -49,6 +53,7 @@ impl ForecastCalculator {
             merge_method,
             initial_balance: Decimal::ZERO,
             today: Some(today),
+            scenario_context: None,
         }
     }
 
@@ -62,6 +67,7 @@ impl ForecastCalculator {
             merge_method,
             initial_balance,
             today: Some(today),
+            scenario_context: None,
         }
     }
 
@@ -71,7 +77,26 @@ impl ForecastCalculator {
             merge_method: MergeMethod::FirstWins,
             initial_balance: Decimal::ZERO,
             today: None,
+            scenario_context: None,
         }
+    }
+
+    /// Builder method to set the scenario context.
+    pub fn with_scenario(mut self, scenario_id: i32) -> Self {
+        self.scenario_context = Some(scenario_id);
+        self
+    }
+
+    /// Builder method to set today's date.
+    pub fn with_today(mut self, today: NaiveDate) -> Self {
+        self.today = Some(today);
+        self
+    }
+
+    /// Builder method to set the initial balance.
+    pub fn with_initial_balance(mut self, balance: Decimal) -> Self {
+        self.initial_balance = balance;
+        self
     }
 }
 

@@ -4,7 +4,7 @@ use chrono::NaiveDate;
 use rust_decimal::Decimal;
 use sea_orm::entity::prelude::*;
 
-use super::{account, recurring_transaction::RecurrencePeriod, tag};
+use super::{account, recurring_transaction::RecurrencePeriod, scenario, tag};
 
 /// Models a recurring income stream, like a salary or business revenue.
 /// Structurally similar to RecurringTransaction but semantically distinct.
@@ -33,6 +33,11 @@ pub struct Model {
     pub source_name: Option<String>,
     /// The name to use when exporting to Ledger CLI format.
     pub ledger_name: Option<String>,
+    /// The scenario this income belongs to (for what-if analysis).
+    pub scenario_id: Option<i32>,
+    /// Whether this is a simulated income (for what-if scenarios).
+    #[sea_orm(default_value = "false")]
+    pub is_simulated: bool,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -44,6 +49,13 @@ pub enum Relation {
         on_delete = "Cascade"
     )]
     TargetAccount,
+    #[sea_orm(
+        belongs_to = "scenario::Entity",
+        from = "Column::ScenarioId",
+        to = "scenario::Column::Id",
+        on_delete = "Cascade"
+    )]
+    Scenario,
 }
 
 impl Related<tag::Entity> for Entity {
@@ -52,6 +64,12 @@ impl Related<tag::Entity> for Entity {
     }
     fn via() -> Option<RelationDef> {
         Some(super::recurring_income_tag::Relation::Income.def().rev())
+    }
+}
+
+impl Related<scenario::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Scenario.def()
     }
 }
 

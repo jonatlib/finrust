@@ -162,6 +162,8 @@ pub fn transaction_modal(props: &TransactionModalProps) -> Html {
                         ledger_name: if ledger_name.as_ref().map(|l| l.is_empty()).unwrap_or(true) { None } else { ledger_name },
                         linked_import_id: None,
                         category_id,
+                        scenario_id: None,
+                        is_simulated: None,
                     };
 
                     wasm_bindgen_futures::spawn_local(async move {

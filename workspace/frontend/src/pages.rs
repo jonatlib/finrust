@@ -6,3 +6,5 @@ pub mod recurring;
 pub mod recurring_detail;
 pub mod instances;
 pub mod categories;
+pub mod scenarios;
+pub mod scenario_detail;

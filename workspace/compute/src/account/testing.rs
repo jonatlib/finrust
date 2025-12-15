@@ -4,6 +4,7 @@ pub mod scenario_balance_no_instances;
 pub mod scenario_forecast;
 pub mod scenario_forecast_no_instances;
 pub mod scenario_forecast_no_instances_outside_range;
+pub mod scenario_isolation;
 pub mod scenario_merge_real;
 pub mod scenario_merge_real_failing;
 pub mod scenario_multiple_accounts;

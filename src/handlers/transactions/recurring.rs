@@ -58,6 +58,10 @@ pub struct CreateRecurringTransactionRequest {
     pub ledger_name: Option<String>,
     /// Optional category ID
     pub category_id: Option<i32>,
+    /// Scenario ID for what-if analysis (optional)
+    pub scenario_id: Option<i32>,
+    /// Whether this is a simulated transaction (default: false)
+    pub is_simulated: Option<bool>,
 }
 
 /// Request body for updating a recurring transaction
@@ -400,6 +404,8 @@ pub async fn create_recurring_transaction(
         source_account_id: Set(request.source_account_id),
         ledger_name: Set(request.ledger_name),
         category_id: Set(request.category_id),
+        scenario_id: Set(request.scenario_id),
+        is_simulated: Set(request.is_simulated.unwrap_or(false)),
         ..Default::default()
     };
 

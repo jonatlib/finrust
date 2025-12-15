@@ -15,7 +15,11 @@ use super::common::process_occurrences;
 /// - Future recurring income (date >= today) is treated as if it were accounted on its date
 /// - Past recurring income (date < today) with instances are included on their due date
 /// - Past recurring income (date < today) without instances are ignored
-#[instrument(skip(db), fields(account_id = account_id, start_date = %start_date, end_date = %end_date, today = %today
+///
+/// # Scenario Context
+/// - `None`: Fetch only real income (is_simulated = false)
+/// - `Some(id)`: Fetch real income OR simulated income belonging to the scenario
+#[instrument(skip(db), fields(account_id = account_id, start_date = %start_date, end_date = %end_date, today = %today, scenario_context = ?scenario_context
 ))]
 pub async fn get_recurring_income(
     db: &DatabaseConnection,
@@ -23,14 +27,15 @@ pub async fn get_recurring_income(
     start_date: NaiveDate,
     end_date: NaiveDate,
     today: NaiveDate,
+    scenario_context: Option<i32>,
 ) -> Result<Vec<(NaiveDate, recurring_income::Model)>> {
     trace!(
-        "Getting recurring income for account_id={} from {} to {} (today={})",
-        account_id, start_date, end_date, today
+        "Getting recurring income for account_id={} from {} to {} (today={}, scenario_context={:?})",
+        account_id, start_date, end_date, today, scenario_context
     );
 
     // Fetch recurring income definitions
-    let incomes = fetch_recurring_income(db, account_id, start_date, end_date).await?;
+    let incomes = fetch_recurring_income(db, account_id, start_date, end_date, scenario_context).await?;
 
     debug!(
         "Found {} recurring income definitions for account_id={}",
@@ -72,17 +77,38 @@ async fn fetch_recurring_income(
     account_id: i32,
     start_date: NaiveDate,
     end_date: NaiveDate,
+    scenario_context: Option<i32>,
 ) -> Result<Vec<recurring_income::Model>> {
-    let incomes = recurring_income::Entity::find()
+    let mut query = recurring_income::Entity::find()
         .filter(recurring_income::Column::TargetAccountId.eq(account_id))
         .filter(
             Condition::any()
                 .add(recurring_income::Column::EndDate.is_null())
                 .add(recurring_income::Column::EndDate.gte(start_date)),
         )
-        .filter(recurring_income::Column::StartDate.lte(end_date))
-        .all(db)
-        .await?;
+        .filter(recurring_income::Column::StartDate.lte(end_date));
+
+    // Apply scenario filtering
+    query = match scenario_context {
+        None => {
+            // Standard mode: only real income
+            query.filter(recurring_income::Column::IsSimulated.eq(false))
+        }
+        Some(scenario_id) => {
+            // Scenario mode: real OR (simulated AND belongs to this scenario)
+            query.filter(
+                Condition::any()
+                    .add(recurring_income::Column::IsSimulated.eq(false))
+                    .add(
+                        Condition::all()
+                            .add(recurring_income::Column::IsSimulated.eq(true))
+                            .add(recurring_income::Column::ScenarioId.eq(scenario_id)),
+                    ),
+            )
+        }
+    };
+
+    let incomes = query.all(db).await?;
 
     Ok(incomes)
 }

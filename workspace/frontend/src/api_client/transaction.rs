@@ -41,6 +41,8 @@ pub struct CreateTransactionRequest {
     pub ledger_name: Option<String>,
     pub linked_import_id: Option<String>,
     pub category_id: Option<i32>,
+    pub scenario_id: Option<i32>,
+    pub is_simulated: Option<bool>,
 }
 
 /// Request body for updating a transaction

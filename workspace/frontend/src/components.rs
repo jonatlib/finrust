@@ -11,3 +11,4 @@ pub mod settings;
 pub mod modals;
 pub mod manual_states;
 pub mod categories;
+pub mod scenarios;

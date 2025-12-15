@@ -15,7 +15,11 @@ use super::common::process_occurrences;
 /// - Future recurring transactions (date >= today) are treated as if they were accounted on their date
 /// - Past recurring transactions (date < today) with instances are included on their due date
 /// - Past recurring transactions (date < today) without instances are ignored
-#[instrument(skip(db), fields(account_id = account_id, start_date = %start_date, end_date = %end_date, today = %today
+///
+/// # Scenario Context
+/// - `None`: Fetch only real transactions (is_simulated = false)
+/// - `Some(id)`: Fetch real transactions OR simulated transactions belonging to the scenario
+#[instrument(skip(db), fields(account_id = account_id, start_date = %start_date, end_date = %end_date, today = %today, scenario_context = ?scenario_context
 ))]
 pub async fn get_recurring_transactions(
     db: &DatabaseConnection,
@@ -23,14 +27,15 @@ pub async fn get_recurring_transactions(
     start_date: NaiveDate,
     end_date: NaiveDate,
     today: NaiveDate,
+    scenario_context: Option<i32>,
 ) -> Result<Vec<(NaiveDate, recurring_transaction::Model)>> {
     trace!(
-        "Getting recurring transactions for account_id={} from {} to {} (today={})",
-        account_id, start_date, end_date, today
+        "Getting recurring transactions for account_id={} from {} to {} (today={}, scenario_context={:?})",
+        account_id, start_date, end_date, today, scenario_context
     );
 
     // Fetch recurring transaction definitions
-    let transactions = fetch_recurring_transactions(db, account_id, start_date, end_date).await?;
+    let transactions = fetch_recurring_transactions(db, account_id, start_date, end_date, scenario_context).await?;
 
     debug!(
         "Found {} recurring transaction definitions for account_id={}",
@@ -72,8 +77,9 @@ async fn fetch_recurring_transactions(
     account_id: i32,
     start_date: NaiveDate,
     end_date: NaiveDate,
+    scenario_context: Option<i32>,
 ) -> Result<Vec<recurring_transaction::Model>> {
-    let transactions = recurring_transaction::Entity::find()
+    let mut query = recurring_transaction::Entity::find()
         .filter(
             Condition::any()
                 .add(recurring_transaction::Column::TargetAccountId.eq(account_id))
@@ -84,9 +90,29 @@ async fn fetch_recurring_transactions(
                 .add(recurring_transaction::Column::EndDate.is_null())
                 .add(recurring_transaction::Column::EndDate.gte(start_date)),
         )
-        .filter(recurring_transaction::Column::StartDate.lte(end_date))
-        .all(db)
-        .await?;
+        .filter(recurring_transaction::Column::StartDate.lte(end_date));
+
+    // Apply scenario filtering
+    query = match scenario_context {
+        None => {
+            // Standard mode: only real transactions
+            query.filter(recurring_transaction::Column::IsSimulated.eq(false))
+        }
+        Some(scenario_id) => {
+            // Scenario mode: real OR (simulated AND belongs to this scenario)
+            query.filter(
+                Condition::any()
+                    .add(recurring_transaction::Column::IsSimulated.eq(false))
+                    .add(
+                        Condition::all()
+                            .add(recurring_transaction::Column::IsSimulated.eq(true))
+                            .add(recurring_transaction::Column::ScenarioId.eq(scenario_id)),
+                    ),
+            )
+        }
+    };
+
+    let transactions = query.all(db).await?;
 
     Ok(transactions)
 }

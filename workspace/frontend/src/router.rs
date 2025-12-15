@@ -16,6 +16,8 @@ use crate::pages::recurring::RecurringPage;
 use crate::pages::recurring_detail::RecurringDetailPage;
 use crate::pages::instances::InstancesPage;
 use crate::pages::categories::CategoriesPage;
+use crate::pages::scenarios::ScenariosPage;
+use crate::pages::scenario_detail::ScenarioDetailPage;
 
 #[derive(Debug, Clone, Routable, PartialEq)]
 pub enum Route {
@@ -41,6 +43,10 @@ pub enum Route {
     Instances,
     #[at("/categories")]
     Categories,
+    #[at("/scenarios")]
+    Scenarios,
+    #[at("/scenarios/:id")]
+    ScenarioDetail { id: i32 },
     #[at("/budgets")]
     Budgets,
     #[at("/forecast")]
@@ -98,6 +104,14 @@ pub fn switch(routes: Route) -> Html {
         Route::Categories => {
             log::trace!("Rendering Categories page");
             html! { <CategoriesPage /> }
+        }
+        Route::Scenarios => {
+            log::trace!("Rendering Scenarios page");
+            html! { <ScenariosPage /> }
+        }
+        Route::ScenarioDetail { id } => {
+            log::trace!("Rendering Scenario Detail page for ID: {}", id);
+            html! { <ScenarioDetailPage id={id} /> }
         }
         Route::Budgets => {
             log::trace!("Rendering Budgets page");

@@ -37,6 +37,10 @@ pub struct CreateRecurringIncomeRequest {
     pub source_name: Option<String>,
     /// Optional ledger name
     pub ledger_name: Option<String>,
+    /// Scenario ID for what-if analysis (optional)
+    pub scenario_id: Option<i32>,
+    /// Whether this is a simulated income (default: false)
+    pub is_simulated: Option<bool>,
 }
 
 /// Request body for updating a recurring income
@@ -173,6 +177,8 @@ pub async fn create_recurring_income(
         target_account_id: Set(request.target_account_id),
         source_name: Set(request.source_name),
         ledger_name: Set(request.ledger_name),
+        scenario_id: Set(request.scenario_id),
+        is_simulated: Set(request.is_simulated.unwrap_or(false)),
         ..Default::default()
     };
 

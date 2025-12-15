@@ -4,7 +4,7 @@ use chrono::NaiveDate;
 use rust_decimal::Decimal;
 use sea_orm::entity::prelude::*;
 
-use super::{account, category, tag};
+use super::{account, category, scenario, tag};
 
 /// Enum for recurrence periods.
 #[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum)]
@@ -55,6 +55,11 @@ pub struct Model {
     pub category_id: Option<i32>,
     /// The name to use when exporting to Ledger CLI format.
     pub ledger_name: Option<String>,
+    /// The scenario this transaction belongs to (for what-if analysis).
+    pub scenario_id: Option<i32>,
+    /// Whether this is a simulated transaction (for what-if scenarios).
+    #[sea_orm(default_value = "false")]
+    pub is_simulated: bool,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -80,6 +85,13 @@ pub enum Relation {
         on_delete = "SetNull"
     )]
     Category,
+    #[sea_orm(
+        belongs_to = "scenario::Entity",
+        from = "Column::ScenarioId",
+        to = "scenario::Column::Id",
+        on_delete = "Cascade"
+    )]
+    Scenario,
 }
 
 impl Related<tag::Entity> for Entity {
@@ -92,6 +104,12 @@ impl Related<tag::Entity> for Entity {
                 .def()
                 .rev(),
         )
+    }
+}
+
+impl Related<scenario::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Scenario.def()
     }
 }
 

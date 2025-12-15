@@ -5,6 +5,7 @@ pub mod statistics;
 pub mod timeseries;
 pub mod recurring_transaction;
 pub mod category;
+pub mod scenario;
 
 use gloo_net::http::Request;
 use serde::{Deserialize, Serialize};

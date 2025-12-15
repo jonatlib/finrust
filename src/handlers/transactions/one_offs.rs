@@ -36,6 +36,10 @@ pub struct CreateTransactionRequest {
     pub linked_import_id: Option<String>,
     /// Category ID
     pub category_id: Option<i32>,
+    /// Scenario ID for what-if analysis (optional)
+    pub scenario_id: Option<i32>,
+    /// Whether this is a simulated transaction (default: false)
+    pub is_simulated: Option<bool>,
 }
 
 /// Request body for updating a transaction
@@ -219,6 +223,8 @@ pub async fn create_transaction(
         ledger_name: Set(request.ledger_name.clone()),
         linked_import_id: Set(request.linked_import_id.clone()),
         category_id: Set(request.category_id),
+        scenario_id: Set(request.scenario_id),
+        is_simulated: Set(request.is_simulated.unwrap_or(false)),
         ..Default::default()
     };
 

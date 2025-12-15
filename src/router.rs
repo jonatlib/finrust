@@ -13,6 +13,10 @@ use crate::handlers::{
         create_recurring_income, delete_recurring_income, get_recurring_income,
         get_recurring_incomes, update_recurring_income,
     },
+    scenarios::{
+        apply_scenario, create_scenario, delete_scenario, get_scenario, get_scenarios,
+        update_scenario,
+    },
     statistics::{get_account_statistics, get_all_accounts_statistics},
     tags::{
         create_tag, delete_tag, get_tag, get_tags, update_tag,
@@ -141,6 +145,13 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/recurring-incomes/:recurring_income_id", get(get_recurring_income))
         .route("/api/v1/recurring-incomes/:recurring_income_id", put(update_recurring_income))
         .route("/api/v1/recurring-incomes/:recurring_income_id", delete(delete_recurring_income))
+        // Scenario routes (what-if analysis)
+        .route("/api/v1/scenarios", post(create_scenario))
+        .route("/api/v1/scenarios", get(get_scenarios))
+        .route("/api/v1/scenarios/:scenario_id", get(get_scenario))
+        .route("/api/v1/scenarios/:scenario_id", put(update_scenario))
+        .route("/api/v1/scenarios/:scenario_id", delete(delete_scenario))
+        .route("/api/v1/scenarios/:scenario_id/apply", post(apply_scenario))
         // API v1 routes (existing statistics and timeseries)
         .route(
             "/api/v1/accounts/:account_id/statistics",

@@ -20,6 +20,8 @@ pub struct BalanceCalculator {
     merge_method: MergeMethod,
     /// The date to use as "today" for determining which recurring transactions to include.
     today: Option<NaiveDate>,
+    /// The active scenario ID for what-if analysis. None means only real transactions.
+    scenario_context: Option<i32>,
 }
 
 impl BalanceCalculator {
@@ -28,6 +30,7 @@ impl BalanceCalculator {
         Self {
             merge_method,
             today: None,
+            scenario_context: None,
         }
     }
 
@@ -36,6 +39,29 @@ impl BalanceCalculator {
         Self {
             merge_method,
             today: Some(today),
+            scenario_context: None,
+        }
+    }
+
+    /// Creates a new balance calculator with the specified merge method and scenario context.
+    pub fn new_with_scenario(merge_method: MergeMethod, scenario_id: i32) -> Self {
+        Self {
+            merge_method,
+            today: None,
+            scenario_context: Some(scenario_id),
+        }
+    }
+
+    /// Creates a new balance calculator with the specified merge method, today date, and scenario context.
+    pub fn new_with_today_and_scenario(
+        merge_method: MergeMethod,
+        today: NaiveDate,
+        scenario_id: i32,
+    ) -> Self {
+        Self {
+            merge_method,
+            today: Some(today),
+            scenario_context: Some(scenario_id),
         }
     }
 
@@ -44,7 +70,20 @@ impl BalanceCalculator {
         Self {
             merge_method: MergeMethod::FirstWins,
             today: None,
+            scenario_context: None,
         }
+    }
+
+    /// Builder method to set the scenario context.
+    pub fn with_scenario(mut self, scenario_id: i32) -> Self {
+        self.scenario_context = Some(scenario_id);
+        self
+    }
+
+    /// Builder method to set today's date.
+    pub fn with_today(mut self, today: NaiveDate) -> Self {
+        self.today = Some(today);
+        self
     }
 }
 
@@ -61,7 +100,7 @@ impl AccountStateCalculator for BalanceCalculator {
         let today = self
             .today
             .unwrap_or_else(|| chrono::Local::now().date_naive());
-        compute_balance(db, accounts, start_date, end_date, today).await
+        compute_balance(db, accounts, start_date, end_date, today, self.scenario_context).await
     }
 
     fn merge_method(&self) -> MergeMethod {
@@ -88,7 +127,11 @@ use self::{
 /// If no manual account state is available, it returns an error.
 /// If manual account states are available, it starts computing balance from the earliest one,
 /// ignoring all transactions before that point.
-#[instrument(skip(db, accounts), fields(num_accounts = accounts.len(), start_date = %start_date, end_date = %end_date, today = %today
+///
+/// # Scenario Context
+/// - `None`: Fetch only real transactions (is_simulated = false)
+/// - `Some(id)`: Fetch real transactions OR simulated transactions belonging to the scenario
+#[instrument(skip(db, accounts), fields(num_accounts = accounts.len(), start_date = %start_date, end_date = %end_date, today = %today, scenario_context = ?scenario_context
 ))]
 async fn compute_balance(
     db: &DatabaseConnection,
@@ -96,6 +139,7 @@ async fn compute_balance(
     start_date: NaiveDate,
     end_date: NaiveDate,
     today: NaiveDate,
+    scenario_context: Option<i32>,
 ) -> crate::error::Result<DataFrame> {
     info!(
         "Computing balance for {} accounts from {} to {}",
@@ -167,11 +211,11 @@ async fn compute_balance(
 
         // Get all transactions for this account from the starting manual state date to the end date
         trace!(
-            "Getting transactions for account {} from {} to {}",
-            account.id, starting_state.date, end_date
+            "Getting transactions for account {} from {} to {} (scenario_context={:?})",
+            account.id, starting_state.date, end_date, scenario_context
         );
         let transactions =
-            get_transactions_for_account(db, account.id, starting_state.date, end_date).await?;
+            get_transactions_for_account(db, account.id, starting_state.date, end_date, scenario_context).await?;
         debug!(
             "Found {} transactions for account {}",
             transactions.len(),
@@ -193,11 +237,11 @@ async fn compute_balance(
 
         // Get all recurring transactions for this account from the starting manual state date to the end date
         trace!(
-            "Getting recurring transactions for account {} from {} to {} (today={})",
-            account.id, starting_state.date, end_date, today
+            "Getting recurring transactions for account {} from {} to {} (today={}, scenario_context={:?})",
+            account.id, starting_state.date, end_date, today, scenario_context
         );
         let recurring_transactions =
-            get_recurring_transactions(db, account.id, starting_state.date, end_date, today)
+            get_recurring_transactions(db, account.id, starting_state.date, end_date, today, scenario_context)
                 .await?;
         debug!(
             "Found {} recurring transactions for account {}",
@@ -207,11 +251,11 @@ async fn compute_balance(
 
         // Get all recurring income for this account from the starting manual state date to the end date
         trace!(
-            "Getting recurring income for account {} from {} to {} (today={})",
-            account.id, starting_state.date, end_date, today
+            "Getting recurring income for account {} from {} to {} (today={}, scenario_context={:?})",
+            account.id, starting_state.date, end_date, today, scenario_context
         );
         let recurring_income =
-            get_recurring_income(db, account.id, starting_state.date, end_date, today).await?;
+            get_recurring_income(db, account.id, starting_state.date, end_date, today, scenario_context).await?;
         debug!(
             "Found {} recurring income entries for account {}",
             recurring_income.len(),
