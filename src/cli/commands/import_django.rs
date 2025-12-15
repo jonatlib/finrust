@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use chrono::NaiveDate;
+use chrono::{Months, NaiveDate};
 use rust_decimal::Decimal;
 use sea_orm::{ActiveModelTrait, Database, DatabaseConnection, EntityTrait, Set};
 use serde::Deserialize;
@@ -8,9 +8,11 @@ use std::fs::File;
 use std::path::Path;
 use tracing::{debug, info, trace, warn};
 
+use model::transaction::TransactionGenerator;
+
 use model::entities::{
     account, category, manual_account_state, one_off_transaction, one_off_transaction_tag,
-    recurring_transaction, recurring_transaction_tag, tag, user,
+    recurring_transaction, recurring_transaction_instance, recurring_transaction_tag, tag, user,
 };
 
 /// Main structure for Django dump
@@ -299,6 +301,7 @@ pub async fn import_django(json_path: &str, database_url: &str) -> Result<()> {
     // Sixth pass: Import recurring transactions
     info!("Importing recurring transactions...");
     let mut recurring_count = 0;
+    let mut imported_recurring_transactions = Vec::new();
     for record in records.iter() {
         if record.model == "account.regulartransactionmodel" {
             let tx: DjangoRegularTransaction = serde_json::from_value(record.fields.clone())?;
@@ -348,6 +351,9 @@ pub async fn import_django(json_path: &str, database_url: &str) -> Result<()> {
                 recurring_count += 1;
                 debug!("Imported recurring transaction {} -> ID {}", tx.name, inserted_tx.id);
 
+                // Store the inserted transaction for instance generation
+                imported_recurring_transactions.push(inserted_tx.clone());
+
                 // Import transaction tags
                 for tag_pk in &tx.tag {
                     if let Some(&tag_id) = tag_map.get(tag_pk) {
@@ -364,6 +370,44 @@ pub async fn import_django(json_path: &str, database_url: &str) -> Result<()> {
         }
     }
     info!("Imported {} recurring transactions", recurring_count);
+
+    // Generate instances for recurring transactions (last 20 months)
+    info!("Generating instances for recurring transactions...");
+    let today = chrono::Utc::now().naive_utc().date();
+    let start_date = today.checked_sub_months(Months::new(20))
+        .unwrap_or(today);
+
+    let mut instance_count = 0;
+    for recurring_tx in imported_recurring_transactions {
+        // Use the transaction generator to get all dates
+        let transactions = recurring_tx.generate_transactions(
+            start_date,
+            today,
+            today,
+            &db,
+        ).await;
+
+        // Create an instance for each generated transaction
+        for tx in transactions {
+            let new_instance = recurring_transaction_instance::ActiveModel {
+                recurring_transaction_id: Set(recurring_tx.id),
+                status: Set(recurring_transaction_instance::InstanceStatus::Paid),
+                due_date: Set(tx.date()),
+                expected_amount: Set(recurring_tx.amount),
+                paid_date: Set(Some(tx.date())),
+                paid_amount: Set(Some(recurring_tx.amount)),
+                reconciled_imported_transaction_id: Set(None),
+                category_id: Set(recurring_tx.category_id),
+                ..Default::default()
+            };
+
+            new_instance.insert(&db).await?;
+            instance_count += 1;
+            debug!("Created paid instance for recurring transaction {} on {}",
+                   recurring_tx.id, tx.date());
+        }
+    }
+    info!("Generated {} instances for recurring transactions", instance_count);
 
     // Seventh pass: Import one-off transactions
     info!("Importing one-off transactions...");
@@ -425,6 +469,7 @@ pub async fn import_django(json_path: &str, database_url: &str) -> Result<()> {
     info!("  - Accounts: {}", account_map.len());
     info!("  - Manual Account States: {}", state_count);
     info!("  - Recurring Transactions: {}", recurring_count);
+    info!("  - Recurring Transaction Instances: {}", instance_count);
     info!("  - One-off Transactions: {}", oneoff_count);
 
     Ok(())
