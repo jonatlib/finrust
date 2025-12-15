@@ -43,12 +43,6 @@ impl MigrationTrait for Migration {
                 Table::alter()
                     .table(Alias::new("one_off_transactions"))
                     .add_column(ColumnDef::new(Alias::new("scenario_id")).integer())
-                    .add_column(
-                        ColumnDef::new(Alias::new("is_simulated"))
-                            .boolean()
-                            .not_null()
-                            .default(false),
-                    )
                     .to_owned(),
             )
             .await?;
@@ -57,26 +51,6 @@ impl MigrationTrait for Migration {
             .alter_table(
                 Table::alter()
                     .table(Alias::new("one_off_transactions"))
-                    .add_foreign_key(
-                        TableForeignKey::new()
-                            .name("fk-one_off_transactions-scenario")
-                            .from_tbl(Alias::new("one_off_transactions"))
-                            .from_col(Alias::new("scenario_id"))
-                            .to_tbl(Scenario::Table)
-                            .to_col(Scenario::Id)
-                            .on_delete(ForeignKeyAction::Cascade)
-                            .on_update(ForeignKeyAction::Cascade),
-                    )
-                    .to_owned(),
-            )
-            .await?;
-
-        // 3. Add scenario_id and is_simulated to recurring_transactions
-        manager
-            .alter_table(
-                Table::alter()
-                    .table(Alias::new("recurring_transactions"))
-                    .add_column(ColumnDef::new(Alias::new("scenario_id")).integer())
                     .add_column(
                         ColumnDef::new(Alias::new("is_simulated"))
                             .boolean()
@@ -87,19 +61,28 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
+        // Note: SQLite doesn't support adding foreign keys to existing tables
+        // The foreign key constraint is defined in the entity model and will be enforced by SeaORM
+
+        // 3. Add scenario_id and is_simulated to recurring_transactions
         manager
             .alter_table(
                 Table::alter()
                     .table(Alias::new("recurring_transactions"))
-                    .add_foreign_key(
-                        TableForeignKey::new()
-                            .name("fk-recurring_transactions-scenario")
-                            .from_tbl(Alias::new("recurring_transactions"))
-                            .from_col(Alias::new("scenario_id"))
-                            .to_tbl(Scenario::Table)
-                            .to_col(Scenario::Id)
-                            .on_delete(ForeignKeyAction::Cascade)
-                            .on_update(ForeignKeyAction::Cascade),
+                    .add_column(ColumnDef::new(Alias::new("scenario_id")).integer())
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .alter_table(
+                Table::alter()
+                    .table(Alias::new("recurring_transactions"))
+                    .add_column(
+                        ColumnDef::new(Alias::new("is_simulated"))
+                            .boolean()
+                            .not_null()
+                            .default(false),
                     )
                     .to_owned(),
             )
@@ -111,12 +94,6 @@ impl MigrationTrait for Migration {
                 Table::alter()
                     .table(Alias::new("recurring_incomes"))
                     .add_column(ColumnDef::new(Alias::new("scenario_id")).integer())
-                    .add_column(
-                        ColumnDef::new(Alias::new("is_simulated"))
-                            .boolean()
-                            .not_null()
-                            .default(false),
-                    )
                     .to_owned(),
             )
             .await?;
@@ -125,15 +102,11 @@ impl MigrationTrait for Migration {
             .alter_table(
                 Table::alter()
                     .table(Alias::new("recurring_incomes"))
-                    .add_foreign_key(
-                        TableForeignKey::new()
-                            .name("fk-recurring_incomes-scenario")
-                            .from_tbl(Alias::new("recurring_incomes"))
-                            .from_col(Alias::new("scenario_id"))
-                            .to_tbl(Scenario::Table)
-                            .to_col(Scenario::Id)
-                            .on_delete(ForeignKeyAction::Cascade)
-                            .on_update(ForeignKeyAction::Cascade),
+                    .add_column(
+                        ColumnDef::new(Alias::new("is_simulated"))
+                            .boolean()
+                            .not_null()
+                            .default(false),
                     )
                     .to_owned(),
             )

@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -xe
+
 CWD=$(pwd)
 ORIGINAL="/Users/libor/Projects/Home/money_project/src/money_project"
 
@@ -16,4 +18,5 @@ uv run python ./manage.py dumpdata --format=json -o "${DUMP_TARGET}"
 cd "${CWD}"
 touch "${DATABASE_FILE}"
 cargo run -- init-db -d "${DATABASE}"
+#cargo run --bin migration up
 cargo run -- import-django --json-path "${DUMP_TARGET}" --database-url "${DATABASE}"
