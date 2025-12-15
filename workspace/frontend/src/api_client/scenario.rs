@@ -34,6 +34,8 @@ pub struct ScenarioResponse {
 #[derive(Debug, Clone, Deserialize)]
 pub struct ScenariosListResponse {
     pub data: Vec<Scenario>,
+    pub message: String,
+    pub success: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
