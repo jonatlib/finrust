@@ -100,6 +100,8 @@ pub struct TransactionResponse {
     pub linked_import_id: Option<String>,
     pub category_id: Option<i32>,
     pub tags: Vec<TagInfo>,
+    pub scenario_id: Option<i32>,
+    pub is_simulated: bool,
 }
 
 impl From<one_off_transaction::Model> for TransactionResponse {
@@ -117,6 +119,8 @@ impl From<one_off_transaction::Model> for TransactionResponse {
             linked_import_id: model.linked_import_id,
             category_id: model.category_id,
             tags: Vec::new(), // Will be populated by with_tags method
+            scenario_id: model.scenario_id,
+            is_simulated: model.is_simulated,
         }
     }
 }
