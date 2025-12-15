@@ -78,88 +78,82 @@ pub fn account_card(props: &Props) -> Html {
                     <div class="badge badge-secondary badge-outline badge-sm">{&account.currency_code}</div>
                 </div>
 
-                // Display stats section only if account is included in statistics
-                {if account.include_in_statistics {
-                    html! {
-                        <div class="mt-4 space-y-2 bg-base-200 p-3 rounded-lg">
-                            <div class="text-xs font-semibold text-gray-600 uppercase">{"Account Stats"}</div>
+                // Display stats section for all accounts
+                <div class="mt-4 space-y-2 bg-base-200 p-3 rounded-lg">
+                    <div class="text-xs font-semibold text-gray-600 uppercase">{"Account Stats"}</div>
 
-                            {match &*stats_state {
-                                FetchState::Loading => html! {
-                                    <div class="flex justify-center items-center py-4">
-                                        <span class="loading loading-spinner loading-sm"></span>
-                                    </div>
-                                },
-                                FetchState::Error(error) => html! {
-                                    <div class="text-xs text-error">
-                                        {format!("Failed to load stats: {}", error)}
-                                    </div>
-                                },
-                        FetchState::Success(_) => {
-                            if let Some(s) = stats {
-                                html! {
-                                    <div class="grid grid-cols-1 gap-2">
-                                        <div class="flex justify-between items-center">
-                                            <span class="text-xs text-gray-500">{"Current Balance:"}</span>
-                                            {if let Some(balance) = &s.end_of_period_state {
-                                                html! { <span class="text-sm font-bold">{balance}{" "}{&account.currency_code}</span> }
-                                            } else {
-                                                html! { <span class="text-xs text-gray-400">{"N/A"}</span> }
-                                            }}
-                                        </div>
-
-                                        <div class="flex justify-between items-center">
-                                            <span class="text-xs text-gray-500">{"Min State:"}</span>
-                                            {if let Some(min) = &s.min_state {
-                                                html! { <span class="text-sm font-bold">{min}{" "}{&account.currency_code}</span> }
-                                            } else {
-                                                html! { <span class="text-xs text-gray-400">{"N/A"}</span> }
-                                            }}
-                                        </div>
-
-                                        <div class="flex justify-between items-center">
-                                            <span class="text-xs text-gray-500">{"Max State:"}</span>
-                                            {if let Some(max) = &s.max_state {
-                                                html! { <span class="text-sm font-bold">{max}{" "}{&account.currency_code}</span> }
-                                            } else {
-                                                html! { <span class="text-xs text-gray-400">{"N/A"}</span> }
-                                            }}
-                                        </div>
-
-                                        <div class="flex justify-between items-center">
-                                            <span class="text-xs text-gray-500">{"Avg Income:"}</span>
-                                            {if let Some(income) = &s.average_income {
-                                                html! { <span class="text-sm font-bold text-success">{income}{" "}{&account.currency_code}</span> }
-                                            } else {
-                                                html! { <span class="text-xs text-gray-400">{"N/A"}</span> }
-                                            }}
-                                        </div>
-
-                                        <div class="flex justify-between items-center">
-                                            <span class="text-xs text-gray-500">{"Avg Expense:"}</span>
-                                            {if let Some(expense) = &s.average_expense {
-                                                html! { <span class="text-sm font-bold text-error">{expense}{" "}{&account.currency_code}</span> }
-                                            } else {
-                                                html! { <span class="text-xs text-gray-400">{"N/A"}</span> }
-                                            }}
-                                        </div>
-                                    </div>
-                                }
-                            } else {
-                                html! {
-                                    <div class="text-xs text-gray-400">{"No stats available"}</div>
-                                }
-                            }
+                    {match &*stats_state {
+                        FetchState::Loading => html! {
+                            <div class="flex justify-center items-center py-4">
+                                <span class="loading loading-spinner loading-sm"></span>
+                            </div>
                         },
-                                FetchState::NotStarted => html! {
-                                    <div class="text-xs text-gray-400">{"Loading..."}</div>
-                                },
-                            }}
-                        </div>
+                        FetchState::Error(error) => html! {
+                            <div class="text-xs text-error">
+                                {format!("Failed to load stats: {}", error)}
+                            </div>
+                        },
+                FetchState::Success(_) => {
+                    if let Some(s) = stats {
+                        html! {
+                            <div class="grid grid-cols-1 gap-2">
+                                <div class="flex justify-between items-center">
+                                    <span class="text-xs text-gray-500">{"Current Balance:"}</span>
+                                    {if let Some(balance) = &s.end_of_period_state {
+                                        html! { <span class="text-sm font-bold">{balance}{" "}{&account.currency_code}</span> }
+                                    } else {
+                                        html! { <span class="text-xs text-gray-400">{"N/A"}</span> }
+                                    }}
+                                </div>
+
+                                <div class="flex justify-between items-center">
+                                    <span class="text-xs text-gray-500">{"Min State:"}</span>
+                                    {if let Some(min) = &s.min_state {
+                                        html! { <span class="text-sm font-bold">{min}{" "}{&account.currency_code}</span> }
+                                    } else {
+                                        html! { <span class="text-xs text-gray-400">{"N/A"}</span> }
+                                    }}
+                                </div>
+
+                                <div class="flex justify-between items-center">
+                                    <span class="text-xs text-gray-500">{"Max State:"}</span>
+                                    {if let Some(max) = &s.max_state {
+                                        html! { <span class="text-sm font-bold">{max}{" "}{&account.currency_code}</span> }
+                                    } else {
+                                        html! { <span class="text-xs text-gray-400">{"N/A"}</span> }
+                                    }}
+                                </div>
+
+                                <div class="flex justify-between items-center">
+                                    <span class="text-xs text-gray-500">{"Avg Income:"}</span>
+                                    {if let Some(income) = &s.average_income {
+                                        html! { <span class="text-sm font-bold text-success">{income}{" "}{&account.currency_code}</span> }
+                                    } else {
+                                        html! { <span class="text-xs text-gray-400">{"N/A"}</span> }
+                                    }}
+                                </div>
+
+                                <div class="flex justify-between items-center">
+                                    <span class="text-xs text-gray-500">{"Avg Expense:"}</span>
+                                    {if let Some(expense) = &s.average_expense {
+                                        html! { <span class="text-sm font-bold text-error">{expense}{" "}{&account.currency_code}</span> }
+                                    } else {
+                                        html! { <span class="text-xs text-gray-400">{"N/A"}</span> }
+                                    }}
+                                </div>
+                            </div>
+                        }
+                    } else {
+                        html! {
+                            <div class="text-xs text-gray-400">{"No stats available"}</div>
+                        }
                     }
-                } else {
-                    html! {}
-                }}
+                },
+                        FetchState::NotStarted => html! {
+                            <div class="text-xs text-gray-400">{"Loading..."}</div>
+                        },
+                    }}
+                </div>
                 {if let Some(ledger) = &account.ledger_name {
                     html! {
                         <div class="mt-2">
