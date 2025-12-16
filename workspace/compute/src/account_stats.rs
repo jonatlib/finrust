@@ -615,9 +615,9 @@ pub fn calculate_goal_reached_date(
 
         // Check if we've reached the goal
         if balance >= target_amount {
-            // Convert i64 (days from CE) back to NaiveDate
-            let date = NaiveDate::from_num_days_from_ce_opt(date_i64 as i32)
-                .ok_or_else(|| crate::error::ComputeError::Date(format!("Invalid date number: {date_i64}")))?;
+            // Polars Date type stores dates as days since Unix epoch (1970-01-01)
+            let unix_epoch = NaiveDate::from_ymd_opt(1970, 1, 1).unwrap();
+            let date = unix_epoch + chrono::Duration::days(date_i64);
             return Ok(Some(date));
         }
     }
