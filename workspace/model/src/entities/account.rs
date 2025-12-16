@@ -15,6 +15,8 @@ pub enum AccountKind {
     Debt,
     #[sea_orm(string_value = "Other")]
     Other,
+    #[sea_orm(string_value = "Goal")]
+    Goal,
 }
 
 /// Represents a financial account, like a bank account, credit card, or cash wallet.
@@ -39,6 +41,8 @@ pub struct Model {
     pub ledger_name: Option<String>,
     /// The kind of account
     pub account_kind: AccountKind,
+    /// Target amount for Goal accounts
+    pub target_amount: Option<Decimal>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

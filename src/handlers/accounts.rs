@@ -19,6 +19,7 @@ pub enum AccountKind {
     Investment,
     Debt,
     Other,
+    Goal,
 }
 
 impl From<account::AccountKind> for AccountKind {
@@ -29,6 +30,7 @@ impl From<account::AccountKind> for AccountKind {
             account::AccountKind::Investment => AccountKind::Investment,
             account::AccountKind::Debt => AccountKind::Debt,
             account::AccountKind::Other => AccountKind::Other,
+            account::AccountKind::Goal => AccountKind::Goal,
         }
     }
 }
@@ -41,6 +43,7 @@ impl From<AccountKind> for account::AccountKind {
             AccountKind::Investment => account::AccountKind::Investment,
             AccountKind::Debt => account::AccountKind::Debt,
             AccountKind::Other => account::AccountKind::Other,
+            AccountKind::Goal => account::AccountKind::Goal,
         }
     }
 }
@@ -62,6 +65,8 @@ pub struct CreateAccountRequest {
     pub ledger_name: Option<String>,
     /// The kind of account (default: RealAccount)
     pub account_kind: Option<AccountKind>,
+    /// Target amount for Goal accounts
+    pub target_amount: Option<rust_decimal::Decimal>,
 }
 
 /// Request body for updating an account
@@ -79,6 +84,8 @@ pub struct UpdateAccountRequest {
     pub ledger_name: Option<String>,
     /// The kind of account
     pub account_kind: Option<AccountKind>,
+    /// Target amount for Goal accounts
+    pub target_amount: Option<rust_decimal::Decimal>,
 }
 
 /// Account response model
@@ -92,6 +99,7 @@ pub struct AccountResponse {
     pub include_in_statistics: bool,
     pub ledger_name: Option<String>,
     pub account_kind: AccountKind,
+    pub target_amount: Option<rust_decimal::Decimal>,
 }
 
 impl From<account::Model> for AccountResponse {
@@ -105,6 +113,7 @@ impl From<account::Model> for AccountResponse {
             include_in_statistics: model.include_in_statistics,
             ledger_name: model.ledger_name,
             account_kind: model.account_kind.into(),
+            target_amount: model.target_amount,
         }
     }
 }
@@ -164,6 +173,7 @@ pub async fn create_account(
         include_in_statistics: Set(request.include_in_statistics.unwrap_or(true)),
         ledger_name: Set(request.ledger_name.clone()),
         account_kind: Set(request.account_kind.unwrap_or(AccountKind::RealAccount).into()),
+        target_amount: Set(request.target_amount),
         ..Default::default()
     };
 
@@ -406,6 +416,11 @@ pub async fn update_account(
         debug!("Updating account account_kind to: {:?}", account_kind);
         account_active.account_kind = Set(account_kind.into());
         updated_fields.push(format!("account_kind: {:?}", account_kind));
+    }
+    if request.target_amount.is_some() {
+        debug!("Updating account target_amount to: {:?}", request.target_amount);
+        account_active.target_amount = Set(request.target_amount);
+        updated_fields.push(format!("target_amount: {:?}", request.target_amount));
     }
 
     if updated_fields.is_empty() {

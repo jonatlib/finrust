@@ -44,6 +44,7 @@ pub fn account_modal(props: &AccountModalProps) -> Html {
                 let ledger_name = form_data.get("ledger_name").as_string();
                 let account_kind_str = form_data.get("account_kind").as_string().unwrap_or("RealAccount".to_string());
                 let include_in_statistics = form_data.get("include_in_statistics").as_string().map(|v| v == "on").unwrap_or(true);
+                let target_amount = form_data.get("target_amount").as_string().filter(|s| !s.is_empty());
 
                 // Parse account kind
                 let account_kind = match account_kind_str.as_str() {
@@ -52,6 +53,7 @@ pub fn account_modal(props: &AccountModalProps) -> Html {
                     "Investment" => AccountKind::Investment,
                     "Debt" => AccountKind::Debt,
                     "Other" => AccountKind::Other,
+                    "Goal" => AccountKind::Goal,
                     _ => AccountKind::RealAccount,
                 };
 
@@ -74,6 +76,7 @@ pub fn account_modal(props: &AccountModalProps) -> Html {
                         include_in_statistics: Some(include_in_statistics),
                         ledger_name: if ledger_name.as_ref().map(|l| l.is_empty()).unwrap_or(true) { Some(String::new()) } else { ledger_name },
                         account_kind: Some(account_kind),
+                        target_amount: target_amount.clone(),
                     };
 
                     wasm_bindgen_futures::spawn_local(async move {
@@ -102,6 +105,7 @@ pub fn account_modal(props: &AccountModalProps) -> Html {
                         include_in_statistics: Some(include_in_statistics),
                         ledger_name: if ledger_name.as_ref().map(|l| l.is_empty()).unwrap_or(true) { None } else { ledger_name },
                         account_kind: Some(account_kind),
+                        target_amount,
                     };
 
                     wasm_bindgen_futures::spawn_local(async move {
@@ -142,6 +146,10 @@ pub fn account_modal(props: &AccountModalProps) -> Html {
     let default_ledger = props.account.as_ref().and_then(|a| a.ledger_name.clone()).unwrap_or_default();
     let default_include_stats = props.account.as_ref().map(|a| a.include_in_statistics).unwrap_or(true);
     let default_kind = props.account.as_ref().map(|a| a.account_kind).unwrap_or(AccountKind::RealAccount);
+    let default_target_amount = props.account.as_ref().and_then(|a| a.target_amount.clone()).unwrap_or_default();
+
+    // Track selected account kind for conditional rendering
+    let selected_kind = use_state(|| default_kind);
 
     html! {
         <dialog class={classes!("modal", props.show.then_some("modal-open"))} id="account_modal">
@@ -198,15 +206,57 @@ pub fn account_modal(props: &AccountModalProps) -> Html {
                         </div>
                         <div class="form-control">
                             <label class="label"><span class="label-text">{"Account Type"}</span></label>
-                            <select name="account_kind" class="select select-bordered w-full" disabled={*is_submitting}>
+                            <select
+                                name="account_kind"
+                                class="select select-bordered w-full"
+                                disabled={*is_submitting}
+                                onchange={{
+                                    let selected_kind = selected_kind.clone();
+                                    Callback::from(move |e: Event| {
+                                        if let Some(select) = e.target_dyn_into::<web_sys::HtmlSelectElement>() {
+                                            let value = select.value();
+                                            let kind = match value.as_str() {
+                                                "RealAccount" => AccountKind::RealAccount,
+                                                "Savings" => AccountKind::Savings,
+                                                "Investment" => AccountKind::Investment,
+                                                "Debt" => AccountKind::Debt,
+                                                "Other" => AccountKind::Other,
+                                                "Goal" => AccountKind::Goal,
+                                                _ => AccountKind::RealAccount,
+                                            };
+                                            selected_kind.set(kind);
+                                        }
+                                    })
+                                }}
+                            >
                                 <option value="RealAccount" selected={default_kind == AccountKind::RealAccount}>{"Real Account"}</option>
                                 <option value="Savings" selected={default_kind == AccountKind::Savings}>{"Savings"}</option>
                                 <option value="Investment" selected={default_kind == AccountKind::Investment}>{"Investment"}</option>
                                 <option value="Debt" selected={default_kind == AccountKind::Debt}>{"Debt"}</option>
                                 <option value="Other" selected={default_kind == AccountKind::Other}>{"Other"}</option>
+                                <option value="Goal" selected={default_kind == AccountKind::Goal}>{"Goal"}</option>
                             </select>
                         </div>
                     </div>
+
+                    {if *selected_kind == AccountKind::Goal {
+                        html! {
+                            <div class="form-control">
+                                <label class="label"><span class="label-text">{"Target Amount"}</span></label>
+                                <input
+                                    type="number"
+                                    name="target_amount"
+                                    class="input input-bordered w-full"
+                                    placeholder="e.g. 10000"
+                                    value={default_target_amount}
+                                    step="0.01"
+                                    disabled={*is_submitting}
+                                />
+                            </div>
+                        }
+                    } else {
+                        html! {}
+                    }}
 
                     <div class="form-control">
                         <label class="label"><span class="label-text">{"Ledger Name (Optional)"}</span></label>

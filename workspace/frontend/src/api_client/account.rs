@@ -10,6 +10,7 @@ pub enum AccountKind {
     Investment,
     Debt,
     Other,
+    Goal,
 }
 
 impl AccountKind {
@@ -21,6 +22,7 @@ impl AccountKind {
             AccountKind::Investment => 2,
             AccountKind::Debt => 3,
             AccountKind::Other => 4,
+            AccountKind::Goal => 5,
         }
     }
 
@@ -32,6 +34,7 @@ impl AccountKind {
             AccountKind::Investment => "Investment",
             AccountKind::Debt => "Debt",
             AccountKind::Other => "Other",
+            AccountKind::Goal => "Goal",
         }
     }
 }
@@ -47,6 +50,7 @@ pub struct AccountResponse {
     pub include_in_statistics: bool,
     pub ledger_name: Option<String>,
     pub account_kind: AccountKind,
+    pub target_amount: Option<String>,
 }
 
 /// Account statistics response
@@ -87,6 +91,7 @@ pub struct CreateAccountRequest {
     pub include_in_statistics: Option<bool>,
     pub ledger_name: Option<String>,
     pub account_kind: Option<AccountKind>,
+    pub target_amount: Option<String>,
 }
 
 /// Request body for updating an account
@@ -98,6 +103,7 @@ pub struct UpdateAccountRequest {
     pub include_in_statistics: Option<bool>,
     pub ledger_name: Option<String>,
     pub account_kind: Option<AccountKind>,
+    pub target_amount: Option<String>,
 }
 
 /// Get all accounts

@@ -570,6 +570,62 @@ fn get_last_day_of_month(year: i32, month: u32) -> NaiveDate {
         .unwrap()
 }
 
+/// Calculates the date when a goal target amount is reached based on forecast data.
+///
+/// This function analyzes the forecast DataFrame and finds the first date where
+/// the balance reaches or exceeds the target amount.
+///
+/// # Arguments
+/// * `forecast_df` - DataFrame with columns: date (i64), balance (Decimal as string)
+/// * `target_amount` - The target amount to reach
+///
+/// # Returns
+/// * `Ok(Some(date))` - The first date when the target is reached
+/// * `Ok(None)` - If the target is never reached within the forecast range
+/// * `Err(_)` - If there's an error processing the DataFrame
+pub fn calculate_goal_reached_date(
+    forecast_df: &DataFrame,
+    target_amount: Decimal,
+) -> Result<Option<NaiveDate>> {
+    let date_col = forecast_df
+        .column("date")
+        .map_err(|e| crate::error::ComputeError::DataFrame(format!("Missing date column: {e}")))?;
+    let balance_col = forecast_df
+        .column("balance")
+        .map_err(|e| crate::error::ComputeError::DataFrame(format!("Missing balance column: {e}")))?;
+
+    // Iterate through rows to find first date where balance >= target_amount
+    for i in 0..forecast_df.height() {
+        let date_i64 = date_col
+            .get(i)
+            .map_err(|e| crate::error::ComputeError::Series(format!("Error getting date at row {i}: {e}")))?
+            .try_extract::<i64>()
+            .map_err(|e| crate::error::ComputeError::Series(format!("Error extracting date as i64 at row {i}: {e}")))?;
+
+        let bal_any = balance_col
+            .get(i)
+            .map_err(|e| crate::error::ComputeError::Series(format!("Error getting balance at row {i}: {e}")))?;
+        let bal_str = match bal_any {
+            AnyValue::String(s) => s.to_string(),
+            AnyValue::StringOwned(s) => s.to_string(),
+            other => other.to_string(),
+        };
+        let balance = Decimal::from_str(&bal_str)
+            .map_err(|e| crate::error::ComputeError::Decimal(format!("Invalid balance '{bal_str}' at row {i}: {e}")))?;
+
+        // Check if we've reached the goal
+        if balance >= target_amount {
+            // Convert i64 (days from CE) back to NaiveDate
+            let date = NaiveDate::from_num_days_from_ce_opt(date_i64 as i32)
+                .ok_or_else(|| crate::error::ComputeError::Date(format!("Invalid date number: {date_i64}")))?;
+            return Ok(Some(date));
+        }
+    }
+
+    // Goal not reached within forecast range
+    Ok(None)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
