@@ -1,5 +1,6 @@
 use crate::api_client::account::AccountResponse;
 use crate::api_client::category::{get_categories, CategoryResponse};
+use crate::api_client::scenario::Scenario;
 use crate::api_client::transaction::{create_transaction, update_transaction, CreateTransactionRequest, TransactionResponse, UpdateTransactionRequest};
 use crate::common::fetch_hook::use_fetch_with_refetch;
 use crate::hooks::FetchState;
@@ -14,6 +15,9 @@ pub struct TransactionModalProps {
     pub on_close: Callback<()>,
     pub on_success: Callback<()>,
     pub accounts: Vec<AccountResponse>,
+    /// List of available scenarios for selection
+    #[prop_or_default]
+    pub scenarios: Vec<Scenario>,
     /// If provided, the modal is in edit mode with this transaction
     #[prop_or_default]
     pub transaction: Option<TransactionResponse>,
@@ -67,6 +71,8 @@ pub fn transaction_modal(props: &TransactionModalProps) -> Html {
                 let ledger_name = form_data.get("ledger_name").as_string();
                 let include_in_statistics = form_data.get("include_in_statistics").as_string().map(|v| v == "on").unwrap_or(true);
                 let category_id_str = form_data.get("category_id").as_string();
+                let scenario_id_str = form_data.get("scenario_id").as_string();
+                let is_simulated = form_data.get("is_simulated").as_string().map(|v| v == "on").unwrap_or(false);
 
                 // Parse amount
                 let amount = match Decimal::from_str(&amount_str) {
@@ -113,6 +119,15 @@ pub fn transaction_modal(props: &TransactionModalProps) -> Html {
                     }
                 });
 
+                // Parse scenario ID (optional)
+                let scenario_id_from_form = scenario_id_str.and_then(|s| {
+                    if s.is_empty() || s == "none" {
+                        None
+                    } else {
+                        s.parse::<i32>().ok()
+                    }
+                });
+
                 let is_submitting = is_submitting.clone();
                 let error_message = error_message.clone();
                 let on_close = on_close.clone();
@@ -136,8 +151,8 @@ pub fn transaction_modal(props: &TransactionModalProps) -> Html {
                         ledger_name: if ledger_name.as_ref().map(|l| l.is_empty()).unwrap_or(true) { None } else { ledger_name },
                         linked_import_id: None,
                         category_id,
-                        scenario_id: None,
-                        is_simulated: None,
+                        scenario_id: scenario_id_from_form,
+                        is_simulated: Some(is_simulated),
                     };
 
                     wasm_bindgen_futures::spawn_local(async move {
@@ -216,6 +231,8 @@ pub fn transaction_modal(props: &TransactionModalProps) -> Html {
     let default_ledger = props.transaction.as_ref().and_then(|t| t.ledger_name.clone()).unwrap_or_default();
     let default_include_stats = props.transaction.as_ref().map(|t| t.include_in_statistics).unwrap_or(true);
     let default_category = props.transaction.as_ref().and_then(|t| t.category_id);
+    let default_scenario = props.transaction.as_ref().and_then(|t| t.scenario_id);
+    let default_is_simulated = props.transaction.as_ref().map(|t| t.is_simulated).unwrap_or(false);
 
     html! {
         <dialog class={classes!("modal", props.show.then_some("modal-open"))} id="transaction_modal">
@@ -341,6 +358,38 @@ pub fn transaction_modal(props: &TransactionModalProps) -> Html {
                                 }
                             })}
                         </select>
+                    </div>
+
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text">{"Scenario (Optional)"}</span>
+                        </label>
+                        <select name="scenario_id" class="select select-bordered w-full" disabled={*is_submitting}>
+                            <option value="none" selected={default_scenario.is_none()}>{"No scenario"}</option>
+                            { for props.scenarios.iter().map(|scenario| {
+                                html! {
+                                    <option
+                                        value={scenario.id.to_string()}
+                                        selected={default_scenario == Some(scenario.id)}
+                                    >
+                                        {&scenario.name}
+                                    </option>
+                                }
+                            })}
+                        </select>
+                    </div>
+
+                    <div class="form-control">
+                        <label class="label cursor-pointer justify-start gap-2">
+                            <input
+                                type="checkbox"
+                                name="is_simulated"
+                                class="checkbox checkbox-info"
+                                checked={default_is_simulated}
+                                disabled={*is_submitting}
+                            />
+                            <span class="label-text">{"Simulated Transaction"}</span>
+                        </label>
                     </div>
 
                     <div class="form-control">

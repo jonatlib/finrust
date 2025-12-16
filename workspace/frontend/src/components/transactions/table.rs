@@ -50,7 +50,19 @@ pub fn transaction_table() -> Html {
                                 <td class={classes!("font-mono", "text-right", "font-bold", amount_class)}>
                                     {if t.amount >= 0.0 { format!("+{}", format_currency(t.amount)) } else { format!("-{}", format_currency(t.amount)) }}
                                 </td>
-                                <td><span class={classes!("badge", "badge-xs", status_badge)}></span> {" "}{&t.status}</td>
+                                <td>
+                                    <span class={classes!("badge", "badge-xs", status_badge)}></span> {" "}{&t.status}
+                                    {if t.is_simulated {
+                                        html! { <><span class="badge badge-xs badge-info ml-1">{"simulated"}</span></> }
+                                    } else {
+                                        html! {}
+                                    }}
+                                    {if t.scenario_id.is_some() {
+                                        html! { <><span class="badge badge-xs badge-warning ml-1">{"scenario"}</span></> }
+                                    } else {
+                                        html! {}
+                                    }}
+                                </td>
                                 <td>
                                     <button class="btn btn-ghost btn-xs"><i class="fas fa-edit"></i></button>
                                 </td>

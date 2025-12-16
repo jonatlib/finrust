@@ -12,6 +12,8 @@ pub struct Transaction {
     #[serde(rename = "type")]
     pub txn_type: String,
     pub status: String,
+    pub is_simulated: bool,
+    pub scenario_id: Option<i32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -129,6 +131,8 @@ pub fn get_mock_transactions() -> Vec<Transaction> {
                 category_id: "c3".to_string(),
                 txn_type: "income".to_string(),
                 status: "cleared".to_string(),
+                is_simulated: false,
+                scenario_id: None,
             });
         }
 
@@ -143,6 +147,8 @@ pub fn get_mock_transactions() -> Vec<Transaction> {
                 category_id: "c2".to_string(),
                 txn_type: "expense".to_string(),
                 status: "cleared".to_string(),
+                is_simulated: false,
+                scenario_id: None,
             });
         }
 
@@ -157,6 +163,8 @@ pub fn get_mock_transactions() -> Vec<Transaction> {
                 category_id: "c1".to_string(),
                 txn_type: "expense".to_string(),
                 status: "cleared".to_string(),
+                is_simulated: false,
+                scenario_id: None,
             });
         }
 
@@ -171,6 +179,8 @@ pub fn get_mock_transactions() -> Vec<Transaction> {
                 category_id: "c6".to_string(),
                 txn_type: "expense".to_string(),
                 status: "pending".to_string(),
+                is_simulated: false,
+                scenario_id: None,
             });
         }
     }
