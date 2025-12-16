@@ -38,7 +38,7 @@ pub struct RecurringListProps {
 pub fn recurring_list(props: &RecurringListProps) -> Html {
     let account_id = props.account_id;
     let (fetch_state, _refetch) = use_fetch_with_refetch(move || {
-        get_recurring_transactions(None, None, account_id, None)
+        get_recurring_transactions(None, Some(1000), account_id, None)
     });
 
     let (categories_state, _) = use_fetch_with_refetch(get_categories);
