@@ -5,6 +5,7 @@ use chrono::Datelike;
 use crate::api_client::transaction::{get_transactions, TransactionResponse};
 use crate::api_client::account::get_accounts;
 use crate::api_client::category::get_categories;
+use crate::api_client::scenario::get_scenarios;
 use crate::common::fetch_hook::use_fetch_with_refetch;
 use crate::hooks::FetchState;
 use super::transaction_modal::TransactionModal;
@@ -30,6 +31,7 @@ pub fn transactions() -> Html {
     let (fetch_state, refetch) = use_fetch_with_refetch(get_transactions);
     let (accounts_state, _) = use_fetch_with_refetch(get_accounts);
     let (categories_state, _) = use_fetch_with_refetch(get_categories);
+    let (scenarios_state, _) = use_fetch_with_refetch(get_scenarios);
     let show_modal = use_state(|| false);
     let sort_column = use_state(|| SortColumn::Date);
     let sort_direction = use_state(|| SortDirection::Descending);
@@ -62,6 +64,12 @@ pub fn transactions() -> Html {
     // Get accounts list for the modal
     let accounts_list = match &*accounts_state {
         FetchState::Success(accounts) => accounts.clone(),
+        _ => vec![],
+    };
+
+    // Get scenarios list for the modal
+    let scenarios_list = match &*scenarios_state {
+        FetchState::Success(scenarios) => scenarios.clone(),
         _ => vec![],
     };
 
@@ -194,6 +202,7 @@ pub fn transactions() -> Html {
                 on_close={on_close_modal}
                 on_success={on_success}
                 accounts={accounts_list.clone()}
+                scenarios={scenarios_list.clone()}
                 transaction={None}
             />
 
@@ -443,11 +452,35 @@ fn render_transaction_row(transaction: &TransactionResponse, account_map: &HashM
     let is_pending = transaction.date > today;
     let status_badge = if is_pending {
         html! {
-            <div class="text-xs font-normal text-warning">{"Pending"}</div>
+            <div class="flex gap-1 items-center flex-wrap">
+                <div class="text-xs font-normal text-warning">{"Pending"}</div>
+                {if transaction.is_simulated {
+                    html! { <span class="badge badge-xs badge-info">{"simulated"}</span> }
+                } else {
+                    html! {}
+                }}
+                {if transaction.scenario_id.is_some() {
+                    html! { <span class="badge badge-xs badge-warning">{"scenario"}</span> }
+                } else {
+                    html! {}
+                }}
+            </div>
         }
     } else {
         html! {
-            <div class="text-xs font-normal text-success">{"Accounted"}</div>
+            <div class="flex gap-1 items-center flex-wrap">
+                <div class="text-xs font-normal text-success">{"Accounted"}</div>
+                {if transaction.is_simulated {
+                    html! { <span class="badge badge-xs badge-info">{"simulated"}</span> }
+                } else {
+                    html! {}
+                }}
+                {if transaction.scenario_id.is_some() {
+                    html! { <span class="badge badge-xs badge-warning">{"scenario"}</span> }
+                } else {
+                    html! {}
+                }}
+            </div>
         }
     };
 

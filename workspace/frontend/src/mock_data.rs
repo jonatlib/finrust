@@ -185,6 +185,33 @@ pub fn get_mock_transactions() -> Vec<Transaction> {
         }
     }
 
+    // Add a couple of simulated/scenario transactions for demo
+    txns.push(Transaction {
+        id: format!("t{}", txns.len() + 1),
+        date: (today + Duration::days(5)).format("%Y-%m-%d").to_string(),
+        description: "Simulated Future Expense".to_string(),
+        amount: -250.00,
+        account_id: 1,
+        category_id: "c2".to_string(),
+        txn_type: "expense".to_string(),
+        status: "pending".to_string(),
+        is_simulated: true,
+        scenario_id: Some(1),
+    });
+
+    txns.push(Transaction {
+        id: format!("t{}", txns.len() + 1),
+        date: (today + Duration::days(10)).format("%Y-%m-%d").to_string(),
+        description: "Scenario Test Transaction".to_string(),
+        amount: -100.00,
+        account_id: 2,
+        category_id: "c5".to_string(),
+        txn_type: "expense".to_string(),
+        status: "pending".to_string(),
+        is_simulated: true,
+        scenario_id: Some(1),
+    });
+
     txns.sort_by(|a, b| b.date.cmp(&a.date));
     txns
 }
