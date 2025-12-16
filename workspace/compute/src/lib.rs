@@ -19,11 +19,25 @@ use std::time::Duration;
 /// This function uses the provided date as "today" or the current date if none is provided.
 /// It has the same configuration as the one used in the `test_scenario_merge_real` test.
 pub fn default_compute(today: Option<NaiveDate>) -> impl AccountStateCalculator {
+    default_compute_with_scenario(today, None)
+}
+
+/// Returns a default pre-configured compute instance with scenario support.
+///
+/// This function uses the provided date as "today" or the current date if none is provided.
+/// If a scenario_id is provided, it will include simulated transactions belonging to that scenario.
+pub fn default_compute_with_scenario(
+    today: Option<NaiveDate>,
+    scenario_id: Option<i32>,
+) -> impl AccountStateCalculator {
     // Create the today date
     let today = today.unwrap_or_else(|| Utc::now().date_naive());
 
-    // Create the balance calculator
-    let balance_calculator = BalanceCalculator::new_with_today(MergeMethod::FirstWins, today);
+    // Create the balance calculator with optional scenario context
+    let balance_calculator = match scenario_id {
+        Some(sid) => BalanceCalculator::new_with_today_and_scenario(MergeMethod::FirstWins, today, sid),
+        None => BalanceCalculator::new_with_today(MergeMethod::FirstWins, today),
+    };
 
     // Create the unpaid recurring calculator
     let unpaid_calculator =

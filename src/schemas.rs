@@ -52,6 +52,8 @@ pub struct TimeseriesQuery {
     /// Include accounts excluded from statistics
     #[serde(default)]
     pub include_ignored: bool,
+    /// Scenario ID to include simulated transactions
+    pub scenario_id: Option<i32>,
 }
 
 fn validate_timeseries_dates(query: &TimeseriesQuery) -> Result<(), validator::ValidationError> {

@@ -7,7 +7,7 @@ use axum::{
 };
 use axum_valid::Valid;
 use common::AccountStateTimeseries;
-use compute::{account::AccountStateCalculator, default_compute};
+use compute::{account::AccountStateCalculator, default_compute, default_compute_with_scenario};
 use model::entities::account;
 use sea_orm::EntityTrait;
 use tracing::{instrument, error, warn, info, debug, trace};
@@ -176,9 +176,9 @@ pub async fn get_all_accounts_timeseries(
     }
 
     // Compute timeseries for all accounts using the compute module
-    debug!("Computing timeseries for {} accounts from {} to {}", 
-           accounts.len(), query.start_date, query.end_date);
-    let compute = default_compute(None);
+    debug!("Computing timeseries for {} accounts from {} to {} (scenario_id={:?})",
+           accounts.len(), query.start_date, query.end_date, query.scenario_id);
+    let compute = default_compute_with_scenario(None, query.scenario_id);
 
     trace!("Executing timeseries computation for all accounts");
     let timeseries_result = compute
