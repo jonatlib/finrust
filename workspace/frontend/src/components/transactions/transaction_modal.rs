@@ -15,7 +15,11 @@ pub struct TransactionModalProps {
     pub on_success: Callback<()>,
     pub accounts: Vec<AccountResponse>,
     /// If provided, the modal is in edit mode with this transaction
+    #[prop_or_default]
     pub transaction: Option<TransactionResponse>,
+    /// If provided, transactions will be linked to this scenario and marked as simulated
+    #[prop_or_default]
+    pub scenario_id: Option<i32>,
 }
 
 #[function_component(TransactionModal)]
@@ -41,6 +45,7 @@ pub fn transaction_modal(props: &TransactionModalProps) -> Html {
         let is_submitting = is_submitting.clone();
         let error_message = error_message.clone();
         let transaction = props.transaction.clone();
+        let scenario_id = props.scenario_id;
         let is_edit = transaction.is_some();
 
         Callback::from(move |e: SubmitEvent| {
@@ -164,8 +169,8 @@ pub fn transaction_modal(props: &TransactionModalProps) -> Html {
                         ledger_name: if ledger_name.as_ref().map(|l| l.is_empty()).unwrap_or(true) { None } else { ledger_name },
                         linked_import_id: None,
                         category_id,
-                        scenario_id: None,
-                        is_simulated: None,
+                        scenario_id,
+                        is_simulated: scenario_id.map(|_| true), // Mark as simulated if scenario is provided
                     };
 
                     wasm_bindgen_futures::spawn_local(async move {

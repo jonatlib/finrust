@@ -5,3 +5,4 @@ mod transaction_edit;
 
 pub use view::Transactions;
 pub use transaction_edit::TransactionEdit;
+pub use transaction_modal::TransactionModal;
