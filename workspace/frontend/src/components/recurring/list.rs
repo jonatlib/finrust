@@ -252,6 +252,18 @@ pub fn recurring_list(props: &RecurringListProps) -> Html {
                                                         {desc}
                                                     </div>
                                                 }
+                                                <div class="flex gap-1 mt-1 flex-wrap">
+                                                    {if t.is_simulated {
+                                                        html! { <span class="badge badge-xs badge-info">{"simulated"}</span> }
+                                                    } else {
+                                                        html! {}
+                                                    }}
+                                                    {if t.scenario_id.is_some() {
+                                                        html! { <span class="badge badge-xs badge-warning">{"scenario"}</span> }
+                                                    } else {
+                                                        html! {}
+                                                    }}
+                                                </div>
                                             </td>
                                             <td>{&t.period}</td>
                                             <td class={classes!("font-mono", amount_class)}>

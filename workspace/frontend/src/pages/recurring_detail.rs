@@ -4,6 +4,7 @@ use crate::components::layout::layout::Layout;
 use crate::router::Route;
 use crate::api_client::recurring_transaction::{get_recurring_transaction, get_recurring_instances, delete_recurring_transaction, delete_recurring_instance, update_recurring_instance, UpdateRecurringInstanceRequest};
 use crate::api_client::category::get_categories;
+use crate::api_client::scenario::get_scenarios;
 use crate::common::fetch_hook::use_fetch_with_refetch;
 use crate::common::toast::ToastContext;
 use crate::hooks::FetchState;
@@ -33,12 +34,22 @@ pub fn recurring_detail_page(props: &RecurringDetailPageProps) -> Html {
 
     // Fetch categories
     let (categories_state, _) = use_fetch_with_refetch(get_categories);
+    let (scenarios_state, _) = use_fetch_with_refetch(get_scenarios);
 
     // Build category ID -> name map
     let category_map: HashMap<i32, String> = match &*categories_state {
         FetchState::Success(categories) => categories
             .iter()
             .map(|cat| (cat.id, cat.name.clone()))
+            .collect(),
+        _ => HashMap::new(),
+    };
+
+    // Build scenario ID -> name map
+    let scenario_map: HashMap<i32, String> = match &*scenarios_state {
+        FetchState::Success(scenarios) => scenarios
+            .iter()
+            .map(|s| (s.id, s.name.clone()))
             .collect(),
         _ => HashMap::new(),
     };
@@ -263,6 +274,37 @@ pub fn recurring_detail_page(props: &RecurringDetailPageProps) -> Html {
                                                     <span class="badge badge-info badge-lg">
                                                         <i class="fas fa-tag mr-1"></i>
                                                         {category_map.get(&category_id).map(|name| name.as_str()).unwrap_or("Unknown Category")}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                } else {
+                                    html! { <></> }
+                                }}
+
+                                <div>
+                                    <div class="stat bg-base-200 rounded-box">
+                                        <div class="stat-title">{"Simulated"}</div>
+                                        <div class="stat-value text-lg">
+                                            {if transaction.is_simulated {
+                                                html! { <span class="badge badge-info badge-lg"><i class="fas fa-flask mr-1"></i>{"Yes"}</span> }
+                                            } else {
+                                                html! { <span class="badge badge-ghost badge-lg">{"No"}</span> }
+                                            }}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {if let Some(scenario_id) = transaction.scenario_id {
+                                    html! {
+                                        <div>
+                                            <div class="stat bg-base-200 rounded-box">
+                                                <div class="stat-title">{"Scenario"}</div>
+                                                <div class="stat-value text-lg">
+                                                    <span class="badge badge-warning badge-lg">
+                                                        <i class="fas fa-project-diagram mr-1"></i>
+                                                        {scenario_map.get(&scenario_id).map(|name| name.as_str()).unwrap_or("Unknown Scenario")}
                                                     </span>
                                                 </div>
                                             </div>

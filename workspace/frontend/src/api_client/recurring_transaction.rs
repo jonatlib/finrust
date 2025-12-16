@@ -90,6 +90,8 @@ pub struct RecurringTransactionResponse {
     pub ledger_name: Option<String>,
     pub category_id: Option<i32>,
     pub tags: Vec<TagInfo>,
+    pub scenario_id: Option<i32>,
+    pub is_simulated: bool,
 }
 
 /// Recurring transaction instance response model
@@ -125,6 +127,8 @@ pub struct CreateRecurringTransactionRequest {
     pub source_account_id: Option<i32>,
     pub ledger_name: Option<String>,
     pub category_id: Option<i32>,
+    pub scenario_id: Option<i32>,
+    pub is_simulated: Option<bool>,
 }
 
 /// Request body for updating a recurring transaction
@@ -141,6 +145,8 @@ pub struct UpdateRecurringTransactionRequest {
     pub source_account_id: Option<i32>,
     pub ledger_name: Option<String>,
     pub category_id: Option<i32>,
+    pub scenario_id: Option<i32>,
+    pub is_simulated: Option<bool>,
 }
 
 /// Request body for creating a recurring transaction instance

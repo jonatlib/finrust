@@ -5,6 +5,7 @@ use crate::api_client::recurring_transaction::{
 };
 use crate::api_client::account::get_accounts;
 use crate::api_client::category::get_categories;
+use crate::api_client::scenario::get_scenarios;
 use crate::common::fetch_hook::use_fetch_with_refetch;
 use crate::hooks::FetchState;
 
@@ -23,9 +24,10 @@ pub fn recurring_modal(props: &RecurringModalProps) -> Html {
     let is_submitting = use_state(|| false);
     let error_message = use_state(|| None::<String>);
 
-    // Fetch accounts and categories for dropdowns
+    // Fetch accounts, categories and scenarios for dropdowns
     let (accounts_state, _) = use_fetch_with_refetch(get_accounts);
     let (categories_state, _) = use_fetch_with_refetch(get_categories);
+    let (scenarios_state, _) = use_fetch_with_refetch(get_scenarios);
 
     let is_edit_mode = props.transaction.is_some();
     let title = if is_edit_mode { "Edit Recurring Transaction" } else { "Add Recurring Transaction" };
@@ -70,6 +72,9 @@ pub fn recurring_modal(props: &RecurringModalProps) -> Html {
                 let include_in_statistics = form_data.get("include_in_statistics").as_string().map(|v| v == "on").unwrap_or(true);
                 let category_id = form_data.get("category_id").as_string()
                     .and_then(|s| if s.is_empty() || s == "none" { None } else { s.parse::<i32>().ok() });
+                let scenario_id = form_data.get("scenario_id").as_string()
+                    .and_then(|s| if s.is_empty() || s == "none" { None } else { s.parse::<i32>().ok() });
+                let is_simulated = form_data.get("is_simulated").as_string().map(|v| v == "on").unwrap_or(false);
 
                 let is_submitting = is_submitting.clone();
                 let error_message = error_message.clone();
@@ -95,6 +100,8 @@ pub fn recurring_modal(props: &RecurringModalProps) -> Html {
                         source_account_id,
                         ledger_name: if ledger_name.as_ref().map(|l| l.is_empty()).unwrap_or(true) { None } else { ledger_name },
                         category_id,
+                        scenario_id,
+                        is_simulated: Some(is_simulated),
                     };
 
                     wasm_bindgen_futures::spawn_local(async move {
@@ -127,6 +134,8 @@ pub fn recurring_modal(props: &RecurringModalProps) -> Html {
                         source_account_id,
                         ledger_name: if ledger_name.as_ref().map(|l| l.is_empty()).unwrap_or(true) { None } else { ledger_name },
                         category_id,
+                        scenario_id,
+                        is_simulated: Some(is_simulated),
                     };
 
                     wasm_bindgen_futures::spawn_local(async move {
@@ -172,6 +181,14 @@ pub fn recurring_modal(props: &RecurringModalProps) -> Html {
     let default_ledger = props.transaction.as_ref().and_then(|t| t.ledger_name.clone()).unwrap_or_default();
     let default_include_stats = props.transaction.as_ref().map(|t| t.include_in_statistics).unwrap_or(true);
     let default_category = props.transaction.as_ref().and_then(|t| t.category_id);
+    let default_scenario = props.transaction.as_ref().and_then(|t| t.scenario_id);
+    let default_is_simulated = props.transaction.as_ref().map(|t| t.is_simulated).unwrap_or(false);
+
+    // Get scenarios list
+    let scenarios_list = match &*scenarios_state {
+        FetchState::Success(scenarios) => scenarios.clone(),
+        _ => vec![],
+    };
 
     // Get today's date for default start date
     let today = chrono::Local::now().format("%Y-%m-%d").to_string();
@@ -362,6 +379,38 @@ pub fn recurring_modal(props: &RecurringModalProps) -> Html {
                                 }
                             })}
                         </select>
+                    </div>
+
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text">{"Scenario (Optional)"}</span>
+                        </label>
+                        <select name="scenario_id" class="select select-bordered w-full" disabled={*is_submitting}>
+                            <option value="none" selected={default_scenario.is_none()}>{"No scenario"}</option>
+                            { for scenarios_list.iter().map(|scenario| {
+                                html! {
+                                    <option
+                                        value={scenario.id.to_string()}
+                                        selected={default_scenario == Some(scenario.id)}
+                                    >
+                                        {&scenario.name}
+                                    </option>
+                                }
+                            })}
+                        </select>
+                    </div>
+
+                    <div class="form-control">
+                        <label class="label cursor-pointer justify-start gap-2">
+                            <input
+                                type="checkbox"
+                                name="is_simulated"
+                                class="checkbox checkbox-info"
+                                checked={default_is_simulated}
+                                disabled={*is_submitting}
+                            />
+                            <span class="label-text">{"Simulated Transaction"}</span>
+                        </label>
                     </div>
 
                     <div class="form-control">

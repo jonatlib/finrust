@@ -89,6 +89,10 @@ pub struct UpdateRecurringTransactionRequest {
     pub ledger_name: Option<String>,
     /// Optional category ID
     pub category_id: Option<i32>,
+    /// Scenario ID for what-if analysis (optional)
+    pub scenario_id: Option<i32>,
+    /// Whether this is a simulated transaction (default: false)
+    pub is_simulated: Option<bool>,
 }
 
 /// Recurring transaction response model
@@ -107,6 +111,8 @@ pub struct RecurringTransactionResponse {
     pub ledger_name: Option<String>,
     pub category_id: Option<i32>,
     pub tags: Vec<TagInfo>,
+    pub scenario_id: Option<i32>,
+    pub is_simulated: bool,
 }
 
 impl From<recurring_transaction::Model> for RecurringTransactionResponse {
@@ -125,6 +131,8 @@ impl From<recurring_transaction::Model> for RecurringTransactionResponse {
             ledger_name: model.ledger_name,
             category_id: model.category_id,
             tags: Vec::new(), // Will be populated by with_tags method
+            scenario_id: model.scenario_id,
+            is_simulated: model.is_simulated,
         }
     }
 }
@@ -701,6 +709,12 @@ pub async fn update_recurring_transaction(
     }
     if let Some(category_id) = request.category_id {
         update_model.category_id = Set(Some(category_id));
+    }
+    if let Some(scenario_id) = request.scenario_id {
+        update_model.scenario_id = Set(Some(scenario_id));
+    }
+    if let Some(is_simulated) = request.is_simulated {
+        update_model.is_simulated = Set(is_simulated);
     }
 
     match update_model.update(&state.db).await {
