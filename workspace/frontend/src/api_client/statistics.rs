@@ -1,7 +1,7 @@
-use serde::{Deserialize, Serialize};
+use crate::api_client;
 use chrono::NaiveDate;
 use rust_decimal::Decimal;
-use crate::api_client;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AccountStatistics {
@@ -15,7 +15,7 @@ pub struct AccountStatistics {
     pub goal_reached_date: Option<NaiveDate>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct AccountStatisticsCollection {
     pub period: TimePeriod,
     pub statistics: Vec<AccountStatistics>,

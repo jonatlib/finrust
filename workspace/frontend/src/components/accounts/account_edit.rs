@@ -1,10 +1,11 @@
 use yew::prelude::*;
 use yew_router::prelude::*;
-use crate::api_client::account::{get_account_with_ignored, delete_account};
+use crate::api_client::account::{get_account_with_ignored, delete_account, AccountKind};
+use crate::api_client::statistics::get_account_statistics_with_ignored;
 use crate::common::fetch_hook::use_fetch_with_refetch;
 use crate::hooks::FetchState;
 use super::account_modal::AccountModal;
-use super::{AccountStats, AccountChart, AccountForecast};
+use super::{AccountStats, AccountChart, AccountForecast, GoalProgress};
 use crate::components::manual_states::ManualStatesAccountView;
 use crate::Route;
 
@@ -19,6 +20,7 @@ pub fn account_edit(props: &Props) -> Html {
     let navigator = use_navigator().unwrap();
 
     let (fetch_state, refetch) = use_fetch_with_refetch(move || get_account_with_ignored(account_id, true));
+    let (stats_state, _stats_refetch) = use_fetch_with_refetch(move || get_account_statistics_with_ignored(account_id, true));
     let show_edit_modal = use_state(|| false);
     let show_delete_confirm = use_state(|| false);
     let is_deleting = use_state(|| false);
@@ -241,6 +243,15 @@ pub fn account_edit(props: &Props) -> Html {
                                         </div>
                                     </div>
                                 </div>
+
+                                // Goal-specific section for Goal accounts
+                                {if account.account_kind == AccountKind::Goal {
+                                    html! {
+                                        <GoalProgress account={account.clone()} stats_state={(*stats_state).clone()} />
+                                    }
+                                } else {
+                                    html! {}
+                                }}
 
                                 <AccountStats account_id={account_id} />
 
