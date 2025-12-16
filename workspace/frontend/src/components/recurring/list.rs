@@ -5,6 +5,7 @@ use crate::api_client::recurring_transaction::get_recurring_transactions;
 use crate::api_client::category::get_categories;
 use crate::api_client::account::get_accounts;
 use crate::common::fetch_hook::use_fetch_with_refetch;
+use crate::components::common::pagination::Pagination;
 use crate::hooks::FetchState;
 use crate::router::Route;
 
@@ -36,10 +37,33 @@ pub struct RecurringListProps {
 
 #[function_component(RecurringList)]
 pub fn recurring_list(props: &RecurringListProps) -> Html {
+    let current_page = use_state(|| 1u64);
+    let items_per_page = 50u64;
+    let fetch_state = use_state(|| FetchState::Loading);
+
     let account_id = props.account_id;
-    let (fetch_state, _refetch) = use_fetch_with_refetch(move || {
-        get_recurring_transactions(None, Some(1000), account_id, None)
-    });
+
+    // Fetch data when page changes
+    {
+        let fetch_state = fetch_state.clone();
+        let page = *current_page;
+        use_effect_with(page, move |_| {
+            let fetch_state = fetch_state.clone();
+            fetch_state.set(FetchState::Loading);
+
+            wasm_bindgen_futures::spawn_local(async move {
+                match get_recurring_transactions(Some(page), Some(items_per_page), account_id, None).await {
+                    Ok(data) => {
+                        fetch_state.set(FetchState::Success(data));
+                    }
+                    Err(err) => {
+                        fetch_state.set(FetchState::Error(err));
+                    }
+                }
+            });
+            || ()
+        });
+    }
 
     let (categories_state, _) = use_fetch_with_refetch(get_categories);
     let (accounts_state, _) = use_fetch_with_refetch(get_accounts);
@@ -48,6 +72,13 @@ pub fn recurring_list(props: &RecurringListProps) -> Html {
     let sort_direction = use_state(|| SortDirection::Descending);
     let selected_category = use_state(|| None::<i32>);
     let selected_target_account = use_state(|| None::<i32>);
+
+    let on_page_change = {
+        let current_page = current_page.clone();
+        Callback::from(move |page: u64| {
+            current_page.set(page);
+        })
+    };
 
     // Build category ID -> name map
     let category_map: HashMap<i32, String> = match &*categories_state {
@@ -392,6 +423,31 @@ pub fn recurring_list(props: &RecurringListProps) -> Html {
             </div>
 
             {render_content()}
+
+            // Add pagination if we have data
+            {match &*fetch_state {
+                FetchState::Success(transactions) if !transactions.is_empty() => {
+                    // Estimate total items based on page and items retrieved
+                    let items_on_page = transactions.len() as u64;
+                    let estimated_total = if items_on_page < items_per_page {
+                        // Last page
+                        (*current_page - 1) * items_per_page + items_on_page
+                    } else {
+                        // Assume there might be more pages
+                        (*current_page) * items_per_page + 1
+                    };
+
+                    html! {
+                        <Pagination
+                            current_page={*current_page}
+                            total_items={estimated_total}
+                            items_per_page={items_per_page}
+                            on_page_change={on_page_change.clone()}
+                        />
+                    }
+                }
+                _ => html! {}
+            }}
         </div>
     }
 }

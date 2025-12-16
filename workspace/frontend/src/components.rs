@@ -1,3 +1,4 @@
+pub mod common;
 pub mod layout;
 pub mod dashboard;
 pub mod accounts;

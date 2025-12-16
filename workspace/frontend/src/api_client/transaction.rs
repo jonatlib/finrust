@@ -64,10 +64,25 @@ pub struct UpdateTransactionRequest {
     pub is_simulated: Option<bool>,
 }
 
-/// Get all transactions
-pub async fn get_transactions() -> Result<Vec<TransactionResponse>, String> {
-    log::trace!("Fetching all transactions");
-    let result = api_client::get::<Vec<TransactionResponse>>("/transactions").await;
+/// Get all transactions with optional pagination
+pub async fn get_transactions(page: Option<u64>, limit: Option<u64>) -> Result<Vec<TransactionResponse>, String> {
+    let mut url = "/transactions".to_string();
+    let mut params = vec![];
+
+    if let Some(p) = page {
+        params.push(format!("page={}", p));
+    }
+    if let Some(l) = limit {
+        params.push(format!("limit={}", l));
+    }
+
+    if !params.is_empty() {
+        url.push('?');
+        url.push_str(&params.join("&"));
+    }
+
+    log::trace!("Fetching transactions: {}", url);
+    let result = api_client::get::<Vec<TransactionResponse>>(&url).await;
     match &result {
         Ok(transactions) => log::info!("Fetched {} transactions", transactions.len()),
         Err(e) => log::error!("Failed to fetch transactions: {}", e),

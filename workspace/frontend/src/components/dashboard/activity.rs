@@ -6,7 +6,7 @@ use crate::hooks::FetchState;
 
 #[function_component(RecentActivity)]
 pub fn recent_activity() -> Html {
-    let (transactions_state, _) = use_fetch_with_refetch(get_transactions);
+    let (transactions_state, _) = use_fetch_with_refetch(|| get_transactions(None, None));
 
     let format_currency = |amount: Decimal| -> String {
         if amount >= Decimal::ZERO {

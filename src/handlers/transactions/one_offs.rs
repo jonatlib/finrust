@@ -1,17 +1,17 @@
 use crate::schemas::{ApiResponse, AppState, ErrorResponse};
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::Json,
 };
 use chrono::NaiveDate;
-use model::entities::{one_off_transaction, account};
+use model::entities::{account, one_off_transaction};
 use model::transaction::{Tag, Transaction, TransactionGenerator};
 use rust_decimal::Decimal;
-use sea_orm::{ActiveModelTrait, EntityTrait, Set, DbErr};
+use sea_orm::{ActiveModelTrait, DbErr, EntityTrait, PaginatorTrait, QueryOrder, Set};
 use serde::{Deserialize, Serialize};
-use tracing::{instrument, error, warn, info, debug, trace};
-use utoipa::ToSchema;
+use tracing::{debug, error, info, instrument, trace, warn};
+use utoipa::{IntoParams, ToSchema};
 
 /// Request body for creating a new one-off transaction
 #[derive(Debug, Deserialize, Serialize, ToSchema)]
@@ -134,7 +134,7 @@ impl TransactionResponse {
         // Use the get_tag_for_transaction method from the Transaction trait
         let tags = model.get_tag_for_transaction(db, true).await;
         let tag_infos: Vec<TagInfo> = tags.into_iter().map(TagInfo::from).collect();
-        
+
         let mut response = Self::from(model);
         response.tags = tag_infos;
         Ok(response)
@@ -237,7 +237,7 @@ pub async fn create_transaction(
         Ok(transaction_model) => {
             info!("Transaction created successfully with ID: {}, name: {}, amount: {}", 
                   transaction_model.id, transaction_model.name, transaction_model.amount);
-            
+
             match TransactionResponse::with_tags(transaction_model.clone(), &state.db).await {
                 Ok(transaction_response) => {
                     let response = ApiResponse {
@@ -294,11 +294,22 @@ pub async fn create_transaction(
     }
 }
 
+/// Query parameters for listing transactions
+#[derive(Debug, Deserialize, IntoParams)]
+#[serde(rename_all = "camelCase")]
+pub struct TransactionQuery {
+    /// Page number (default: 1)
+    pub page: Option<u64>,
+    /// Items per page (default: 50)
+    pub limit: Option<u64>,
+}
+
 /// Get all transactions
 #[utoipa::path(
     get,
     path = "/api/v1/transactions",
     tag = "transactions",
+    params(TransactionQuery),
     responses(
         (status = 200, description = "Transactions retrieved successfully", body = ApiResponse<Vec<TransactionResponse>>),
         (status = 500, description = "Internal server error", body = ErrorResponse)
@@ -306,12 +317,22 @@ pub async fn create_transaction(
 )]
 #[instrument]
 pub async fn get_transactions(
+    Query(query): Query<TransactionQuery>,
     State(state): State<AppState>,
 ) -> Result<Json<ApiResponse<Vec<TransactionResponse>>>, StatusCode> {
     trace!("Entering get_transactions function");
-    debug!("Fetching all transactions from database");
 
-    match one_off_transaction::Entity::find().all(&state.db).await {
+    let page = query.page.unwrap_or(1);
+    let limit = query.limit.unwrap_or(50);
+
+    debug!("Fetching transactions - page: {}, limit: {}", page, limit);
+
+    match one_off_transaction::Entity::find()
+        .order_by_desc(one_off_transaction::Column::Date)
+        .paginate(&state.db, limit)
+        .fetch_page(page - 1)
+        .await
+    {
         Ok(transactions) => {
             let transaction_count = transactions.len();
             debug!("Retrieved {} transactions from database", transaction_count);
@@ -435,7 +456,7 @@ pub async fn get_transaction(
         Ok(Some(transaction_model)) => {
             info!("Successfully retrieved transaction with ID: {}, name: {}", 
                   transaction_model.id, transaction_model.name);
-            
+
             match TransactionResponse::with_tags(transaction_model.clone(), &state.db).await {
                 Ok(transaction_response) => {
                     let response = ApiResponse {
@@ -579,7 +600,7 @@ pub async fn update_transaction(
         Ok(updated_transaction) => {
             info!("Transaction with ID {} updated successfully. Updated fields: {}", 
                   transaction_id, if updated_fields.is_empty() { "none".to_string() } else { updated_fields.join(", ") });
-            
+
             match TransactionResponse::with_tags(updated_transaction.clone(), &state.db).await {
                 Ok(transaction_response) => {
                     let response = ApiResponse {

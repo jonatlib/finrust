@@ -7,6 +7,7 @@ use crate::api_client::account::get_accounts;
 use crate::api_client::category::get_categories;
 use crate::api_client::scenario::get_scenarios;
 use crate::common::fetch_hook::use_fetch_with_refetch;
+use crate::components::common::pagination::Pagination;
 use crate::hooks::FetchState;
 use super::transaction_modal::TransactionModal;
 use crate::Route;
@@ -28,7 +29,54 @@ enum SortDirection {
 #[function_component(Transactions)]
 pub fn transactions() -> Html {
     log::trace!("Transactions component rendering");
-    let (fetch_state, refetch) = use_fetch_with_refetch(get_transactions);
+    let current_page = use_state(|| 1u64);
+    let items_per_page = 50u64;
+    let fetch_state = use_state(|| FetchState::Loading);
+
+    // Fetch data when page changes
+    {
+        let fetch_state = fetch_state.clone();
+        let page = *current_page;
+        use_effect_with(page, move |_| {
+            let fetch_state = fetch_state.clone();
+            fetch_state.set(FetchState::Loading);
+
+            wasm_bindgen_futures::spawn_local(async move {
+                match get_transactions(Some(page), Some(items_per_page)).await {
+                    Ok(data) => {
+                        fetch_state.set(FetchState::Success(data));
+                    }
+                    Err(err) => {
+                        fetch_state.set(FetchState::Error(err));
+                    }
+                }
+            });
+            || ()
+        });
+    }
+
+    // Create a refetch callback for manual refresh (e.g., after creating a transaction)
+    let refetch = {
+        let fetch_state = fetch_state.clone();
+        let current_page = current_page.clone();
+        Callback::from(move |_| {
+            let fetch_state = fetch_state.clone();
+            let page = *current_page;
+            fetch_state.set(FetchState::Loading);
+
+            wasm_bindgen_futures::spawn_local(async move {
+                match get_transactions(Some(page), Some(items_per_page)).await {
+                    Ok(data) => {
+                        fetch_state.set(FetchState::Success(data));
+                    }
+                    Err(err) => {
+                        fetch_state.set(FetchState::Error(err));
+                    }
+                }
+            });
+        })
+    };
+
     let (accounts_state, _) = use_fetch_with_refetch(get_accounts);
     let (categories_state, _) = use_fetch_with_refetch(get_categories);
     let (scenarios_state, _) = use_fetch_with_refetch(get_scenarios);
@@ -39,6 +87,13 @@ pub fn transactions() -> Html {
     let selected_category = use_state(|| None::<i32>);
     let selected_source_account = use_state(|| None::<i32>);
     let selected_target_account = use_state(|| None::<i32>);
+
+    let on_page_change = {
+        let current_page = current_page.clone();
+        Callback::from(move |page: u64| {
+            current_page.set(page);
+        })
+    };
 
     log::debug!("Transactions component state: loading={}, success={}, error={}",
         fetch_state.is_loading(), fetch_state.is_success(), fetch_state.is_error());
@@ -383,6 +438,31 @@ pub fn transactions() -> Html {
                     FetchState::NotStarted => html! { <></> },
                 }
             }
+
+            // Add pagination
+            {match &*fetch_state {
+                FetchState::Success(transactions) if !transactions.is_empty() => {
+                    // Estimate total items based on page and items retrieved
+                    let items_on_page = transactions.len() as u64;
+                    let estimated_total = if items_on_page < items_per_page {
+                        // Last page
+                        (*current_page - 1) * items_per_page + items_on_page
+                    } else {
+                        // Assume there might be more pages
+                        (*current_page) * items_per_page + 1
+                    };
+
+                    html! {
+                        <Pagination
+                            current_page={*current_page}
+                            total_items={estimated_total}
+                            items_per_page={items_per_page}
+                            on_page_change={on_page_change.clone()}
+                        />
+                    }
+                }
+                _ => html! {}
+            }}
         </>
     }
 }
