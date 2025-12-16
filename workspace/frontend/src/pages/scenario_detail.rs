@@ -47,6 +47,8 @@ pub fn scenario_detail_page(props: &ScenarioDetailPageProps) -> Html {
     let show_apply_modal = use_state(|| false);
     let show_transaction_modal = use_state(|| false);
     let show_recurring_modal = use_state(|| false);
+    let edit_transaction = use_state(|| None::<TransactionResponse>);
+    let edit_recurring = use_state(|| None::<RecurringTransactionResponse>);
     let is_applying = use_state(|| false);
 
     let scenario_transactions: Vec<TransactionResponse> = if let FetchState::Success(txs) = &*transactions_state {
@@ -144,15 +146,30 @@ pub fn scenario_detail_page(props: &ScenarioDetailPageProps) -> Html {
 
     let on_close_transaction_modal = {
         let show_transaction_modal = show_transaction_modal.clone();
-        Callback::from(move |_| show_transaction_modal.set(false))
+        let edit_transaction = edit_transaction.clone();
+        Callback::from(move |_| {
+            show_transaction_modal.set(false);
+            edit_transaction.set(None);
+        })
     };
 
     let on_transaction_success = {
         let transactions_refetch = transactions_refetch.clone();
         let show_transaction_modal = show_transaction_modal.clone();
+        let edit_transaction = edit_transaction.clone();
         Callback::from(move |_| {
             transactions_refetch.emit(());
             show_transaction_modal.set(false);
+            edit_transaction.set(None);
+        })
+    };
+
+    let on_edit_transaction = {
+        let show_transaction_modal = show_transaction_modal.clone();
+        let edit_transaction = edit_transaction.clone();
+        Callback::from(move |tx: TransactionResponse| {
+            edit_transaction.set(Some(tx));
+            show_transaction_modal.set(true);
         })
     };
 
@@ -163,15 +180,30 @@ pub fn scenario_detail_page(props: &ScenarioDetailPageProps) -> Html {
 
     let on_close_recurring_modal = {
         let show_recurring_modal = show_recurring_modal.clone();
-        Callback::from(move |_| show_recurring_modal.set(false))
+        let edit_recurring = edit_recurring.clone();
+        Callback::from(move |_| {
+            show_recurring_modal.set(false);
+            edit_recurring.set(None);
+        })
     };
 
     let on_recurring_success = {
         let recurring_refetch = recurring_refetch.clone();
         let show_recurring_modal = show_recurring_modal.clone();
+        let edit_recurring = edit_recurring.clone();
         Callback::from(move |_| {
             recurring_refetch.emit(());
             show_recurring_modal.set(false);
+            edit_recurring.set(None);
+        })
+    };
+
+    let on_edit_recurring = {
+        let show_recurring_modal = show_recurring_modal.clone();
+        let edit_recurring = edit_recurring.clone();
+        Callback::from(move |rec: RecurringTransactionResponse| {
+            edit_recurring.set(Some(rec));
+            show_recurring_modal.set(true);
         })
     };
 
@@ -245,6 +277,7 @@ pub fn scenario_detail_page(props: &ScenarioDetailPageProps) -> Html {
                                                         <th>{"Account"}</th>
                                                         <th>{"Type"}</th>
                                                         <th>{"Status"}</th>
+                                                        <th>{"Actions"}</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
@@ -254,6 +287,8 @@ pub fn scenario_detail_page(props: &ScenarioDetailPageProps) -> Html {
                                                             accounts.iter().find(|a| a.id == tx.target_account_id)
                                                                 .map(|a| a.name.clone()).unwrap_or_else(|| "Unknown".to_string())
                                                         } else { "Loading...".to_string() };
+                                                        let tx_clone = tx.clone();
+                                                        let on_edit = on_edit_transaction.clone();
                                                         html! {
                                                             <tr key={tx.id}>
                                                                 <td>{tx.date.format("%Y-%m-%d").to_string()}</td>
@@ -270,6 +305,14 @@ pub fn scenario_detail_page(props: &ScenarioDetailPageProps) -> Html {
                                                                         html! { <span class="badge badge-success">{"Real"}</span> }
                                                                     }}
                                                                 </td>
+                                                                <td>
+                                                                    <button
+                                                                        class="btn btn-sm btn-ghost"
+                                                                        onclick={Callback::from(move |_| on_edit.emit(tx_clone.clone()))}
+                                                                    >
+                                                                        {"Edit"}
+                                                                    </button>
+                                                                </td>
                                                             </tr>
                                                         }
                                                     })}
@@ -280,6 +323,8 @@ pub fn scenario_detail_page(props: &ScenarioDetailPageProps) -> Html {
                                                                 .map(|a| a.name.clone()).unwrap_or_else(|| "Unknown".to_string())
                                                         } else { "Loading...".to_string() };
                                                         let amount = rec.amount.parse::<f64>().unwrap_or(0.0);
+                                                        let rec_clone = rec.clone();
+                                                        let on_edit = on_edit_recurring.clone();
                                                         html! {
                                                             <tr key={format!("rec-{}", rec.id)}>
                                                                 <td>
@@ -298,6 +343,14 @@ pub fn scenario_detail_page(props: &ScenarioDetailPageProps) -> Html {
                                                                     } else {
                                                                         html! { <span class="badge badge-success">{"Real"}</span> }
                                                                     }}
+                                                                </td>
+                                                                <td>
+                                                                    <button
+                                                                        class="btn btn-sm btn-ghost"
+                                                                        onclick={Callback::from(move |_| on_edit.emit(rec_clone.clone()))}
+                                                                    >
+                                                                        {"Edit"}
+                                                                    </button>
                                                                 </td>
                                                             </tr>
                                                         }
@@ -371,7 +424,7 @@ pub fn scenario_detail_page(props: &ScenarioDetailPageProps) -> Html {
                         on_success={on_transaction_success}
                         accounts={accounts_list.clone()}
                         scenarios={vec![]}
-                        transaction={None}
+                        transaction={(*edit_transaction).clone()}
                         scenario_id={Some(id)}
                     />
                 }
@@ -384,7 +437,7 @@ pub fn scenario_detail_page(props: &ScenarioDetailPageProps) -> Html {
                         on_close={on_close_recurring_modal}
                         on_success={on_recurring_success}
                         accounts={accounts_list}
-                        transaction={None}
+                        transaction={(*edit_recurring).clone()}
                         scenario_id={Some(id)}
                     />
                 }
