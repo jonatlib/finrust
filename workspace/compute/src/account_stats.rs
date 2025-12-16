@@ -596,11 +596,34 @@ pub fn calculate_goal_reached_date(
 
     // Iterate through rows to find first date where balance >= target_amount
     for i in 0..forecast_df.height() {
-        let date_i64 = date_col
+        let date_any = date_col
             .get(i)
-            .map_err(|e| crate::error::ComputeError::Series(format!("Error getting date at row {i}: {e}")))?
-            .try_extract::<i64>()
-            .map_err(|e| crate::error::ComputeError::Series(format!("Error extracting date as i64 at row {i}: {e}")))?;
+            .map_err(|e| crate::error::ComputeError::Series(format!("Error getting date at row {i}: {e}")))?;
+
+        // Parse date - could be Date (i64), Int64, or String
+        let date = match date_any {
+            AnyValue::Date(days) => {
+                // Polars Date type stores dates as days since Unix epoch (1970-01-01)
+                let unix_epoch = NaiveDate::from_ymd_opt(1970, 1, 1).unwrap();
+                unix_epoch + chrono::Duration::days(days as i64)
+            }
+            AnyValue::Int64(days) => {
+                // Also handle as days since Unix epoch
+                let unix_epoch = NaiveDate::from_ymd_opt(1970, 1, 1).unwrap();
+                unix_epoch + chrono::Duration::days(days)
+            }
+            AnyValue::String(s) => {
+                NaiveDate::parse_from_str(s, "%Y-%m-%d")
+                    .map_err(|e| crate::error::ComputeError::Date(format!("Invalid date string '{s}' at row {i}: {e}")))?
+            }
+            AnyValue::StringOwned(s) => {
+                NaiveDate::parse_from_str(s.as_str(), "%Y-%m-%d")
+                    .map_err(|e| crate::error::ComputeError::Date(format!("Invalid date string '{s}' at row {i}: {e}")))?
+            }
+            other => {
+                return Err(crate::error::ComputeError::Series(format!("Unexpected date type at row {i}: {other:?}")));
+            }
+        };
 
         let bal_any = balance_col
             .get(i)
@@ -615,9 +638,6 @@ pub fn calculate_goal_reached_date(
 
         // Check if we've reached the goal
         if balance >= target_amount {
-            // Polars Date type stores dates as days since Unix epoch (1970-01-01)
-            let unix_epoch = NaiveDate::from_ymd_opt(1970, 1, 1).unwrap();
-            let date = unix_epoch + chrono::Duration::days(date_i64);
             return Ok(Some(date));
         }
     }
