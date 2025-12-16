@@ -604,6 +604,9 @@ pub fn calculate_goal_reached_date(
         .column("balance")
         .map_err(|e| crate::error::ComputeError::DataFrame(format!("Missing balance column: {e}")))?;
 
+    let today = chrono::Utc::now().date_naive();
+    eprintln!("DEBUG: Today's date: {}", today);
+
     // Iterate through rows to find first date where balance >= target_amount
     for i in 0..sorted_df.height() {
         let date_any = date_col
@@ -645,6 +648,11 @@ pub fn calculate_goal_reached_date(
         };
         let balance = Decimal::from_str(&bal_str)
             .map_err(|e| crate::error::ComputeError::Decimal(format!("Invalid balance '{bal_str}' at row {i}: {e}")))?;
+
+        // Skip dates in the past
+        if date < today {
+            continue;
+        }
 
         // Debug first few and around target
         if i < 5 || (balance >= target_amount - Decimal::from(5000) && balance <= target_amount + Decimal::from(5000)) {
