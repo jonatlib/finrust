@@ -29,23 +29,6 @@ pub async fn compute_account_statistics(
     let compute = default_compute(None);
     let account_id = account.id;
 
-    // Helper function to calculate goal reached date for Goal accounts
-    let calculate_goal_date = |start: NaiveDate, end: NaiveDate| async {
-        if account.account_kind == account::AccountKind::Goal {
-            if let Some(target_amount) = account.target_amount {
-                // Compute forecast for the period
-                match compute.compute_account_state(db, &accounts, start, end).await {
-                    Ok(df) => account_stats::calculate_goal_reached_date(&df, target_amount).ok().flatten(),
-                    Err(_) => None,
-                }
-            } else {
-                None
-            }
-        } else {
-            None
-        }
-    };
-
     let statistics = match period {
         TimePeriod::Year(year) => {
             let min_stats = account_stats::min_state_in_year(
@@ -54,32 +37,32 @@ pub async fn compute_account_statistics(
                 &accounts,
                 *year,
             )
-            .await
-            .unwrap_or_else(|_| vec![]);
+                .await
+                .unwrap_or_else(|_| vec![]);
             let max_stats = account_stats::max_state_in_year(
                 &compute as &dyn AccountStateCalculator,
                 db,
                 &accounts,
                 *year,
             )
-            .await
-            .unwrap_or_else(|_| vec![]);
+                .await
+                .unwrap_or_else(|_| vec![]);
             let avg_expense_stats = account_stats::average_expense_in_year(
                 &compute as &dyn AccountStateCalculator,
                 db,
                 &accounts,
                 *year,
             )
-            .await
-            .unwrap_or_else(|_| vec![]);
+                .await
+                .unwrap_or_else(|_| vec![]);
             let avg_income_stats = account_stats::average_income_in_year(
                 &compute as &dyn AccountStateCalculator,
                 db,
                 &accounts,
                 *year,
             )
-            .await
-            .unwrap_or_else(|_| vec![]);
+                .await
+                .unwrap_or_else(|_| vec![]);
             let upcoming_expenses_stats = account_stats::upcoming_expenses_until_year_end(
                 &compute as &dyn AccountStateCalculator,
                 db,
@@ -87,20 +70,31 @@ pub async fn compute_account_statistics(
                 *year,
                 chrono::Utc::now().date_naive(),
             )
-            .await
-            .unwrap_or_else(|_| vec![]);
+                .await
+                .unwrap_or_else(|_| vec![]);
             let end_of_period_stats = account_stats::end_of_year_state(
                 &compute as &dyn AccountStateCalculator,
                 db,
                 &accounts,
                 *year,
             )
-            .await
-            .unwrap_or_else(|_| vec![]);
+                .await
+                .unwrap_or_else(|_| vec![]);
 
-            let start_date = NaiveDate::from_ymd_opt(*year, 1, 1).unwrap();
-            let end_date = NaiveDate::from_ymd_opt(*year + 5, 12, 31).unwrap(); // 5-year forecast
-            let goal_reached_date = calculate_goal_date(start_date, end_date).await;
+            let goal_reached_date = if account.account_kind == account::AccountKind::Goal {
+                if let Some(target_amount) = account.target_amount {
+                    let start_date = NaiveDate::from_ymd_opt(*year, 1, 1).unwrap();
+                    let end_date = NaiveDate::from_ymd_opt(*year + 5, 12, 31).unwrap();
+                    match compute.compute_account_state(db, &accounts, start_date, end_date).await {
+                        Ok(df) => account_stats::calculate_goal_reached_date(&df, target_amount).ok().flatten(),
+                        Err(_) => None,
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
 
             AccountStatistics {
                 account_id,
@@ -114,7 +108,7 @@ pub async fn compute_account_statistics(
                 end_of_period_state: end_of_period_stats
                     .first()
                     .and_then(|s| s.end_of_period_state),
-                goal_reached_date,
+                goal_reached_date: goal_reached_date,
             }
         }
         TimePeriod::Month { year, month } => {
@@ -125,8 +119,8 @@ pub async fn compute_account_statistics(
                 *year,
                 *month,
             )
-            .await
-            .unwrap_or_else(|_| vec![]);
+                .await
+                .unwrap_or_else(|_| vec![]);
             let max_stats = account_stats::max_state_in_month(
                 &compute as &dyn AccountStateCalculator,
                 db,
@@ -134,8 +128,8 @@ pub async fn compute_account_statistics(
                 *year,
                 *month,
             )
-            .await
-            .unwrap_or_else(|_| vec![]);
+                .await
+                .unwrap_or_else(|_| vec![]);
             let avg_expense_stats = account_stats::average_expense_in_month(
                 &compute as &dyn AccountStateCalculator,
                 db,
@@ -143,8 +137,8 @@ pub async fn compute_account_statistics(
                 *year,
                 *month,
             )
-            .await
-            .unwrap_or_else(|_| vec![]);
+                .await
+                .unwrap_or_else(|_| vec![]);
             let avg_income_stats = account_stats::average_income_in_month(
                 &compute as &dyn AccountStateCalculator,
                 db,
@@ -152,8 +146,8 @@ pub async fn compute_account_statistics(
                 *year,
                 *month,
             )
-            .await
-            .unwrap_or_else(|_| vec![]);
+                .await
+                .unwrap_or_else(|_| vec![]);
             let upcoming_expenses_stats = account_stats::upcoming_expenses_until_month_end(
                 &compute as &dyn AccountStateCalculator,
                 db,
@@ -162,8 +156,8 @@ pub async fn compute_account_statistics(
                 *month,
                 chrono::Utc::now().date_naive(),
             )
-            .await
-            .unwrap_or_else(|_| vec![]);
+                .await
+                .unwrap_or_else(|_| vec![]);
             let end_of_period_stats = account_stats::end_of_month_state(
                 &compute as &dyn AccountStateCalculator,
                 db,
@@ -171,12 +165,23 @@ pub async fn compute_account_statistics(
                 *year,
                 *month,
             )
-            .await
-            .unwrap_or_else(|_| vec![]);
+                .await
+                .unwrap_or_else(|_| vec![]);
 
-            let start_date = NaiveDate::from_ymd_opt(*year, *month, 1).unwrap();
-            let end_date = NaiveDate::from_ymd_opt(*year + 5, 12, 31).unwrap(); // 5-year forecast
-            let goal_reached_date = calculate_goal_date(start_date, end_date).await;
+            let goal_reached_date = if account.account_kind == account::AccountKind::Goal {
+                if let Some(target_amount) = account.target_amount {
+                    let start_date = NaiveDate::from_ymd_opt(*year, *month, 1).unwrap();
+                    let end_date = NaiveDate::from_ymd_opt(*year + 5, 12, 31).unwrap();
+                    match compute.compute_account_state(db, &accounts, start_date, end_date).await {
+                        Ok(df) => account_stats::calculate_goal_reached_date(&df, target_amount).ok().flatten(),
+                        Err(_) => None,
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
 
             AccountStatistics {
                 account_id,
@@ -190,7 +195,7 @@ pub async fn compute_account_statistics(
                 end_of_period_state: end_of_period_stats
                     .first()
                     .and_then(|s| s.end_of_period_state),
-                goal_reached_date,
+                goal_reached_date: goal_reached_date,
             }
         }
         TimePeriod::DateRange { start, end: _ } => {
@@ -201,32 +206,32 @@ pub async fn compute_account_statistics(
                 &accounts,
                 year,
             )
-            .await
-            .unwrap_or_else(|_| vec![]);
+                .await
+                .unwrap_or_else(|_| vec![]);
             let max_stats = account_stats::max_state_in_year(
                 &compute as &dyn AccountStateCalculator,
                 db,
                 &accounts,
                 year,
             )
-            .await
-            .unwrap_or_else(|_| vec![]);
+                .await
+                .unwrap_or_else(|_| vec![]);
             let avg_expense_stats = account_stats::average_expense_in_year(
                 &compute as &dyn AccountStateCalculator,
                 db,
                 &accounts,
                 year,
             )
-            .await
-            .unwrap_or_else(|_| vec![]);
+                .await
+                .unwrap_or_else(|_| vec![]);
             let avg_income_stats = account_stats::average_income_in_year(
                 &compute as &dyn AccountStateCalculator,
                 db,
                 &accounts,
                 year,
             )
-            .await
-            .unwrap_or_else(|_| vec![]);
+                .await
+                .unwrap_or_else(|_| vec![]);
             let upcoming_expenses_stats = account_stats::upcoming_expenses_until_year_end(
                 &compute as &dyn AccountStateCalculator,
                 db,
@@ -234,20 +239,31 @@ pub async fn compute_account_statistics(
                 year,
                 chrono::Utc::now().date_naive(),
             )
-            .await
-            .unwrap_or_else(|_| vec![]);
+                .await
+                .unwrap_or_else(|_| vec![]);
             let end_of_period_stats = account_stats::end_of_year_state(
                 &compute as &dyn AccountStateCalculator,
                 db,
                 &accounts,
                 year,
             )
-            .await
-            .unwrap_or_else(|_| vec![]);
+                .await
+                .unwrap_or_else(|_| vec![]);
 
-            let start_date = *start;
-            let end_date = NaiveDate::from_ymd_opt(start.year() + 5, 12, 31).unwrap(); // 5-year forecast
-            let goal_reached_date = calculate_goal_date(start_date, end_date).await;
+            let goal_reached_date = if account.account_kind == account::AccountKind::Goal {
+                if let Some(target_amount) = account.target_amount {
+                    let start_date = *start;
+                    let end_date = NaiveDate::from_ymd_opt(start.year() + 5, 12, 31).unwrap();
+                    match compute.compute_account_state(db, &accounts, start_date, end_date).await {
+                        Ok(df) => account_stats::calculate_goal_reached_date(&df, target_amount).ok().flatten(),
+                        Err(_) => None,
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
 
             AccountStatistics {
                 account_id,
@@ -261,7 +277,7 @@ pub async fn compute_account_statistics(
                 end_of_period_state: end_of_period_stats
                     .first()
                     .and_then(|s| s.end_of_period_state),
-                goal_reached_date,
+                goal_reached_date: goal_reached_date,
             }
         }
     };
