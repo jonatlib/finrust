@@ -161,6 +161,8 @@ mod tests {
             ledger_name: None,
             linked_import_id: None,
             category_id: None,
+            is_simulated: false,
+            scenario_id: None,
         };
 
         // Date range includes the transaction date
@@ -212,6 +214,8 @@ mod tests {
             ledger_name: None,
             linked_import_id: None,
             category_id: None,
+            is_simulated: false,
+            scenario_id: None,
         };
 
         let today = NaiveDate::from_ymd_opt(2023, 1, 20).unwrap(); // Set today to Jan 20, 2023
@@ -246,6 +250,8 @@ mod tests {
             ledger_name: None,
             linked_import_id: None,
             category_id: None,
+            is_simulated: false,
+            scenario_id: None,
         };
 
         let transactions = transfer

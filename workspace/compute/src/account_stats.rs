@@ -587,11 +587,6 @@ pub fn calculate_goal_reached_date(
     forecast_df: &DataFrame,
     target_amount: Decimal,
 ) -> Result<Option<NaiveDate>> {
-    eprintln!("DEBUG: calculate_goal_reached_date called");
-    eprintln!("DEBUG: DataFrame shape: {} rows x {} cols", forecast_df.height(), forecast_df.width());
-    eprintln!("DEBUG: DataFrame columns: {:?}", forecast_df.get_column_names());
-    eprintln!("DEBUG: Target amount: {}", target_amount);
-
     // Sort by date to ensure chronological order
     let sorted_df = forecast_df
         .sort(["date"], Default::default())
@@ -605,7 +600,6 @@ pub fn calculate_goal_reached_date(
         .map_err(|e| crate::error::ComputeError::DataFrame(format!("Missing balance column: {e}")))?;
 
     let today = chrono::Utc::now().date_naive();
-    eprintln!("DEBUG: Today's date: {}", today);
 
     // Iterate through rows to find first date where balance >= target_amount
     for i in 0..sorted_df.height() {
@@ -654,14 +648,8 @@ pub fn calculate_goal_reached_date(
             continue;
         }
 
-        // Debug first few and around target
-        if i < 5 || (balance >= target_amount - Decimal::from(5000) && balance <= target_amount + Decimal::from(5000)) {
-            eprintln!("DEBUG row {}: date={}, balance={}, target={}", i, date, balance, target_amount);
-        }
-
         // Check if we've reached the goal
         if balance >= target_amount {
-            eprintln!("DEBUG: Goal reached at row {} on date {} with balance {}", i, date, balance);
             return Ok(Some(date));
         }
     }
@@ -717,5 +705,115 @@ mod tests {
         let mut ids = get_unique_account_ids(&df).unwrap();
         ids.sort();
         assert_eq!(ids, vec![7, 8]);
+    }
+
+    #[test]
+    fn test_calculate_goal_reached_date_future_date() {
+        // Create a DataFrame with dates in the future
+        let today = chrono::Utc::now().date_naive();
+        let future_dates = vec![
+            today + chrono::Duration::days(10),
+            today + chrono::Duration::days(20),
+            today + chrono::Duration::days(30),
+        ];
+
+        let date_strings: Vec<String> = future_dates.iter().map(|d| d.to_string()).collect();
+        let balances = vec!["40000", "50000", "60000"];
+
+        let df = df! {
+            "account_id" => &[1i32, 1, 1],
+            "date" => date_strings.as_slice(),
+            "balance" => balances.as_slice(),
+        }
+        .unwrap();
+
+        let target = Decimal::from(50000);
+        let result = calculate_goal_reached_date(&df, target).unwrap();
+
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), today + chrono::Duration::days(20));
+    }
+
+    #[test]
+    fn test_calculate_goal_reached_date_skips_past_dates() {
+        // Create a DataFrame with a mix of past and future dates
+        let today = chrono::Utc::now().date_naive();
+        let dates = vec![
+            today - chrono::Duration::days(30),  // Past date with balance >= target (should be skipped)
+            today - chrono::Duration::days(20),  // Past date
+            today + chrono::Duration::days(10),  // Future date below target
+            today + chrono::Duration::days(20),  // Future date reaching target
+        ];
+
+        let date_strings: Vec<String> = dates.iter().map(|d| d.to_string()).collect();
+        let balances = vec!["60000", "65000", "45000", "50000"];
+
+        let df = df! {
+            "account_id" => &[1i32, 1, 1, 1],
+            "date" => date_strings.as_slice(),
+            "balance" => balances.as_slice(),
+        }
+        .unwrap();
+
+        let target = Decimal::from(50000);
+        let result = calculate_goal_reached_date(&df, target).unwrap();
+
+        // Should return the future date, not the past date
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), today + chrono::Duration::days(20));
+    }
+
+    #[test]
+    fn test_calculate_goal_reached_date_not_reached() {
+        // Create a DataFrame where goal is never reached
+        let today = chrono::Utc::now().date_naive();
+        let future_dates = vec![
+            today + chrono::Duration::days(10),
+            today + chrono::Duration::days(20),
+            today + chrono::Duration::days(30),
+        ];
+
+        let date_strings: Vec<String> = future_dates.iter().map(|d| d.to_string()).collect();
+        let balances = vec!["30000", "35000", "40000"];
+
+        let df = df! {
+            "account_id" => &[1i32, 1, 1],
+            "date" => date_strings.as_slice(),
+            "balance" => balances.as_slice(),
+        }
+        .unwrap();
+
+        let target = Decimal::from(50000);
+        let result = calculate_goal_reached_date(&df, target).unwrap();
+
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_calculate_goal_reached_date_sorts_unordered_data() {
+        // Create a DataFrame with dates out of order
+        let today = chrono::Utc::now().date_naive();
+        let dates = vec![
+            today + chrono::Duration::days(30),  // Out of order
+            today + chrono::Duration::days(10),
+            today + chrono::Duration::days(20),  // This reaches the target
+        ];
+
+        let date_strings: Vec<String> = dates.iter().map(|d| d.to_string()).collect();
+        let balances = vec!["60000", "40000", "50000"];
+
+        let df = df! {
+            "account_id" => &[1i32, 1, 1],
+            "date" => date_strings.as_slice(),
+            "balance" => balances.as_slice(),
+        }
+        .unwrap();
+
+        let target = Decimal::from(50000);
+        let result = calculate_goal_reached_date(&df, target).unwrap();
+
+        // Should return day 20, not day 30, even though the data is unordered
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), today + chrono::Duration::days(20));
     }
 }

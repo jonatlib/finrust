@@ -9,14 +9,14 @@ use model::entities::{account, one_off_transaction, scenario, user};
 use rust_decimal::Decimal;
 use sea_orm::{ActiveModelTrait, Database, DatabaseConnection, Set};
 
-use crate::account::{BalanceCalculator, MergeMethod};
+use crate::BalanceCalculator;
+use crate::account::MergeMethod;
 use crate::error::Result;
 use crate::AccountStateCalculator;
 
 /// Helper to set up a test database with migrations
 async fn setup_db() -> Result<DatabaseConnection> {
     let db = Database::connect("sqlite::memory:").await?;
-    db.execute_unprepared("PRAGMA foreign_keys = ON;").await?;
     Migrator::up(&db, None).await?;
     Ok(db)
 }

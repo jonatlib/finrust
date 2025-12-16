@@ -250,6 +250,7 @@ mod tests {
             include_in_statistics: true,
             ledger_name: None,
             account_kind: AccountKind::RealAccount,
+            target_amount: None,
         };
         let account2 = account::Model {
             id: 2,
@@ -260,6 +261,7 @@ mod tests {
             include_in_statistics: true,
             ledger_name: None,
             account_kind: AccountKind::RealAccount,
+            target_amount: None,
         };
 
         let date1 = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap();

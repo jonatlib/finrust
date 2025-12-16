@@ -469,6 +469,8 @@ mod tests {
             target_account_id: 1,
             source_name: Some("Employer".to_string()),
             ledger_name: None,
+            is_simulated: false,
+            scenario_id: None,
         };
 
         // Date range includes a monthly occurrence
@@ -513,6 +515,8 @@ mod tests {
             target_account_id: 1,
             source_name: Some("Employer".to_string()),
             ledger_name: None,
+            is_simulated: false,
+            scenario_id: None,
         };
 
         // Generate transactions for a 3-month period

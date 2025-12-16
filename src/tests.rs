@@ -287,6 +287,7 @@ mod integration_tests {
             include_in_statistics: Some(true),
             ledger_name: Some("test_ledger".to_string()),
             account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
+            target_amount: None,
         };
 
         // Send POST request to create account
@@ -331,6 +332,7 @@ mod integration_tests {
             include_in_statistics: Some(false),
             ledger_name: None,
             account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
+            target_amount: None,
         };
 
         let create_response = server
@@ -371,6 +373,7 @@ mod integration_tests {
             include_in_statistics: Some(true),
             ledger_name: Some("main_account".to_string()),
             account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
+            target_amount: None,
         };
 
         // Send POST request to create account
@@ -410,6 +413,8 @@ mod integration_tests {
             ledger_name: Some("test_ledger".to_string()),
             linked_import_id: None,
             category_id: None,
+            is_simulated: false,
+            scenario_id: None,
         };
 
         // Send POST request to create transaction
@@ -468,6 +473,8 @@ mod integration_tests {
             ledger_name: Some("test_ledger".to_string()),
             linked_import_id: None,
             category_id: None,
+            is_simulated: false,
+            scenario_id: None,
         };
 
         // Send POST request to create transaction
@@ -612,6 +619,7 @@ mod integration_tests {
             include_in_statistics: Some(false),
             ledger_name: Some("updated_ledger".to_string()),
             account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
+            target_amount: None,
         };
 
         let response = server
@@ -719,6 +727,7 @@ mod integration_tests {
             include_in_statistics: None,
             ledger_name: None,
             account_kind: None,
+            target_amount: None,
         };
 
         let response = server
@@ -973,6 +982,7 @@ mod integration_tests {
             start_date: NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
             end_date: NaiveDate::from_ymd_opt(2025, 12, 31).unwrap(),
             include_ignored: true,
+            scenario_id: None,
         };
 
         // Test individual account timeseries first

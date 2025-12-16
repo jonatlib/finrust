@@ -621,6 +621,8 @@ mod tests {
             source_account_id: None,
             ledger_name: None,
             category_id: None,
+            is_simulated: false,
+            scenario_id: None,
         };
 
         // Date range includes a monthly occurrence
@@ -666,6 +668,8 @@ mod tests {
             source_account_id: None,
             ledger_name: None,
             category_id: None,
+            is_simulated: false,
+            scenario_id: None,
         };
 
         // Generate transactions for a 3-month period
@@ -727,6 +731,8 @@ mod tests {
             source_account_id: Some(1),
             ledger_name: None,
             category_id: None,
+            is_simulated: false,
+            scenario_id: None,
         };
 
         // Generate transactions for a 2-month period
@@ -799,6 +805,8 @@ mod tests {
             source_account_id: None,
             ledger_name: None,
             category_id: None,
+            is_simulated: false,
+            scenario_id: None,
         };
 
         // Generate transactions for a 3-month period without any instances in the database
