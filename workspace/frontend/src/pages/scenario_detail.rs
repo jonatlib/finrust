@@ -2,6 +2,7 @@ use yew::prelude::*;
 use yew_router::prelude::*;
 use crate::components::layout::layout::Layout;
 use crate::components::transactions::TransactionModal;
+use crate::components::recurring::RecurringModal;
 use crate::components::scenarios::ScenarioModal;
 use crate::router::Route;
 use crate::api_client::scenario::{get_scenario, delete_scenario, apply_scenario};
@@ -45,6 +46,7 @@ pub fn scenario_detail_page(props: &ScenarioDetailPageProps) -> Html {
     let show_edit_modal = use_state(|| false);
     let show_apply_modal = use_state(|| false);
     let show_transaction_modal = use_state(|| false);
+    let show_recurring_modal = use_state(|| false);
     let is_applying = use_state(|| false);
 
     let scenario_transactions: Vec<TransactionResponse> = if let FetchState::Success(txs) = &*transactions_state {
@@ -154,6 +156,25 @@ pub fn scenario_detail_page(props: &ScenarioDetailPageProps) -> Html {
         })
     };
 
+    let on_add_recurring = {
+        let show_recurring_modal = show_recurring_modal.clone();
+        Callback::from(move |_| show_recurring_modal.set(true))
+    };
+
+    let on_close_recurring_modal = {
+        let show_recurring_modal = show_recurring_modal.clone();
+        Callback::from(move |_| show_recurring_modal.set(false))
+    };
+
+    let on_recurring_success = {
+        let recurring_refetch = recurring_refetch.clone();
+        let show_recurring_modal = show_recurring_modal.clone();
+        Callback::from(move |_| {
+            recurring_refetch.emit(());
+            show_recurring_modal.set(false);
+        })
+    };
+
     let render_scenario_details = || -> Html {
         match &*scenario_state {
             FetchState::Success(scenario) => {
@@ -195,9 +216,14 @@ pub fn scenario_detail_page(props: &ScenarioDetailPageProps) -> Html {
                             <div class="card-body">
                                 <div class="flex justify-between items-center mb-4">
                                     <h3 class="text-xl font-bold">{"Scenario Transactions"}</h3>
-                                    <button class="btn btn-primary btn-sm" onclick={on_add_transaction}>
-                                        <i class="fas fa-plus"></i>{" Add Transaction"}
-                                    </button>
+                                    <div class="flex gap-2">
+                                        <button class="btn btn-primary btn-sm" onclick={on_add_transaction}>
+                                            <i class="fas fa-plus"></i>{" Add One-off"}
+                                        </button>
+                                        <button class="btn btn-primary btn-sm btn-outline" onclick={on_add_recurring}>
+                                            <i class="fas fa-sync-alt"></i>{" Add Recurring"}
+                                        </button>
+                                    </div>
                                 </div>
                                 {if scenario_transactions.is_empty() && scenario_recurring.is_empty() {
                                     html! {
@@ -343,6 +369,20 @@ pub fn scenario_detail_page(props: &ScenarioDetailPageProps) -> Html {
                         show={*show_transaction_modal}
                         on_close={on_close_transaction_modal}
                         on_success={on_transaction_success}
+                        accounts={accounts_list.clone()}
+                        scenarios={vec![]}
+                        transaction={None}
+                        scenario_id={Some(id)}
+                    />
+                }
+            } else { html! { <></> }}}
+
+            {if *show_recurring_modal {
+                html! {
+                    <RecurringModal
+                        show={*show_recurring_modal}
+                        on_close={on_close_recurring_modal}
+                        on_success={on_recurring_success}
                         accounts={accounts_list}
                         transaction={None}
                         scenario_id={Some(id)}

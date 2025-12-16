@@ -3,7 +3,7 @@ use crate::api_client::recurring_transaction::{
     RecurringTransactionResponse, CreateRecurringTransactionRequest,
     UpdateRecurringTransactionRequest, create_recurring_transaction, update_recurring_transaction,
 };
-use crate::api_client::account::get_accounts;
+use crate::api_client::account::AccountResponse;
 use crate::api_client::category::get_categories;
 use crate::api_client::scenario::get_scenarios;
 use crate::common::fetch_hook::use_fetch_with_refetch;
@@ -14,8 +14,14 @@ pub struct RecurringModalProps {
     pub show: bool,
     pub on_close: Callback<()>,
     pub on_success: Callback<()>,
+    /// List of accounts to display
+    pub accounts: Vec<AccountResponse>,
     /// If provided, the modal is in edit mode with this recurring transaction
+    #[prop_or_default]
     pub transaction: Option<RecurringTransactionResponse>,
+    /// If provided, recurring transaction will be linked to this scenario and marked as simulated
+    #[prop_or_default]
+    pub scenario_id: Option<i32>,
 }
 
 #[function_component(RecurringModal)]
@@ -24,13 +30,15 @@ pub fn recurring_modal(props: &RecurringModalProps) -> Html {
     let is_submitting = use_state(|| false);
     let error_message = use_state(|| None::<String>);
 
-    // Fetch accounts, categories and scenarios for dropdowns
-    let (accounts_state, _) = use_fetch_with_refetch(get_accounts);
+    // Fetch categories and scenarios for dropdowns
     let (categories_state, _) = use_fetch_with_refetch(get_categories);
     let (scenarios_state, _) = use_fetch_with_refetch(get_scenarios);
 
     let is_edit_mode = props.transaction.is_some();
     let title = if is_edit_mode { "Edit Recurring Transaction" } else { "Add Recurring Transaction" };
+
+    // Use accounts from props
+    let accounts_list = props.accounts.clone();
 
     // Get categories list
     let categories_list = match &*categories_state {
@@ -181,8 +189,10 @@ pub fn recurring_modal(props: &RecurringModalProps) -> Html {
     let default_ledger = props.transaction.as_ref().and_then(|t| t.ledger_name.clone()).unwrap_or_default();
     let default_include_stats = props.transaction.as_ref().map(|t| t.include_in_statistics).unwrap_or(true);
     let default_category = props.transaction.as_ref().and_then(|t| t.category_id);
-    let default_scenario = props.transaction.as_ref().and_then(|t| t.scenario_id);
-    let default_is_simulated = props.transaction.as_ref().map(|t| t.is_simulated).unwrap_or(false);
+    // Use scenario_id prop if provided (creating from scenario detail page), otherwise use transaction's scenario
+    let default_scenario = props.scenario_id.or_else(|| props.transaction.as_ref().and_then(|t| t.scenario_id));
+    // If scenario_id prop is provided, default to simulated
+    let default_is_simulated = props.scenario_id.is_some() || props.transaction.as_ref().map(|t| t.is_simulated).unwrap_or(false);
 
     // Get scenarios list
     let scenarios_list = match &*scenarios_state {
@@ -293,11 +303,11 @@ pub fn recurring_modal(props: &RecurringModalProps) -> Html {
                     <div class="grid grid-cols-2 gap-4">
                         <div class="form-control">
                             <label class="label"><span class="label-text">{"Target Account"}</span></label>
-                            {match &*accounts_state {
-                                FetchState::Success(accounts) => html! {
+                            {if !accounts_list.is_empty() {
+                                html! {
                                     <select name="target_account_id" class="select select-bordered w-full" required={true} disabled={*is_submitting}>
                                         <option value="" selected={default_target_account == 0}>{"Select an account"}</option>
-                                        {for accounts.iter().map(|account| html! {
+                                        {for accounts_list.iter().map(|account| html! {
                                             <option
                                                 value={account.id.to_string()}
                                                 selected={default_target_account == account.id}
@@ -306,22 +316,13 @@ pub fn recurring_modal(props: &RecurringModalProps) -> Html {
                                             </option>
                                         })}
                                     </select>
-                                },
-                                FetchState::Loading => html! {
+                                }
+                            } else {
+                                html! {
                                     <select class="select select-bordered w-full" disabled={true}>
-                                        <option>{"Loading accounts..."}</option>
+                                        <option>{"No accounts available"}</option>
                                     </select>
-                                },
-                                FetchState::Error(_) => html! {
-                                    <select class="select select-bordered w-full" disabled={true}>
-                                        <option>{"Error loading accounts"}</option>
-                                    </select>
-                                },
-                                FetchState::NotStarted => html! {
-                                    <select class="select select-bordered w-full" disabled={true}>
-                                        <option>{"..."}</option>
-                                    </select>
-                                },
+                                }
                             }}
                         </div>
                         <div class="form-control">
@@ -329,11 +330,11 @@ pub fn recurring_modal(props: &RecurringModalProps) -> Html {
                                 <span class="label-text">{"Source Account (Optional)"}</span>
                                 <span class="label-text-alt text-xs">{"(for transfers)"}</span>
                             </label>
-                            {match &*accounts_state {
-                                FetchState::Success(accounts) => html! {
+                            {if !accounts_list.is_empty() {
+                                html! {
                                     <select name="source_account_id" class="select select-bordered w-full" disabled={*is_submitting}>
                                         <option value="" selected={default_source_account.is_none()}>{"None"}</option>
-                                        {for accounts.iter().map(|account| html! {
+                                        {for accounts_list.iter().map(|account| html! {
                                             <option
                                                 value={account.id.to_string()}
                                                 selected={default_source_account == Some(account.id)}
@@ -342,22 +343,13 @@ pub fn recurring_modal(props: &RecurringModalProps) -> Html {
                                             </option>
                                         })}
                                     </select>
-                                },
-                                FetchState::Loading => html! {
+                                }
+                            } else {
+                                html! {
                                     <select class="select select-bordered w-full" disabled={true}>
-                                        <option>{"Loading accounts..."}</option>
+                                        <option>{"No accounts available"}</option>
                                     </select>
-                                },
-                                FetchState::Error(_) => html! {
-                                    <select class="select select-bordered w-full" disabled={true}>
-                                        <option>{"Error loading accounts"}</option>
-                                    </select>
-                                },
-                                FetchState::NotStarted => html! {
-                                    <select class="select select-bordered w-full" disabled={true}>
-                                        <option>{"..."}</option>
-                                    </select>
-                                },
+                                }
                             }}
                         </div>
                     </div>

@@ -6,7 +6,10 @@ use crate::api_client::recurring_transaction::{
     create_recurring_instance, get_recurring_transaction,
     CreateRecurringInstanceRequest, RecurringTransactionResponse,
 };
+use crate::api_client::account::{get_accounts_with_ignored, AccountResponse};
+use crate::common::fetch_hook::use_fetch_with_refetch;
 use crate::common::toast::ToastContext;
+use crate::hooks::FetchState;
 use yew::prelude::*;
 
 #[derive(Properties, PartialEq)]
@@ -23,6 +26,14 @@ pub fn recurring(props: &RecurringProps) -> Html {
     let edit_transaction = use_state(|| None::<RecurringTransactionResponse>);
     let instance_transaction = use_state(|| None::<RecurringTransactionResponse>);
     let toast_ctx = use_context::<ToastContext>().expect("ToastContext not found");
+
+    // Fetch accounts for the modal
+    let (accounts_state, _) = use_fetch_with_refetch(|| get_accounts_with_ignored(true));
+
+    let accounts_list = match &*accounts_state {
+        FetchState::Success(accounts) => accounts.clone(),
+        _ => vec![],
+    };
 
     let on_edit = {
         let show_modal = show_modal.clone();
@@ -183,6 +194,7 @@ pub fn recurring(props: &RecurringProps) -> Html {
                 show={*show_modal}
                 on_close={on_modal_close}
                 on_success={on_modal_success}
+                accounts={accounts_list}
                 transaction={(*edit_transaction).clone()}
             />
             {if let Some(transaction) = (*instance_transaction).clone() {
