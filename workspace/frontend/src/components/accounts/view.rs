@@ -99,7 +99,7 @@ pub fn accounts() -> Html {
                                 <div class="space-y-6">
                                     {
                                         // Render groups in the specified order
-                                        [AccountKind::RealAccount, AccountKind::Savings, AccountKind::Investment, AccountKind::Debt, AccountKind::Other]
+                                        [AccountKind::RealAccount, AccountKind::Savings, AccountKind::Investment, AccountKind::Debt, AccountKind::Other, AccountKind::Goal]
                                             .iter()
                                             .filter_map(|kind| {
                                                 groups.get(kind).map(|accounts| {
