@@ -587,15 +587,25 @@ pub fn calculate_goal_reached_date(
     forecast_df: &DataFrame,
     target_amount: Decimal,
 ) -> Result<Option<NaiveDate>> {
-    let date_col = forecast_df
+    eprintln!("DEBUG: calculate_goal_reached_date called");
+    eprintln!("DEBUG: DataFrame shape: {} rows x {} cols", forecast_df.height(), forecast_df.width());
+    eprintln!("DEBUG: DataFrame columns: {:?}", forecast_df.get_column_names());
+    eprintln!("DEBUG: Target amount: {}", target_amount);
+
+    // Sort by date to ensure chronological order
+    let sorted_df = forecast_df
+        .sort(["date"], Default::default())
+        .map_err(|e| crate::error::ComputeError::DataFrame(format!("Failed to sort by date: {e}")))?;
+
+    let date_col = sorted_df
         .column("date")
         .map_err(|e| crate::error::ComputeError::DataFrame(format!("Missing date column: {e}")))?;
-    let balance_col = forecast_df
+    let balance_col = sorted_df
         .column("balance")
         .map_err(|e| crate::error::ComputeError::DataFrame(format!("Missing balance column: {e}")))?;
 
     // Iterate through rows to find first date where balance >= target_amount
-    for i in 0..forecast_df.height() {
+    for i in 0..sorted_df.height() {
         let date_any = date_col
             .get(i)
             .map_err(|e| crate::error::ComputeError::Series(format!("Error getting date at row {i}: {e}")))?;
@@ -636,8 +646,14 @@ pub fn calculate_goal_reached_date(
         let balance = Decimal::from_str(&bal_str)
             .map_err(|e| crate::error::ComputeError::Decimal(format!("Invalid balance '{bal_str}' at row {i}: {e}")))?;
 
+        // Debug first few and around target
+        if i < 5 || (balance >= target_amount - Decimal::from(5000) && balance <= target_amount + Decimal::from(5000)) {
+            eprintln!("DEBUG row {}: date={}, balance={}, target={}", i, date, balance, target_amount);
+        }
+
         // Check if we've reached the goal
         if balance >= target_amount {
+            eprintln!("DEBUG: Goal reached at row {} on date {} with balance {}", i, date, balance);
             return Ok(Some(date));
         }
     }
