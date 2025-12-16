@@ -7,6 +7,7 @@ use crate::router::Route;
 use crate::api_client::scenario::{get_scenario, delete_scenario, apply_scenario};
 use crate::api_client::account::{get_accounts_with_ignored, AccountResponse};
 use crate::api_client::transaction::{get_transactions, TransactionResponse};
+use crate::api_client::recurring_transaction::{get_recurring_transactions, RecurringTransactionResponse};
 use crate::api_client::timeseries::get_all_accounts_timeseries_with_scenario;
 use crate::common::fetch_hook::use_fetch_with_refetch;
 use crate::common::toast::ToastContext;
@@ -39,6 +40,7 @@ pub fn scenario_detail_page(props: &ScenarioDetailPageProps) -> Html {
     let (scenario_state, scenario_refetch) = use_fetch_with_refetch(move || get_scenario(id));
     let (accounts_state, _) = use_fetch_with_refetch(|| get_accounts_with_ignored(true));
     let (transactions_state, transactions_refetch) = use_fetch_with_refetch(|| get_transactions(None, None));
+    let (recurring_state, recurring_refetch) = use_fetch_with_refetch(|| get_recurring_transactions(None, Some(1000), None, None));
 
     let show_edit_modal = use_state(|| false);
     let show_apply_modal = use_state(|| false);
@@ -47,6 +49,12 @@ pub fn scenario_detail_page(props: &ScenarioDetailPageProps) -> Html {
 
     let scenario_transactions: Vec<TransactionResponse> = if let FetchState::Success(txs) = &*transactions_state {
         txs.iter().filter(|t| t.scenario_id == Some(id)).cloned().collect()
+    } else {
+        vec![]
+    };
+
+    let scenario_recurring: Vec<RecurringTransactionResponse> = if let FetchState::Success(recurring) = &*recurring_state {
+        recurring.iter().filter(|r| r.scenario_id == Some(id)).cloned().collect()
     } else {
         vec![]
     };
@@ -191,7 +199,7 @@ pub fn scenario_detail_page(props: &ScenarioDetailPageProps) -> Html {
                                         <i class="fas fa-plus"></i>{" Add Transaction"}
                                     </button>
                                 </div>
-                                {if scenario_transactions.is_empty() {
+                                {if scenario_transactions.is_empty() && scenario_recurring.is_empty() {
                                     html! {
                                         <div class="text-center py-8 text-base-content/50">
                                             <i class="fas fa-file-invoice text-4xl mb-4 opacity-50"></i>
@@ -205,14 +213,16 @@ pub fn scenario_detail_page(props: &ScenarioDetailPageProps) -> Html {
                                             <table class="table table-zebra w-full">
                                                 <thead>
                                                     <tr>
-                                                        <th>{"Date"}</th>
+                                                        <th>{"Date/Period"}</th>
                                                         <th>{"Name"}</th>
                                                         <th>{"Amount"}</th>
                                                         <th>{"Account"}</th>
+                                                        <th>{"Type"}</th>
                                                         <th>{"Status"}</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
+                                                    // Show one-off transactions
                                                     {for scenario_transactions.iter().map(|tx| {
                                                         let account_name = if let FetchState::Success(accounts) = &*accounts_state {
                                                             accounts.iter().find(|a| a.id == tx.target_account_id)
@@ -226,8 +236,38 @@ pub fn scenario_detail_page(props: &ScenarioDetailPageProps) -> Html {
                                                                     {format!("{:.2}", tx.amount)}
                                                                 </td>
                                                                 <td>{account_name}</td>
+                                                                <td><span class="badge badge-sm">{"One-off"}</span></td>
                                                                 <td>
                                                                     {if tx.is_simulated {
+                                                                        html! { <span class="badge badge-info">{"Simulated"}</span> }
+                                                                    } else {
+                                                                        html! { <span class="badge badge-success">{"Real"}</span> }
+                                                                    }}
+                                                                </td>
+                                                            </tr>
+                                                        }
+                                                    })}
+                                                    // Show recurring transactions
+                                                    {for scenario_recurring.iter().map(|rec| {
+                                                        let account_name = if let FetchState::Success(accounts) = &*accounts_state {
+                                                            accounts.iter().find(|a| a.id == rec.target_account_id)
+                                                                .map(|a| a.name.clone()).unwrap_or_else(|| "Unknown".to_string())
+                                                        } else { "Loading...".to_string() };
+                                                        let amount = rec.amount.parse::<f64>().unwrap_or(0.0);
+                                                        html! {
+                                                            <tr key={format!("rec-{}", rec.id)}>
+                                                                <td>
+                                                                    <div>{format!("Starts: {}", rec.start_date)}</div>
+                                                                    <div class="text-xs opacity-70">{&rec.period}</div>
+                                                                </td>
+                                                                <td>{&rec.name}</td>
+                                                                <td class={if amount < 0.0 { "text-error" } else { "text-success" }}>
+                                                                    {format!("{:.2}", amount)}
+                                                                </td>
+                                                                <td>{account_name}</td>
+                                                                <td><span class="badge badge-sm badge-primary">{"Recurring"}</span></td>
+                                                                <td>
+                                                                    {if rec.is_simulated {
                                                                         html! { <span class="badge badge-info">{"Simulated"}</span> }
                                                                     } else {
                                                                         html! { <span class="badge badge-success">{"Real"}</span> }
