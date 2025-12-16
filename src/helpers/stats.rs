@@ -1,5 +1,5 @@
 use crate::schemas::StatisticsQuery;
-use chrono::Datelike;
+use chrono::{Datelike, NaiveDate};
 use common::{AccountStatistics, TimePeriod};
 use compute::{account::AccountStateCalculator, account_stats, default_compute};
 use model::entities::account;
@@ -28,6 +28,23 @@ pub async fn compute_account_statistics(
     let accounts = vec![account.clone()];
     let compute = default_compute(None);
     let account_id = account.id;
+
+    // Helper function to calculate goal reached date for Goal accounts
+    let calculate_goal_date = |start: NaiveDate, end: NaiveDate| async {
+        if account.account_kind == account::AccountKind::Goal {
+            if let Some(target_amount) = account.target_amount {
+                // Compute forecast for the period
+                match compute.compute_account_state(db, &accounts, start, end).await {
+                    Ok(df) => account_stats::calculate_goal_reached_date(&df, target_amount).ok().flatten(),
+                    Err(_) => None,
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    };
 
     let statistics = match period {
         TimePeriod::Year(year) => {
@@ -81,6 +98,10 @@ pub async fn compute_account_statistics(
             .await
             .unwrap_or_else(|_| vec![]);
 
+            let start_date = NaiveDate::from_ymd_opt(*year, 1, 1).unwrap();
+            let end_date = NaiveDate::from_ymd_opt(*year + 5, 12, 31).unwrap(); // 5-year forecast
+            let goal_reached_date = calculate_goal_date(start_date, end_date).await;
+
             AccountStatistics {
                 account_id,
                 min_state: min_stats.first().and_then(|s| s.min_state),
@@ -93,6 +114,7 @@ pub async fn compute_account_statistics(
                 end_of_period_state: end_of_period_stats
                     .first()
                     .and_then(|s| s.end_of_period_state),
+                goal_reached_date,
             }
         }
         TimePeriod::Month { year, month } => {
@@ -152,6 +174,10 @@ pub async fn compute_account_statistics(
             .await
             .unwrap_or_else(|_| vec![]);
 
+            let start_date = NaiveDate::from_ymd_opt(*year, *month, 1).unwrap();
+            let end_date = NaiveDate::from_ymd_opt(*year + 5, 12, 31).unwrap(); // 5-year forecast
+            let goal_reached_date = calculate_goal_date(start_date, end_date).await;
+
             AccountStatistics {
                 account_id,
                 min_state: min_stats.first().and_then(|s| s.min_state),
@@ -164,6 +190,7 @@ pub async fn compute_account_statistics(
                 end_of_period_state: end_of_period_stats
                     .first()
                     .and_then(|s| s.end_of_period_state),
+                goal_reached_date,
             }
         }
         TimePeriod::DateRange { start, end: _ } => {
@@ -218,6 +245,10 @@ pub async fn compute_account_statistics(
             .await
             .unwrap_or_else(|_| vec![]);
 
+            let start_date = *start;
+            let end_date = NaiveDate::from_ymd_opt(start.year() + 5, 12, 31).unwrap(); // 5-year forecast
+            let goal_reached_date = calculate_goal_date(start_date, end_date).await;
+
             AccountStatistics {
                 account_id,
                 min_state: min_stats.first().and_then(|s| s.min_state),
@@ -230,6 +261,7 @@ pub async fn compute_account_statistics(
                 end_of_period_state: end_of_period_stats
                     .first()
                     .and_then(|s| s.end_of_period_state),
+                goal_reached_date,
             }
         }
     };

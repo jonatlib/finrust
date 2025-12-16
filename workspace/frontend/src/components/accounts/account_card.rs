@@ -119,9 +119,24 @@ pub fn account_card(props: &Props) -> Html {
                                                                 } else {
                                                                     let remaining = target_num - current_balance;
                                                                     html! {
-                                                                        <div class="text-xs text-gray-500 text-center mt-2">
-                                                                            {format!("{:.2} {} to go", remaining, &account.currency_code)}
-                                                                        </div>
+                                                                        <>
+                                                                            <div class="text-xs text-gray-500 text-center mt-2">
+                                                                                {format!("{:.2} {} to go", remaining, &account.currency_code)}
+                                                                            </div>
+                                                                            {if let Some(goal_date) = &s.goal_reached_date {
+                                                                                html! {
+                                                                                    <div class="text-xs text-primary text-center mt-1 font-semibold">
+                                                                                        {"Est. completion: "}{goal_date.format("%Y-%m-%d").to_string()}
+                                                                                    </div>
+                                                                                }
+                                                                            } else {
+                                                                                html! {
+                                                                                    <div class="text-xs text-gray-400 text-center mt-1">
+                                                                                        {"Goal not projected within forecast"}
+                                                                                    </div>
+                                                                                }
+                                                                            }}
+                                                                        </>
                                                                     }
                                                                 }}
                                                             </>

@@ -28,6 +28,8 @@ pub struct AccountStatistics {
     pub upcoming_expenses: Option<Decimal>,
     /// Account state at the end of the period
     pub end_of_period_state: Option<Decimal>,
+    /// Date when goal target is reached (for Goal accounts only)
+    pub goal_reached_date: Option<NaiveDate>,
 }
 
 /// Collection of statistics for multiple accounts
@@ -120,6 +122,7 @@ mod tests {
             average_income: Some(Decimal::new(300, 2)),
             upcoming_expenses: Some(Decimal::new(150, 2)),
             end_of_period_state: Some(Decimal::new(400, 2)),
+            goal_reached_date: None,
         };
 
         assert_eq!(stats.account_id, 1);
@@ -136,6 +139,7 @@ mod tests {
             average_income: None,
             upcoming_expenses: None,
             end_of_period_state: None,
+            goal_reached_date: None,
         };
 
         let stats2 = AccountStatistics {
@@ -146,6 +150,7 @@ mod tests {
             average_income: None,
             upcoming_expenses: None,
             end_of_period_state: None,
+            goal_reached_date: None,
         };
 
         let collection =

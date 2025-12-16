@@ -12,6 +12,7 @@ pub struct AccountStatistics {
     pub average_income: Option<Decimal>,
     pub upcoming_expenses: Option<Decimal>,
     pub end_of_period_state: Option<Decimal>,
+    pub goal_reached_date: Option<NaiveDate>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
