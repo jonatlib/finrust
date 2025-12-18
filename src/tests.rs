@@ -413,7 +413,7 @@ mod integration_tests {
             ledger_name: Some("test_ledger".to_string()),
             linked_import_id: None,
             category_id: None,
-            is_simulated: false,
+            is_simulated: Some(false),
             scenario_id: None,
         };
 
@@ -451,6 +451,7 @@ mod integration_tests {
             include_in_statistics: Some(true),
             ledger_name: Some("target_account".to_string()),
             account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
+            target_amount: None,
         };
 
         let account_response = server
@@ -473,7 +474,7 @@ mod integration_tests {
             ledger_name: Some("test_ledger".to_string()),
             linked_import_id: None,
             category_id: None,
-            is_simulated: false,
+            is_simulated: Some(false),
             scenario_id: None,
         };
 
@@ -554,6 +555,7 @@ mod integration_tests {
             include_in_statistics: Some(true),
             ledger_name: Some("specific_ledger".to_string()),
             account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
+            target_amount: None,
         };
 
         let create_response = server
@@ -600,6 +602,7 @@ mod integration_tests {
             include_in_statistics: Some(true),
             ledger_name: None,
             account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
+            target_amount: None,
         };
 
         let create_response = server
@@ -670,6 +673,7 @@ mod integration_tests {
             include_in_statistics: Some(true),
             ledger_name: None,
             account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
+            target_amount: None,
         };
 
         let create_response = server
@@ -771,6 +775,7 @@ mod integration_tests {
             include_in_statistics: Some(true),
             ledger_name: Some("test_ledger_1".to_string()),
             account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
+            target_amount: None,
         };
 
         let account2_request = CreateAccountRequest {
@@ -781,6 +786,7 @@ mod integration_tests {
             include_in_statistics: Some(true),
             ledger_name: Some("test_ledger_2".to_string()),
             account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
+            target_amount: None,
         };
 
         // Create accounts
@@ -813,6 +819,8 @@ mod integration_tests {
             ledger_name: Some("test_ledger_1".to_string()),
             linked_import_id: None,
             category_id: None,
+            is_simulated: Some(false),
+            scenario_id: None,
         };
 
         // Account 2: 100,000 on 2025-01-01
@@ -827,6 +835,8 @@ mod integration_tests {
             ledger_name: Some("test_ledger_2".to_string()),
             linked_import_id: None,
             category_id: None,
+            is_simulated: Some(false),
+            scenario_id: None,
         };
 
         // Create initial balance transactions
@@ -854,6 +864,8 @@ mod integration_tests {
             ledger_name: Some("test_ledger_1".to_string()),
             linked_import_id: None,
             category_id: None,
+            is_simulated: Some(false),
+            scenario_id: None,
         };
 
         let update1_response = server
@@ -882,6 +894,8 @@ mod integration_tests {
                 ledger_name: Some("test_ledger_1".to_string()),
                 linked_import_id: None,
                 category_id: None,
+                is_simulated: Some(false),
+                scenario_id: None,
             };
 
             let tx_response = server
@@ -903,6 +917,8 @@ mod integration_tests {
             ledger_name: Some("test_ledger_1".to_string()),
             linked_import_id: None,
             category_id: None,
+            is_simulated: Some(false),
+            scenario_id: None,
         };
 
         let jan_response = server
@@ -923,6 +939,8 @@ mod integration_tests {
             ledger_name: Some("test_ledger_2".to_string()),
             linked_import_id: None,
             category_id: None,
+            is_simulated: Some(false),
+            scenario_id: None,
         };
 
         let acc2_response = server
@@ -943,6 +961,8 @@ mod integration_tests {
             ledger_name: Some("test_transfer".to_string()),
             linked_import_id: None,
             category_id: None,
+            is_simulated: Some(false),
+            scenario_id: None,
         };
 
         let transfer_response = server
@@ -1748,6 +1768,7 @@ mod integration_tests {
             include_in_statistics: Some(true),
             ledger_name: Some("test_manual_state".to_string()),
             account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
+            target_amount: None,
         };
 
         let account_response = server
@@ -1832,6 +1853,7 @@ mod integration_tests {
             include_in_statistics: Some(true),
             ledger_name: Some("test_manual_states".to_string()),
             account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
+            target_amount: None,
         };
 
         let account_response = server
@@ -1902,6 +1924,7 @@ mod integration_tests {
             include_in_statistics: Some(true),
             ledger_name: Some("test_manual_state".to_string()),
             account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
+            target_amount: None,
         };
 
         let account_response = server
@@ -1960,6 +1983,7 @@ mod integration_tests {
             include_in_statistics: Some(true),
             ledger_name: Some("test_manual_state".to_string()),
             account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
+            target_amount: None,
         };
 
         let account_response = server
@@ -2001,6 +2025,7 @@ mod integration_tests {
             include_in_statistics: Some(true),
             ledger_name: Some("test_manual_state".to_string()),
             account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
+            target_amount: None,
         };
 
         let account_response = server
@@ -2069,6 +2094,7 @@ mod integration_tests {
             include_in_statistics: Some(true),
             ledger_name: Some("test_manual_state".to_string()),
             account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
+            target_amount: None,
         };
 
         let account_response = server
@@ -2116,6 +2142,7 @@ mod integration_tests {
             include_in_statistics: Some(true),
             ledger_name: Some("test_manual_state".to_string()),
             account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
+            target_amount: None,
         };
 
         let account_response = server
@@ -2174,6 +2201,7 @@ mod integration_tests {
             include_in_statistics: Some(true),
             ledger_name: Some("test_manual_state".to_string()),
             account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
+            target_amount: None,
         };
 
         let account_response = server
@@ -2217,6 +2245,7 @@ mod integration_tests {
             include_in_statistics: Some(true),
             ledger_name: Some("test_imported".to_string()),
             account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
+            target_amount: None,
         };
 
         let account_response = server
@@ -2290,6 +2319,7 @@ mod integration_tests {
             include_in_statistics: Some(true),
             ledger_name: Some("test_imported".to_string()),
             account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
+            target_amount: None,
         };
 
         let account_response = server
@@ -2350,6 +2380,7 @@ mod integration_tests {
             include_in_statistics: Some(true),
             ledger_name: Some("test_imported".to_string()),
             account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
+            target_amount: None,
         };
 
         let account_response = server
@@ -2408,6 +2439,7 @@ mod integration_tests {
             include_in_statistics: Some(true),
             ledger_name: Some("test_imported".to_string()),
             account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
+            target_amount: None,
         };
 
         let account_response = server
@@ -2476,6 +2508,7 @@ mod integration_tests {
             include_in_statistics: Some(true),
             ledger_name: Some("test_imported".to_string()),
             account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
+            target_amount: None,
         };
 
         let account_response = server
@@ -2537,6 +2570,7 @@ mod integration_tests {
             include_in_statistics: Some(true),
             ledger_name: Some("test_imported".to_string()),
             account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
+            target_amount: None,
         };
 
         let account_response = server
@@ -2626,6 +2660,7 @@ mod integration_tests {
             include_in_statistics: Some(true),
             ledger_name: Some("test_imported".to_string()),
             account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
+            target_amount: None,
         };
 
         let account_response = server
@@ -2740,6 +2775,7 @@ mod integration_tests {
             include_in_statistics: Some(true),
             ledger_name: Some("test_imported".to_string()),
             account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
+            target_amount: None,
         };
 
         let account_response = server
@@ -2821,6 +2857,7 @@ mod integration_tests {
             include_in_statistics: Some(true),
             ledger_name: Some("test_reconcile".to_string()),
             account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
+            target_amount: None,
         };
 
         let account_response = server
@@ -2843,6 +2880,8 @@ mod integration_tests {
             ledger_name: Some("test_reconcile".to_string()),
             linked_import_id: None,
             category_id: None,
+            is_simulated: Some(false),
+            scenario_id: None,
         };
 
         let transaction_response = server
@@ -2932,6 +2971,7 @@ mod integration_tests {
             include_in_statistics: Some(true),
             ledger_name: Some("test_reconcile".to_string()),
             account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
+            target_amount: None,
         };
 
         let account_response = server
@@ -2996,6 +3036,7 @@ mod integration_tests {
             include_in_statistics: Some(true),
             ledger_name: Some("test_reconcile".to_string()),
             account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
+            target_amount: None,
         };
 
         let account_response = server
@@ -3018,6 +3059,8 @@ mod integration_tests {
             ledger_name: Some("test_reconcile".to_string()),
             linked_import_id: None,
             category_id: None,
+            is_simulated: Some(false),
+            scenario_id: None,
         };
 
         let transaction_response = server
@@ -3132,6 +3175,7 @@ mod integration_tests {
             include_in_statistics: Some(true),
             ledger_name: Some("test_filter".to_string()),
             account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
+            target_amount: None,
         };
 
         let account_response = server
@@ -3154,6 +3198,8 @@ mod integration_tests {
             ledger_name: Some("test_filter".to_string()),
             linked_import_id: None,
             category_id: None,
+            is_simulated: Some(false),
+            scenario_id: None,
         };
 
         let transaction_response = server
