@@ -1,29 +1,30 @@
 # ==============================================================================
 # 0. BASE STAGE
-#    Installs system dependencies & cargo-chef once for both stages
+#    Installs system tools & cargo-chef once for all stages
 # ==============================================================================
-FROM rust:1.83-slim-bookworm AS base
+FROM rust:1.91-slim-bookworm AS base
 WORKDIR /app
 
-# 1. Install system dependencies required for compilation (cc, OpenSSL, pkg-config)
-#    - build-essential: contains gcc/linker needed for 'cargo install'
-#    - pkg-config & libssl-dev: often needed for Rust dependencies (like reqwest/sqlx/tokio)
+# 1. Install system dependencies (cc, pkg-config, OpenSSL)
+#    'build-essential' is REQUIRED on slim images to provide the linker (cc)
 RUN apt-get update && apt-get install -y \
     build-essential \
     pkg-config \
     libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# 2. Install cargo-chef and trunk (shared tools)
+# 2. Install cargo-chef and trunk
+#    (Rust 1.91 supports edition 2024 natively)
 RUN cargo install cargo-chef
 RUN cargo install trunk
-# Add WASM target for the frontend
+
+# 3. Add WASM target for the frontend
 RUN rustup target add wasm32-unknown-unknown
 
 
 # ==============================================================================
 # 1. PLANNER STAGE
-#    Computes the recipe file
+#    Computes the recipe file (Cargo.lock + Cargo.toml analysis)
 # ==============================================================================
 FROM base AS planner
 COPY . .
@@ -42,7 +43,7 @@ COPY --from=planner /app/recipe.json recipe.json
 RUN cargo chef cook --release --recipe-path recipe.json
 
 # 2. Cook Frontend Dependencies (WASM)
-#    Targeting only the frontend package to avoid backend crate errors on WASM
+#    -p frontend ensures we don't build backend crates for WASM
 RUN cargo chef cook --release --target wasm32-unknown-unknown --recipe-path recipe.json -p frontend
 
 
@@ -63,7 +64,7 @@ RUN trunk build --release --public-url /
 FROM builder AS backend-builder
 COPY . .
 
-# Build the specific binary
+# Build the specific binary 'finrust'
 RUN cargo build --release --bin finrust
 
 
@@ -74,16 +75,17 @@ RUN cargo build --release --bin finrust
 FROM debian:bookworm-slim AS runtime
 WORKDIR /app
 
-# Runtime needs OpenSSL/CA certs (but not gcc/build-essential)
+# Install Runtime dependencies
+# We need OpenSSL (libssl-dev/libssl3) but NOT build-essential/gcc
 RUN apt-get update && apt-get install -y libssl-dev ca-certificates && rm -rf /var/lib/apt/lists/*
 
 # Copy Backend Binary
 COPY --from=backend-builder /app/target/release/finrust /app/finrust
 
-# Copy Frontend Assets
+# Copy Frontend Assets (Trunk output)
 COPY --from=frontend-builder /app/workspace/frontend/dist /app/dist
 
-# Env vars
+# Configuration
 ENV HOST=0.0.0.0
 ENV PORT=8080
 EXPOSE 8080
