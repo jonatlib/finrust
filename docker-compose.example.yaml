@@ -1,17 +1,12 @@
 services:
   # ----------------------------------------------------
-  # 1. Backend Service (Rust)
+  # 1. Backend Service
   # ----------------------------------------------------
   backend:
-    # DEFINES THE IMAGE NAME FOR PUSHING
     image: xlikos/finrust:backend
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: backend
-    restart: unless-stopped
+    restart: always
 
-    # Run migrations and start the server
+    # Same command as dev to ensure migrations run
     command: >
       /app/finrust migrate-and-serve 
       --database-url sqlite:///app/data/finrust.db?mode=rwc 
@@ -25,35 +20,28 @@ services:
     ports:
       - "8080:8080"
     volumes:
+      # Ensure this directory exists on your production server
       - ./data:/app/data
 
   # ----------------------------------------------------
-  # 2. Frontend Service (Nginx)
+  # 2. Frontend Service
   # ----------------------------------------------------
   frontend:
-    # DEFINES THE IMAGE NAME FOR PUSHING
     image: xlikos/finrust:frontend
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: frontend
-    restart: unless-stopped
+    restart: always
     ports:
       - "8081:80"
-
     depends_on:
       - backend
 
+    # Production Environment Variables
+    # Change these to match your actual Production Domain/IP
     environment:
-      # Frontend API configuration
-      - API_HOST=127.0.0.1
+      - API_HOST=my-production-server.com  # <--- CHANGE THIS
       - API_PORT=8080
       - API_PATH=/api/v1
-      - API_USE_HTTPS=false
+      - API_USE_HTTPS=false # Set to true if you put SSL in front
 
-    # Inject environment variables into config.js at runtime, then start Nginx
-    # Note: '$$' is used to escape the variable so Docker Compose doesn't
-    # interpolate it, allowing the container's shell to expand it.
     command: >
       sh -c "echo 'window.ENV = {
         \"API_HOST\": \"'$$API_HOST'\",
