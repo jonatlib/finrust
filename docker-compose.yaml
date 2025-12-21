@@ -5,6 +5,8 @@ services:
   backend:
     # DEFINES THE IMAGE NAME FOR PUSHING
     image: xlikos/finrust:backend
+    # FORCE LINUX/AMD64 BUILD
+    platform: linux/amd64
     build:
       context: .
       dockerfile: Dockerfile
@@ -33,6 +35,8 @@ services:
   frontend:
     # DEFINES THE IMAGE NAME FOR PUSHING
     image: xlikos/finrust:frontend
+    # FORCE LINUX/AMD64 BUILD
+    platform: linux/amd64
     build:
       context: .
       dockerfile: Dockerfile
