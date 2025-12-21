@@ -1,11 +1,12 @@
 use anyhow::Result;
 use migration::{Migrator, MigratorTrait};
 use sea_orm::Database;
+use tokio::net::TcpListener;
+use tokio::signal;
 use tracing::{debug, error, info, trace};
 
 use crate::config::initialize_app_state_with_url;
 use crate::router::create_router;
-use tokio::net::TcpListener;
 
 pub async fn migrate_and_serve(database_url: &str, bind_address: &str) -> Result<()> {
     trace!("Entering migrate_and_serve function");
@@ -77,11 +78,42 @@ pub async fn migrate_and_serve(database_url: &str, bind_address: &str) -> Result
     debug!("Server is ready to accept connections");
 
     trace!("Starting axum server");
-    if let Err(e) = axum::serve(listener, app).await {
-        error!("Server error: {}", e);
-        return Err(e.into());
-    }
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal())
+        .await
+        .map_err(|e| {
+            error!("Server error: {}", e);
+            e
+        })?;
 
     info!("Server shutdown gracefully");
     Ok(())
+}
+
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        signal::unix::signal(signal::unix::SignalKind::terminate())
+            .expect("failed to install signal handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {
+            info!("Received SIGINT (Ctrl+C), shutting down gracefully");
+        },
+        _ = terminate => {
+            info!("Received SIGTERM, shutting down gracefully");
+        },
+    }
 }
