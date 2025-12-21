@@ -1,6 +1,6 @@
 services:
   # ----------------------------------------------------
-  # 1. Backend Service
+  # 1. Backend Service (Rust)
   # ----------------------------------------------------
   backend:
     build:
@@ -8,20 +8,34 @@ services:
       dockerfile: Dockerfile
       target: backend
     restart: unless-stopped
+
+    # ------------------------------------------------------------------
+    # COMMAND: Run migrations and start the server
+    # ------------------------------------------------------------------
+    # Normal usage (local):
+    # cargo run --release -- serve --database-url sqlite://./finrust.sqlite
+    #
+    # Docker usage (binary):
+    command: >
+      /app/finrust migrate-and-serve 
+      --database-url sqlite:///app/data/finrust.db?mode=rwc 
+      --bind-address 0.0.0.0:8080
+
     environment:
-      - HOST=0.0.0.0
-      - PORT=8080
-      # The DB file will be created inside the container at /app/data/finrust.db
-      # Since /app/data is bound to your local ./data folder, the file will appear there.
+      # We set these for safety, though the command flags above take precedence.
+      # Note: The CLI uses BIND_ADDRESS, not PORT.
       - DATABASE_URL=sqlite:///app/data/finrust.db?mode=rwc
+      - BIND_ADDRESS=0.0.0.0:8080
+      - RUST_LOG=info
+
     ports:
       - "8080:8080"
     volumes:
-      # BIND MOUNT: Maps the local "./data" folder to "/app/data" in the container
+      # Bind mount the local ./data folder to the container
       - ./data:/app/data
 
   # ----------------------------------------------------
-  # 2. Frontend Service
+  # 2. Frontend Service (Nginx)
   # ----------------------------------------------------
   frontend:
     build:
@@ -33,5 +47,3 @@ services:
       - "8081:80"
     depends_on:
       - backend
-
-# (No top-level 'volumes:' key is needed for bind mounts)
