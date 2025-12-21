@@ -1,37 +1,27 @@
-# FinRust - Home Finance Tracker
+# **FinRust \- Home Finance Tracker**
 
-![FinRust Logo](assets/logo-small.png)
-
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-
-This repository contains the backend service for a powerful, self-hosted home finance tracking application. Built with
-Rust, Axum, SeaORM, and Polars, this tool is designed for users who want granular control over their financial data,
-robust forecasting capabilities, and a system based on sound accounting principles.
+This repository contains the full-stack solution for a powerful, self-hosted home finance tracking application. Built
+with **Rust**, **Axum**, **SeaORM**, and **Polars** on the backend, and **Yew (WebAssembly)** on the frontend, this tool
+is designed for users who want granular control over their financial data, robust forecasting capabilities, and a system
+based on sound accounting principles.
 
 The core mission of this project is to provide a comprehensive and accurate view of your financial situation, both past
 and future. It allows you to model your entire financial ecosystem—from various bank accounts and currencies to complex
 recurring transactions—and then use that model to gain insights and forecast with precision.
 
-## Table of Contents
+## **Table of Contents**
 
-- [Core Features](#core-features)
-- [Project Goals](#project-goals)
-- [Technical Stack](#technical-stack)
-- [Getting Started](#getting-started)
-    - [Prerequisites](#prerequisites)
-    - [Installation](#installation)
-    - [Running the Application](#running-the-application)
-- [API Documentation](#api-documentation)
-    - [Available Endpoints](#available-endpoints)
-    - [Interactive Documentation](#interactive-documentation)
-- [Project Structure](#project-structure)
-- [Development](#development)
-    - [Setting Up Development Environment](#setting-up-development-environment)
-    - [Running Tests](#running-tests)
-- [Contributing](#contributing)
-- [License](#license)
+* [Core Features](https://www.google.com/search?q=%23core-features&authuser=1)
+* [Project Goals](https://www.google.com/search?q=%23project-goals&authuser=1)
+* [Technical Stack](https://www.google.com/search?q=%23technical-stack&authuser=1)
+* [Getting Started](https://www.google.com/search?q=%23getting-started&authuser=1)
+* [API Documentation](https://www.google.com/search?q=%23api-documentation&authuser=1)
+* [Project Structure](https://www.google.com/search?q=%23project-structure&authuser=1)
+* [Development](https://www.google.com/search?q=%23development&authuser=1)
+* [Contributing](https://www.google.com/search?q=%23contributing&authuser=1)
+* [License](https://www.google.com/search?q=%23license&authuser=1)
 
-## Core Features
+## **Core Features**
 
 This application is built around a set of powerful, interconnected features:
 
@@ -39,7 +29,6 @@ This application is built around a set of powerful, interconnected features:
     * Track an unlimited number of accounts (e.g., bank accounts, credit cards, cash).
     * Each account has its own designated currency, with all calculations being currency-aware using `rusty_money`.
     * Designate specific accounts (e.g., for error correction) to be ignored in statistics and totals.
-
 * **Comprehensive Transaction Modeling**:
     * **Recurring Transactions**: Model regular expenses like rent, subscriptions, or loan payments with flexible
       recurrence rules (daily, weekly, monthly, etc.).
@@ -47,218 +36,240 @@ This application is built around a set of powerful, interconnected features:
     * **One-Off Transactions**: Manually add any extra or non-recurring transactions.
     * **Imported Transactions**: Import transactions from standard banking formats. The system is designed to let you
       reconcile these imported items against your manually modeled data to prevent duplicates.
-
 * **Double-Entry Accounting System**:
     * All transactions support an optional source account in addition to the mandatory target account.
     * When both are specified, the system automatically creates the corresponding transaction on the source account,
       ensuring that money is never created or destroyed, only moved.
-
 * **Financial Analysis & Forecasting**:
     * **Historical View**: Get a cumulative, day-by-day balance for any account up to the present.
     * **Future Forecast**: Project account balances into the future based on all scheduled recurring transactions and
       income.
+    * **Scenarios (What-If Analysis)**: Create and apply hypothetical financial scenarios (e.g., "Buying a House", "New
+      Job") to see how major decisions impact your future balance without affecting your actual data.
     * **Per-Account Statistics**: Analyze account performance with metrics like starting/ending balances for a period
       and lowest/highest balances.
-
 * **Advanced Categorization & Reporting**:
     * **Hierarchical Tagging**: Apply tags to both transactions and accounts. Tags can be nested (e.g.,
       `Expenses:Food:Groceries`) to allow for detailed, tree-based reporting on spending and income.
     * **Cross-Account Insights**: Use tags to see total expenses or income in a category, regardless of which account
       was used.
-
+* **Manual Account States**:
+    * Create "snapshots" of your account balance at specific points in time.
+    * Useful for correcting drift or ensuring historical accuracy by overriding calculated balances with actual bank
+      statement values.
 * **Interoperability**:
     * **Ledger CLI Compatibility**: Every entity (accounts, transactions, tags) can be configured with a `ledger_name`,
       allowing the entire financial history to be exported in a format compatible with the powerful, plain-text
       accounting tool, [Ledger](https://www.ledger-cli.org/).
 
-## Project Goals
+## **Project Goals**
 
 The main goals of this project are:
 
-1. **Current Account State Visibility**: Provide a clear and accurate view of all account states over time
-2. **Account Forecasting**: Enable precise forecasting of account balances based on recurring transactions and income
+1. **Current Account State Visibility**: Provide a clear and accurate view of all account states over time.
+2. **Account Forecasting**: Enable precise forecasting of account balances based on recurring transactions and income.
+3. **Scenario Planning**: Allow users to model future life events and their financial impact.
 
-## Technical Stack
+## **Technical Stack**
 
 This project is built using the following technologies:
 
-* **Backend**:
-    * [Rust](https://www.rust-lang.org/) - Programming language (Edition 2024)
-    * [Axum](https://github.com/tokio-rs/axum) - Web framework for building REST APIs
-    * [SeaORM](https://www.sea-ql.org/SeaORM/) - Async ORM for Rust
-    * [Polars](https://pola.rs/) - Data manipulation and analysis library
-    * [Tokio](https://tokio.rs/) - Async runtime
-    * [Tower](https://github.com/tower-rs/tower) - Middleware and service abstractions
+**Backend**
 
-* **API Documentation**:
-    * [utoipa](https://github.com/juhaku/utoipa) - OpenAPI 3.0 specification generation
-    * [utoipa-swagger-ui](https://github.com/juhaku/utoipa) - Interactive Swagger UI
+* [Rust](https://www.rust-lang.org/) (Edition 2024\)
+* [Axum](https://github.com/tokio-rs/axum) \- REST API
+* [SeaORM](https://www.sea-ql.org/SeaORM/) \- Async ORM
+* [Polars](https://pola.rs/) \- High-performance dataframes for financial compute
+* [Tokio](https://tokio.rs/) \- Async runtime
+* **Observability**: `tracing` & `axum-prometheus`
+* **Documentation**: `utoipa` (OpenAPI 3.0)
 
-* **Monitoring & Observability**:
-    * [tracing](https://github.com/tokio-rs/tracing) - Structured logging and diagnostics
-    * [axum-prometheus](https://github.com/Ptrskay3/axum-prometheus) - Prometheus metrics integration
+**Frontend**
 
-* **Data Handling**:
-    * [serde](https://serde.rs/) - Serialization/deserialization
-    * [chrono](https://github.com/chronotope/chrono) - Date and time handling
-    * [rust_decimal](https://github.com/paupino/rust-decimal) - Precise decimal arithmetic
-    * [validator](https://github.com/Keats/validator) - Input validation
+* [Yew](https://yew.rs/) \- Rust framework for WebAssembly apps
+* [Trunk](https://trunkrs.dev/) \- WASM web application bundler
+* **Styling**: [Tailwind CSS](https://tailwindcss.com/) & [DaisyUI](https://daisyui.com/)
+* **Routing**: Yew Router
 
-* **Database**:
-    * SQLite (development)
-    * PostgreSQL (production)
+**Infrastructure & Data**
 
-* **CLI & Configuration**:
-    * [clap](https://github.com/clap-rs/clap) - Command-line argument parsing
-    * [config](https://github.com/mehcode/config-rs) - Configuration management
-    * [dotenvy](https://github.com/allan2/dotenvy) - Environment variable loading
+* **Database**: SQLite (development), PostgreSQL (production)
+* **Containerization**: Docker & Docker Compose
+* **Data Handling**: `serde`, `chrono`, `rust_decimal`
 
-* **Frontend**:
-    * Separate application (not included in this repository)
+## **Getting Started**
 
-## Getting Started
+### **Using Docker Compose (Recommended)**
 
-### Prerequisites
+The easiest way to run the full stack (backend \+ frontend) is via Docker Compose.
+
+1. **Clone the repository**:  
+   Bash
+
+```
+git clone https://github.com/yourusername/finrust.git
+cd finrust
+```
+
+2.
+3. **Start the application**:  
+   Bash
+
+```
+docker-compose up -d
+```
+
+4.
+5. **Access the services**:
+    * **Frontend**: `http://localhost:8081`
+    * **Backend API**: `http://localhost:8080/api/v1/`
+    * **Swagger UI**: `http://localhost:8080/swagger-ui`
+6. *Note: Data will be persisted in the `./data` directory.*
+
+### **Manual Installation**
+
+**Prerequisites**
 
 * [Rust](https://www.rust-lang.org/tools/install) (latest stable version)
-* [SQLite](https://www.sqlite.org/download.html) (for development)
-* [PostgreSQL](https://www.postgresql.org/download/) (for production)
+* [Trunk](https://trunkrs.dev/) (for frontend): `cargo install trunk`
+* `wasm-bindgen-cli`: `cargo install wasm-bindgen-cli`
+* [SQLite](https://www.sqlite.org/download.html) (for development) or PostgreSQL
 
-### Installation
+**Backend Setup**
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/yourusername/finrust.git
-   cd finrust
-   ```
+1. Initialize the database:  
+   Bash
 
-2. Build the project:
-   ```bash
-   cargo build
-   ```
+```
+cargo run init-db --database-url "sqlite://finrust.db"
+```
 
-### Running the Application
+2.
+3. Start the server:  
+   Bash
 
-1. Initialize the database:
-   ```bash
-   cargo run init-db --database-url "sqlite://finrust.db"
-   ```
+```
+cargo run serve --bind-address "0.0.0.0:8080"
+```
 
-2. Start the server:
-   ```bash
-   cargo run serve
-   ```
+4.
 
-   Or with custom configuration:
-   ```bash
-   cargo run serve --database-url "sqlite://finrust.db" --bind-address "0.0.0.0:3000"
-   ```
+**Frontend Setup**
 
-3. Access the application:
-   - **API Base URL**: `http://localhost:3000/api/v1/`
-   - **Swagger UI Documentation**: `http://localhost:3000/swagger-ui`
-   - **Health Check**: `http://localhost:3000/health`
-   - **Prometheus Metrics**: `http://localhost:3000/metrics`
+1. Navigate to the frontend workspace:  
+   Bash
 
-## API Documentation
+```
+cd workspace/frontend
+```
 
-The application provides a comprehensive REST API with full OpenAPI 3.0 specification and interactive Swagger UI documentation.
+2.
+3. Add the WebAssembly target (if not already added):  
+   Bash
 
-### Available Endpoints
+```
+rustup target add wasm32-unknown-unknown
+```
 
-- **Accounts**: CRUD operations for financial accounts
-- **Transactions**: Manage one-off, recurring, and imported transactions
-- **Recurring Income**: Handle recurring income streams
-- **Users**: User management functionality
-- **Statistics**: Account performance metrics and analytics
-- **Timeseries**: Historical and forecasted account balance data
-- **Manual Account States**: Override account balances at specific points in time
+4.
+5. Serve the application:  
+   Bash
 
-### Interactive Documentation
+```
+trunk serve --port 8081
+```
 
-Once the server is running, visit `http://localhost:3000/swagger-ui` to explore the complete API documentation with:
-- Interactive endpoint testing
-- Request/response schemas
-- Authentication requirements
-- Example payloads
+6.
 
-## Project Structure
+## **API Documentation**
+
+The application provides a comprehensive REST API with full OpenAPI 3.0 specification and interactive Swagger UI
+documentation.
+
+### **Available Endpoints**
+
+* **Accounts**: CRUD operations for financial accounts.
+* **Transactions**: Manage one-off, recurring, and imported transactions.
+* **Recurring Income**: Handle recurring income streams.
+* **Scenarios**: Create and manage "what-if" financial scenarios.
+* **Manual Account States**: Override account balances at specific points in time.
+* **Statistics**: Account performance metrics and analytics.
+* **Timeseries**: Historical and forecasted account balance data.
+* **Users**: User management functionality.
+* **Tags & Categories**: Hierarchical organization for transactions.
+
+### **Interactive Documentation**
+
+Once the backend is running, visit `http://localhost:8080/swagger-ui` to explore the complete API documentation with
+interactive endpoint testing, schemas, and example payloads.
+
+## **Project Structure**
+
+Plaintext
 
 ```
 finrust/
 ├── Cargo.toml              # Main workspace configuration
-├── src/                    # Main application code
+├── docker-compose.yaml     # Docker composition for full stack
+├── Dockerfile              # Multi-stage Docker build
+├── src/                    # Main application entry point & CLI
 │   ├── handlers/           # API endpoint handlers
-│   ├── cli.rs             # Command-line interface
-│   ├── router.rs          # API routing configuration
-│   └── main.rs            # Application entry point
+│   ├── cli.rs              # Command-line interface definitions
+│   └── router.rs           # API routing configuration
 └── workspace/
-    ├── model/              # Database models and entities
-    │   └── src/
-    │       └── entities/   # Entity definitions
+    ├── frontend/           # Yew (WebAssembly) Frontend Application
+    │   ├── src/
+    │   └── index.html
+    ├── model/              # Database models and entities (SeaORM)
     ├── migration/          # Database migrations
-    │   └── src/            # Migration scripts
-    ├── compute/            # Financial computation logic
-    │   └── src/
+    ├── compute/            # Financial computation logic (Polars)
     └── common/             # Shared utilities and types
-        └── src/
 ```
 
-## Development
+## **Development**
 
-### Setting Up Development Environment
+### **Setting Up Development Environment**
 
-1. Install Rust and required dependencies:
-   ```bash
-   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-   rustup update stable
-   ```
+1. **Install Rust and dependencies**:  
+   Bash
 
-2. Set up the database:
-   ```bash
-   # For SQLite (development)
-   # No additional setup required
+```
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+rustup update stable
+cargo install trunk wasm-bindgen-cli
+```
 
-   # For PostgreSQL (production)
-   # Create a database and update the connection string in your configuration
-   ```
+2.
+3. **Set up the database**:  
+   Bash
 
-### Code Standards
+```
+# For SQLite (development)
+cargo run init-db --database-url "sqlite://finrust.db"
+```
 
-#### Logging
+4.
 
-This project uses the `tracing` crate for structured logging. Follow these guidelines for logging:
+### **Code Standards**
 
-- Use appropriate log levels:
-  - `error!` - For errors that prevent the application from functioning correctly
-  - `warn!` - For unexpected conditions that don't prevent the application from working
-  - `info!` - For important events that should be visible in normal operation
-  - `debug!` - For detailed information useful during development
-  - `trace!` - For very detailed diagnostic information
+* **Logging**: This project uses the `tracing` crate. Use appropriate log levels (`error!`, `warn!`, `info!`, `debug!`,
+  `trace!`) and never `println!` in production code.
+* **Documentation**: Every public struct, enum, trait, and function must have a docstring explaining its purpose,
+  arguments, and return values.
 
-- Never use `println!` in production code; always use the appropriate tracing macro
-- Use the `#[instrument]` attribute on functions to automatically trace function entry and exit
+### **Running Tests**
 
-#### Documentation
+Run the test suite for the entire workspace:
 
-All code should be well-documented following these guidelines:
+Bash
 
-- Every public struct, enum, trait, and function must have a docstring
-- Docstrings should explain the purpose, behavior, and usage of the item
-- Use the standard Rust documentation format with sections like `# Arguments`, `# Returns`, etc.
-- Follow the DRY principle: don't explain what the code is doing line by line, but focus on the intent and special cases
-
-### Running Tests
-
-Run the test suite with:
-
-```bash
+```
 cargo test
 ```
 
-## Contributing
+## **Contributing**
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome\! Please feel free to submit a Pull Request.
 
 1. Fork the repository
 2. Create your feature branch (`git checkout -b feature/amazing-feature`)
@@ -266,6 +277,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-## License
+## **License**
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License \- see the [LICENSE](https://www.google.com/search?q=LICENSE&authuser=1)
+file for details.
