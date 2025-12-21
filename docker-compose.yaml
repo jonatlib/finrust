@@ -1,0 +1,37 @@
+services:
+  # ----------------------------------------------------
+  # 1. Backend Service
+  # ----------------------------------------------------
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: backend
+    restart: unless-stopped
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8080
+      # The DB file will be created inside the container at /app/data/finrust.db
+      # Since /app/data is bound to your local ./data folder, the file will appear there.
+      - DATABASE_URL=sqlite:///app/data/finrust.db?mode=rwc
+    ports:
+      - "8080:8080"
+    volumes:
+      # BIND MOUNT: Maps the local "./data" folder to "/app/data" in the container
+      - ./data:/app/data
+
+  # ----------------------------------------------------
+  # 2. Frontend Service
+  # ----------------------------------------------------
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: frontend
+    restart: unless-stopped
+    ports:
+      - "8081:80"
+    depends_on:
+      - backend
+
+# (No top-level 'volumes:' key is needed for bind mounts)
