@@ -45,5 +45,17 @@ services:
     restart: unless-stopped
     ports:
       - "8081:80"
-    depends_on:
-      - backend
+    environment:
+      # Frontend API configuration
+      # These variables configure where the frontend sends API requests
+      - API_HOST=127.0.0.1
+      - API_PORT=8080
+      - API_PATH=/api/v1
+      - API_USE_HTTPS=false
+    command: >
+      sh -c "echo 'window.ENV = {
+        \"API_HOST\": \"'$$API_HOST'\",
+        \"API_PORT\": \"'$$API_PORT'\",
+        \"API_PATH\": \"'$$API_PATH'\",
+        \"API_USE_HTTPS\": \"'$$API_USE_HTTPS'\"
+      };' > /usr/share/nginx/html/config.js && nginx -g 'daemon off;'"

@@ -1,6 +1,8 @@
 use log::Level;
 use wasm_bindgen::JsValue;
+use wasm_bindgen::JsCast;
 use web_sys::window;
+use js_sys::Reflect;
 
 /// Global application settings
 #[derive(Debug, Clone)]
@@ -57,6 +59,54 @@ impl AppSettings {
 
         // Detect if running in development mode
         if let Some(window) = window() {
+            // First, try to read from window.ENV object (injected by Docker)
+            let env_key = JsValue::from_str("ENV");
+            if let Ok(env_obj) = Reflect::get(&window, &env_key) {
+                if !env_obj.is_undefined() && !env_obj.is_null() {
+                    log::debug!("Found window.ENV object, reading configuration");
+
+                    // Read API_HOST
+                    let api_host_key = JsValue::from_str("API_HOST");
+                    if let Ok(api_host) = Reflect::get(&env_obj, &api_host_key) {
+                        if let Some(host_str) = api_host.as_string() {
+                            log::debug!("Loaded API_HOST from window.ENV: {}", host_str);
+                            settings.api_host = host_str;
+                        }
+                    }
+
+                    // Read API_PORT
+                    let api_port_key = JsValue::from_str("API_PORT");
+                    if let Ok(api_port) = Reflect::get(&env_obj, &api_port_key) {
+                        if let Some(port_str) = api_port.as_string() {
+                            if let Ok(port_val) = port_str.parse::<u16>() {
+                                log::debug!("Loaded API_PORT from window.ENV: {}", port_val);
+                                settings.api_port = port_val;
+                            } else {
+                                log::warn!("Failed to parse API_PORT from window.ENV: {}", port_str);
+                            }
+                        }
+                    }
+
+                    // Read API_PATH
+                    let api_path_key = JsValue::from_str("API_PATH");
+                    if let Ok(api_path) = Reflect::get(&env_obj, &api_path_key) {
+                        if let Some(path_str) = api_path.as_string() {
+                            log::debug!("Loaded API_PATH from window.ENV: {}", path_str);
+                            settings.api_path = path_str;
+                        }
+                    }
+
+                    // Read API_USE_HTTPS
+                    let api_https_key = JsValue::from_str("API_USE_HTTPS");
+                    if let Ok(api_https) = Reflect::get(&env_obj, &api_https_key) {
+                        if let Some(https_str) = api_https.as_string() {
+                            settings.api_use_https = https_str.to_lowercase() == "true";
+                            log::debug!("Loaded API_USE_HTTPS from window.ENV: {}", settings.api_use_https);
+                        }
+                    }
+                }
+            }
+
             if let Ok(hostname) = window.location().hostname() {
                 log::debug!("Detected hostname: {}", hostname);
                 settings.debug_mode = hostname == "localhost" || hostname == "127.0.0.1";
