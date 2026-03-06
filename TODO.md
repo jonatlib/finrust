@@ -16,6 +16,7 @@
         - Then would be nice to show also average per year
         - And also percentage of that category
             - Beware the categories are tree so it sums up in the tree
+    - New categories per account
     - The stats on the account detail page don't match with data in balance - i believe the balance chart.
     - Frontend shows $ sign. Instead of curency based on account
         - This might lead to multicurrency - don't do it now. Just use currency by first account
