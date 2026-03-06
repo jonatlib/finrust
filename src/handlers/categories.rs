@@ -4,13 +4,17 @@ use axum::{
     http::StatusCode,
     response::Json,
 };
-use chrono::NaiveDate;
-use model::entities::{category, account, one_off_transaction};
+use chrono::{Datelike, NaiveDate};
+use model::entities::{
+    category, account, one_off_transaction, recurring_transaction,
+    recurring_transaction_instance,
+};
+use compute::account::utils::generate_occurrences;
 use sea_orm::{ActiveModelTrait, EntityTrait, Set, ColumnTrait, QueryFilter};
 use rust_decimal::Decimal;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use serde::{Deserialize, Serialize};
-use tracing::{instrument, error, warn, info, debug};
+use tracing::{instrument, error, warn, info, debug, trace};
 use utoipa::{ToSchema, IntoParams};
 
 /// Request structure for creating a new category
@@ -66,12 +70,29 @@ pub struct CategoryStatsQuery {
     pub account_id: Option<i32>,
 }
 
-/// Category statistics response
+/// Yearly total for a category
+#[derive(Debug, Serialize, ToSchema, Clone)]
+pub struct YearlyTotal {
+    pub year: i32,
+    pub amount: String,
+}
+
+/// Category statistics response with tree-aggregated totals, averages, and percentages
 #[derive(Debug, Serialize, ToSchema)]
 pub struct CategoryStatsResponse {
     pub category_id: i32,
     pub category_name: String,
+    pub parent_id: Option<i32>,
+    /// Own total (direct transactions only, excluding children)
+    pub own_total: String,
+    /// Total amount including children in the tree
     pub total_amount: String,
+    /// Yearly totals including children
+    pub yearly_totals: Vec<YearlyTotal>,
+    /// Average per year including children
+    pub average_per_year: String,
+    /// Percentage of the absolute grand total (including children)
+    pub percentage: f64,
     pub transaction_count: i64,
 }
 
@@ -626,16 +647,19 @@ pub async fn get_category_stats(
         }
     };
 
-    // Get all transactions in the date range with categories
-    let transactions = match one_off_transaction::Entity::find()
+    let account_ids: Vec<i32> = accounts.iter().map(|a| a.id).collect();
+
+    // Get one-off transactions in the date range with categories
+    let one_off_txns = match one_off_transaction::Entity::find()
         .filter(one_off_transaction::Column::Date.between(query.start_date, query.end_date))
         .filter(one_off_transaction::Column::CategoryId.is_not_null())
+        .filter(one_off_transaction::Column::TargetAccountId.is_in(account_ids.clone()))
         .all(&state.db)
         .await
     {
         Ok(txns) => txns,
         Err(e) => {
-            error!("Failed to fetch transactions: {}", e);
+            error!("Failed to fetch one-off transactions: {}", e);
             return Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
@@ -647,7 +671,54 @@ pub async fn get_category_stats(
         }
     };
 
-    // Get all categories to map IDs to names
+    // Get recurring transactions with categories
+    let recurring_txns = match recurring_transaction::Entity::find()
+        .filter(recurring_transaction::Column::CategoryId.is_not_null())
+        .filter(recurring_transaction::Column::TargetAccountId.is_in(account_ids.clone()))
+        .all(&state.db)
+        .await
+    {
+        Ok(txns) => txns,
+        Err(e) => {
+            error!("Failed to fetch recurring transactions: {}", e);
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "Failed to fetch recurring transactions".to_string(),
+                    code: "ERROR".to_string(),
+                    success: false,
+                }),
+            ));
+        }
+    };
+
+    // Get recurring transaction instances in the date range for overrides
+    let instances = match recurring_transaction_instance::Entity::find()
+        .filter(recurring_transaction_instance::Column::DueDate.between(query.start_date, query.end_date))
+        .all(&state.db)
+        .await
+    {
+        Ok(insts) => insts,
+        Err(e) => {
+            error!("Failed to fetch recurring transaction instances: {}", e);
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "Failed to fetch transaction instances".to_string(),
+                    code: "ERROR".to_string(),
+                    success: false,
+                }),
+            ));
+        }
+    };
+
+    // Build instance lookup: (recurring_transaction_id, due_date) -> instance
+    let instance_map: HashMap<(i32, NaiveDate), &recurring_transaction_instance::Model> = instances
+        .iter()
+        .map(|inst| ((inst.recurring_transaction_id, inst.due_date), inst))
+        .collect();
+
+    // Get all categories
     let categories = match category::Entity::find().all(&state.db).await {
         Ok(cats) => cats,
         Err(e) => {
@@ -663,38 +734,165 @@ pub async fn get_category_stats(
         }
     };
 
-    // Build category name map
-    let category_map: HashMap<i32, String> = categories
-        .into_iter()
-        .map(|cat| (cat.id, cat.name))
+    let category_map: HashMap<i32, &category::Model> = categories
+        .iter()
+        .map(|cat| (cat.id, cat))
         .collect();
 
-    // Aggregate statistics by category
-    let mut stats_map: HashMap<i32, (Decimal, i64)> = HashMap::new();
+    // Aggregate: category_id -> (yearly amounts BTreeMap<year, Decimal>, transaction_count)
+    let mut stats_map: HashMap<i32, (BTreeMap<i32, Decimal>, i64)> = HashMap::new();
 
-    for txn in transactions {
+    // Process one-off transactions
+    for txn in &one_off_txns {
         if let Some(category_id) = txn.category_id {
-            let entry = stats_map.entry(category_id).or_insert((Decimal::ZERO, 0));
-            entry.0 += txn.amount;
+            let year = txn.date.year();
+            let entry = stats_map.entry(category_id).or_insert_with(|| (BTreeMap::new(), 0));
+            *entry.0.entry(year).or_insert(Decimal::ZERO) += txn.amount;
             entry.1 += 1;
         }
     }
 
-    // Convert to response format
-    let stats: Vec<CategoryStatsResponse> = stats_map
-        .into_iter()
-        .map(|(category_id, (total_amount, count))| {
-            let category_name = category_map
-                .get(&category_id)
-                .cloned()
-                .unwrap_or_else(|| format!("Category {}", category_id));
+    // Process recurring transactions by generating occurrences
+    for rtxn in &recurring_txns {
+        let occurrences = generate_occurrences(
+            rtxn.start_date,
+            rtxn.end_date,
+            &rtxn.period,
+            query.start_date,
+            query.end_date,
+        );
 
-            CategoryStatsResponse {
-                category_id,
-                category_name,
-                total_amount: total_amount.to_string(),
-                transaction_count: count,
+        for date in occurrences {
+            // Check if there's an instance override for this occurrence
+            let (amount, cat_id) = if let Some(instance) = instance_map.get(&(rtxn.id, date)) {
+                // Skipped instances don't count
+                if instance.status == recurring_transaction_instance::InstanceStatus::Skipped {
+                    trace!("Skipping instance for recurring txn {} on {}", rtxn.id, date);
+                    continue;
+                }
+                let amount = instance.paid_amount.unwrap_or(instance.expected_amount);
+                let cat = instance.category_id.or(rtxn.category_id);
+                (amount, cat)
+            } else {
+                (rtxn.amount, rtxn.category_id)
+            };
+
+            if let Some(category_id) = cat_id {
+                let year = date.year();
+                let entry = stats_map.entry(category_id).or_insert_with(|| (BTreeMap::new(), 0));
+                *entry.0.entry(year).or_insert(Decimal::ZERO) += amount;
+                entry.1 += 1;
             }
+        }
+    }
+
+    // Build children map for tree propagation
+    let mut children_map: HashMap<i32, Vec<i32>> = HashMap::new();
+    for cat in &categories {
+        if let Some(parent_id) = cat.parent_id {
+            children_map.entry(parent_id).or_default().push(cat.id);
+        }
+    }
+
+    // Compute tree-aggregated yearly totals (own + all descendants)
+    // Using post-order traversal: collect all category IDs in topological order (leaves first)
+    let all_cat_ids: Vec<i32> = categories.iter().map(|c| c.id).collect();
+    let topo_order = topological_sort_leaves_first(&all_cat_ids, &children_map);
+
+    // tree_yearly: category_id -> BTreeMap<year, Decimal> (aggregated including children)
+    // tree_count: category_id -> i64 (aggregated transaction count)
+    let mut tree_yearly: HashMap<i32, BTreeMap<i32, Decimal>> = HashMap::new();
+    let mut tree_count: HashMap<i32, i64> = HashMap::new();
+
+    // Initialize with own stats
+    for cat in &categories {
+        if let Some((yearly, count)) = stats_map.get(&cat.id) {
+            tree_yearly.insert(cat.id, yearly.clone());
+            tree_count.insert(cat.id, *count);
+        } else {
+            tree_yearly.insert(cat.id, BTreeMap::new());
+            tree_count.insert(cat.id, 0);
+        }
+    }
+
+    // Propagate children up in leaves-first order
+    for &cat_id in &topo_order {
+        if let Some(parent_id) = category_map.get(&cat_id).and_then(|c| c.parent_id) {
+            let child_yearly = tree_yearly.get(&cat_id).cloned().unwrap_or_default();
+            let child_count = tree_count.get(&cat_id).copied().unwrap_or(0);
+
+            let parent_yearly = tree_yearly.entry(parent_id).or_default();
+            for (year, amount) in &child_yearly {
+                *parent_yearly.entry(*year).or_insert(Decimal::ZERO) += amount;
+            }
+            *tree_count.entry(parent_id).or_insert(0) += child_count;
+        }
+    }
+
+    // Calculate grand total (sum of absolute values of root categories only)
+    let grand_total: Decimal = categories
+        .iter()
+        .filter(|c| c.parent_id.is_none())
+        .map(|c| {
+            tree_yearly
+                .get(&c.id)
+                .map(|y| y.values().copied().sum::<Decimal>().abs())
+                .unwrap_or(Decimal::ZERO)
+        })
+        .sum();
+
+    // Determine how many distinct years appear in the date range
+    let num_years = (query.start_date.year()..=query.end_date.year()).count() as i64;
+    let num_years_dec = Decimal::from(num_years.max(1));
+
+    // Build response
+    let stats: Vec<CategoryStatsResponse> = categories
+        .iter()
+        .filter_map(|cat| {
+            let own_stats = stats_map.get(&cat.id);
+            let agg_yearly = tree_yearly.get(&cat.id)?;
+            let agg_count = tree_count.get(&cat.id).copied().unwrap_or(0);
+
+            // Skip categories with no transactions at all (own or aggregated)
+            let agg_total: Decimal = agg_yearly.values().copied().sum();
+            let own_total: Decimal = own_stats
+                .map(|(y, _)| y.values().copied().sum())
+                .unwrap_or(Decimal::ZERO);
+
+            if agg_count == 0 && agg_total == Decimal::ZERO {
+                return None;
+            }
+
+            let average_per_year = agg_total / num_years_dec;
+
+            let percentage = if grand_total > Decimal::ZERO {
+                use rust_decimal::prelude::ToPrimitive;
+                (agg_total.abs() / grand_total * Decimal::from(100))
+                    .to_f64()
+                    .unwrap_or(0.0)
+            } else {
+                0.0
+            };
+
+            let yearly_totals: Vec<YearlyTotal> = agg_yearly
+                .iter()
+                .map(|(year, amount)| YearlyTotal {
+                    year: *year,
+                    amount: amount.round_dp(0).to_string(),
+                })
+                .collect();
+
+            Some(CategoryStatsResponse {
+                category_id: cat.id,
+                category_name: cat.name.clone(),
+                parent_id: cat.parent_id,
+                own_total: own_total.round_dp(0).to_string(),
+                total_amount: agg_total.round_dp(0).to_string(),
+                yearly_totals,
+                average_per_year: average_per_year.round_dp(0).to_string(),
+                percentage,
+                transaction_count: agg_count,
+            })
         })
         .collect();
 
@@ -705,4 +903,37 @@ pub async fn get_category_stats(
         message: "Success".to_string(),
         success: true,
     }))
+}
+
+/// Topological sort returning leaves first (post-order) for bottom-up tree propagation.
+fn topological_sort_leaves_first(
+    all_ids: &[i32],
+    children_map: &HashMap<i32, Vec<i32>>,
+) -> Vec<i32> {
+    let mut result = Vec::with_capacity(all_ids.len());
+    let mut visited = HashMap::new();
+
+    fn visit(
+        id: i32,
+        children_map: &HashMap<i32, Vec<i32>>,
+        visited: &mut HashMap<i32, bool>,
+        result: &mut Vec<i32>,
+    ) {
+        if visited.contains_key(&id) {
+            return;
+        }
+        visited.insert(id, true);
+        if let Some(children) = children_map.get(&id) {
+            for &child in children {
+                visit(child, children_map, visited, result);
+            }
+        }
+        result.push(id);
+    }
+
+    for &id in all_ids {
+        visit(id, children_map, &mut visited, &mut result);
+    }
+
+    result
 }

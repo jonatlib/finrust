@@ -1,9 +1,9 @@
-use yew::prelude::*;
-use std::collections::HashMap;
-use std::rc::Rc;
 use crate::api_client::category::{CategoryResponse, CategoryStatistics};
 use rust_decimal::Decimal;
+use std::collections::HashMap;
+use std::rc::Rc;
 use std::str::FromStr;
+use yew::prelude::*;
 
 #[derive(Properties, PartialEq)]
 pub struct TreeItemProps {
@@ -112,15 +112,33 @@ pub fn tree_item(props: &TreeItemProps) -> Html {
 
                 // Statistics
                 if let Some(stats) = props.stats_map.get(&props.category.id) {
-                    <div class="flex flex-col items-end mr-4">
-                        <div class={format!("font-semibold {}",
-                            if let Ok(amount) = Decimal::from_str(&stats.total_amount) {
+                    <div class="flex flex-col items-end mr-4 min-w-[180px]">
+                        // Yearly totals
+                        { for stats.yearly_totals.iter().map(|yt| {
+                            let amount_class = if let Ok(amount) = Decimal::from_str(&yt.amount) {
+                                if amount < Decimal::ZERO { "text-error" } else { "text-success" }
+                            } else {
+                                "text-base-content"
+                            };
+                            html! {
+                                <div class={format!("text-xs {}", amount_class)}>
+                                    {format!("{}: {}", yt.year, &yt.amount)}
+                                </div>
+                            }
+                        })}
+                        // Average per year
+                        <div class={format!("font-semibold text-sm {}",
+                            if let Ok(amount) = Decimal::from_str(&stats.average_per_year) {
                                 if amount < Decimal::ZERO { "text-error" } else { "text-success" }
                             } else {
                                 "text-base-content"
                             }
                         )}>
-                            {format!("${}", &stats.total_amount)}
+                            {format!("Avg/yr: {}", &stats.average_per_year)}
+                        </div>
+                        // Percentage badge
+                        <div class="badge badge-sm badge-outline mt-1">
+                            {format!("{:.1}%", stats.percentage)}
                         </div>
                         <div class="text-xs text-gray-500">
                             {format!("{} transactions", stats.transaction_count)}

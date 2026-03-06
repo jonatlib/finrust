@@ -1,12 +1,12 @@
-use yew::prelude::*;
-use std::collections::HashMap;
-use std::rc::Rc;
+use super::category_modal::CategoryModal;
+use super::tree_item::TreeItem;
 use crate::api_client::category::{get_categories, get_category_stats, CategoryResponse, CategoryStatistics};
 use crate::common::fetch_hook::use_fetch_with_refetch;
 use crate::hooks::FetchState;
-use super::tree_item::TreeItem;
-use super::category_modal::CategoryModal;
 use chrono::{Datelike, NaiveDate};
+use std::collections::HashMap;
+use std::rc::Rc;
+use yew::prelude::*;
 
 #[function_component(Categories)]
 pub fn categories() -> Html {
@@ -15,10 +15,10 @@ pub fn categories() -> Html {
     let show_modal = use_state(|| false);
     let selected_category = use_state(|| None::<CategoryResponse>);
 
-    // Get current year start and end dates for stats
+    // Fetch stats across a wide range to get multi-year data up to today
     let now = chrono::Local::now().naive_local();
-    let start_date = NaiveDate::from_ymd_opt(now.year(), 1, 1).unwrap().to_string();
-    let end_date = NaiveDate::from_ymd_opt(now.year(), 12, 31).unwrap().to_string();
+    let start_date = NaiveDate::from_ymd_opt(now.year() - 10, 1, 1).unwrap().to_string();
+    let end_date = NaiveDate::from_ymd_opt(now.year(), now.month(), now.day()).unwrap().to_string();
 
     let (stats_state, _stats_refetch) = use_fetch_with_refetch(move || {
         let start_date = start_date.clone();
@@ -48,7 +48,7 @@ pub fn categories() -> Html {
             }
 
             (roots, children_map)
-        },
+        }
         _ => (Vec::new(), HashMap::new()),
     };
 
@@ -56,7 +56,7 @@ pub fn categories() -> Html {
     let stats_map: HashMap<i32, CategoryStatistics> = match &*stats_state {
         FetchState::Success(stats) => {
             stats.iter().map(|stat| (stat.category_id, stat.clone())).collect()
-        },
+        }
         _ => HashMap::new(),
     };
 

@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use crate::api_client;
+use serde::{Deserialize, Serialize};
 
 /// Category response model
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
@@ -26,12 +26,24 @@ pub struct UpdateCategoryRequest {
     pub parent_id: Option<i32>,
 }
 
-/// Category statistics response
+/// Yearly total for a category
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+pub struct YearlyTotal {
+    pub year: i32,
+    pub amount: String,
+}
+
+/// Category statistics response with tree-aggregated totals, averages, and percentages
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct CategoryStatistics {
     pub category_id: i32,
     pub category_name: String,
+    pub parent_id: Option<i32>,
+    pub own_total: String,
     pub total_amount: String,
+    pub yearly_totals: Vec<YearlyTotal>,
+    pub average_per_year: String,
+    pub percentage: f64,
     pub transaction_count: i64,
 }
 
