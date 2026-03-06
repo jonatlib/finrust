@@ -1,5 +1,14 @@
 - Bugs:
-    - None now
+    - Fix tests
+    - Frontend not whole decimal places but one zero decimal places is enough
+        - Mainly on the accounts page and account detail page
+    - Transactions page (recurring and extra)
+        - When using filters the pagination don't take them into account leading to broken pagination
+    - Broken categories page
+        - Stats not correct - it should be sum of all transactions per year.
+        - Then would be nice to show also average per year
+        - And also percentage of that category
+            - Beware the categories are tree so it sums up in the tree
 
 
 - show per account current state, and state at the end of current month.
