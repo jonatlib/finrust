@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use tracing::{debug, info, instrument, trace};
 
 use super::{AccountStateCalculator, MergeMethod};
-use crate::error::{ComputeError, Result};
+use crate::error::Result;
 
 /// A calculator that computes account balances based on transactions and manual states.
 pub struct BalanceCalculator {
@@ -124,9 +124,11 @@ use self::{
 ///
 /// It considers transactions where the account is both source and target.
 ///
-/// If no manual account state is available, it returns an error.
-/// If manual account states are available, it starts computing balance from the earliest one,
-/// ignoring all transactions before that point.
+/// If no manual account state is available, the account is treated as having initial balance zero
+/// at the start of the requested date range.
+/// If manual account states are available, the latest state on or before `start_date` is used
+/// (which may be outside the requested range—"last balance in bigger history").
+/// Transactions before that state are ignored.
 ///
 /// # Scenario Context
 /// - `None`: Fetch only real transactions (is_simulated = false)
@@ -160,88 +162,84 @@ async fn compute_balance(
         // Get all manual account states for this account
         trace!("Getting all manual states for account {}", account.id);
 
-        // Get all manual states for this account (regardless of date range)
-        // We'll use the earliest one as our starting point
+        // Get all manual states for this account (regardless of date range).
+        // When present, we use the latest state on or before start_date so the "last balance"
+        // can come from a wider history than the current filter.
         let all_manual_states = get_all_manual_states(db, account.id).await?;
 
-        if all_manual_states.is_empty() {
-            return Err(ComputeError::BalanceComputation(format!(
-                "No manual account state found for account {}. Cannot compute balance without a starting point.",
-                account.id
-            )));
-        }
+        let (mut current_balance, tx_from_date, current_date, filter_date_for_manual_state) =
+            if all_manual_states.is_empty() {
+                debug!(
+                    "No manual account state for account {}; using initial balance zero from {}",
+                    account.id, start_date
+                );
+                (
+                    Decimal::ZERO,
+                    start_date,
+                    start_date,
+                    None::<NaiveDate>,
+                )
+            } else {
+                // Find the appropriate starting manual state:
+                // - Use the latest manual state on or before start_date (may be outside filter range)
+                // - If start_date is before all manual states, use the earliest manual state
+                let starting_state = if let Some(latest_state_before_or_at_start) = all_manual_states
+                    .iter()
+                    .filter(|state| state.date <= start_date)
+                    .max_by_key(|state| state.date)
+                {
+                    latest_state_before_or_at_start
+                } else {
+                    all_manual_states
+                        .iter()
+                        .min_by_key(|state| state.date)
+                        .unwrap()
+                };
 
-        // Find the appropriate starting manual state:
-        // - For historical/current dates: use the latest manual state on or before start_date
-        // - For future dates beyond all manual states: use the latest manual state overall
-        let starting_state = if let Some(latest_state_before_or_at_start) = all_manual_states
-            .iter()
-            .filter(|state| state.date <= start_date)
-            .max_by_key(|state| state.date)
-        {
-            // We found a manual state on or before start_date, use it
-            latest_state_before_or_at_start
-        } else {
-            // No manual state on or before start_date
-            // This means start_date is before the earliest manual state
-            // Use the earliest manual state
-            all_manual_states
-                .iter()
-                .min_by_key(|state| state.date)
-                .unwrap() // Safe as we checked for empty above
-        };
+                debug!(
+                    "Using starting manual state for account {}: date={}, amount={}",
+                    account.id, starting_state.date, starting_state.amount
+                );
 
-        debug!(
-            "Using starting manual state for account {}: date={}, amount={}",
-            account.id, starting_state.date, starting_state.amount
-        );
+                (
+                    starting_state.amount,
+                    starting_state.date,
+                    std::cmp::max(starting_state.date, start_date),
+                    Some(starting_state.date),
+                )
+            };
 
-        // Initialize balance with the starting manual state
-        let mut current_balance = starting_state.amount;
-        // Use the max of starting_state.date and start_date as our starting point for storing balances
-        let current_date = std::cmp::max(starting_state.date, start_date);
-
-        // Special case: If the starting manual state is on the same date as a recurring transaction,
-        // we need to make sure the manual state takes precedence for that date.
-        // We'll handle this by filtering out transactions on the starting manual state's date.
-        debug!(
-            "Checking for transactions on the starting manual state date: {}",
-            starting_state.date
-        );
-
-        // Get all transactions for this account from the starting manual state date to the end date
+        // Get all transactions for this account from tx_from_date to the end date
         trace!(
             "Getting transactions for account {} from {} to {} (scenario_context={:?})",
-            account.id, starting_state.date, end_date, scenario_context
+            account.id, tx_from_date, end_date, scenario_context
         );
         let transactions =
-            get_transactions_for_account(db, account.id, starting_state.date, end_date, scenario_context).await?;
+            get_transactions_for_account(db, account.id, tx_from_date, end_date, scenario_context).await?;
         debug!(
             "Found {} transactions for account {}",
             transactions.len(),
             account.id
         );
 
-        // Get all imported transactions for this account from the starting manual state date to the end date
         trace!(
             "Getting imported transactions for account {} from {} to {}",
-            account.id, starting_state.date, end_date
+            account.id, tx_from_date, end_date
         );
         let imported_transactions =
-            get_imported_transactions(db, account.id, starting_state.date, end_date).await?;
+            get_imported_transactions(db, account.id, tx_from_date, end_date).await?;
         debug!(
             "Found {} imported transactions for account {}",
             imported_transactions.len(),
             account.id
         );
 
-        // Get all recurring transactions for this account from the starting manual state date to the end date
         trace!(
             "Getting recurring transactions for account {} from {} to {} (today={}, scenario_context={:?})",
-            account.id, starting_state.date, end_date, today, scenario_context
+            account.id, tx_from_date, end_date, today, scenario_context
         );
         let recurring_transactions =
-            get_recurring_transactions(db, account.id, starting_state.date, end_date, today, scenario_context)
+            get_recurring_transactions(db, account.id, tx_from_date, end_date, today, scenario_context)
                 .await?;
         debug!(
             "Found {} recurring transactions for account {}",
@@ -249,13 +247,12 @@ async fn compute_balance(
             account.id
         );
 
-        // Get all recurring income for this account from the starting manual state date to the end date
         trace!(
             "Getting recurring income for account {} from {} to {} (today={}, scenario_context={:?})",
-            account.id, starting_state.date, end_date, today, scenario_context
+            account.id, tx_from_date, end_date, today, scenario_context
         );
         let recurring_income =
-            get_recurring_income(db, account.id, starting_state.date, end_date, today, scenario_context).await?;
+            get_recurring_income(db, account.id, tx_from_date, end_date, today, scenario_context).await?;
         debug!(
             "Found {} recurring income entries for account {}",
             recurring_income.len(),
@@ -337,13 +334,16 @@ async fn compute_balance(
             }
         }
 
-        // Filter out transactions on the starting manual state's date
-        // This ensures that the manual state takes precedence
-        all_transactions.retain(|(date, _)| *date != starting_state.date);
-        debug!(
-            "Filtered out transactions on the starting manual state date. Remaining: {}",
-            all_transactions.len()
-        );
+        // When we have a manual state as starting point, filter out transactions on that date
+        // so the manual state takes precedence.
+        if let Some(manual_date) = filter_date_for_manual_state {
+            all_transactions.retain(|(date, _)| *date != manual_date);
+            debug!(
+                "Filtered out transactions on the starting manual state date {}. Remaining: {}",
+                manual_date,
+                all_transactions.len()
+            );
+        }
 
         // Sort transactions by date
         all_transactions.sort_by(|a, b| a.0.cmp(&b.0));
@@ -363,7 +363,7 @@ async fn compute_balance(
             "Processing transactions and calculating balance for account {}",
             account.id
         );
-        let mut date = starting_state.date;
+        let mut date = tx_from_date;
         let mut tx_index = 0;
 
         while date <= end_date {

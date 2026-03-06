@@ -1,5 +1,5 @@
 - Bugs:
-    - Account without initial balance should work - should set to zero
+    - None now
 
 
 - show per account current state, and state at the end of current month.
