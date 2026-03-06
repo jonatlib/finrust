@@ -5,6 +5,13 @@
 - show per account current state, and state at the end of current month.
 
 
+- show tumbling minimum per account to be able to see if the account state is actually growing or not
+    - show this in account detail as new charts
+        - one chart on the historical balances
+        - and one for forecast.
+    - Add also stats about this on the all accounts page - to be able to assess how the balance on tha account builds up
+
+
 - be able to create instance of recurring transaction early and then don't count it in the future.
     - For eample pay car service two months early
     - write test for this
