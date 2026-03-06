@@ -1,3 +1,7 @@
+- Bugs:
+    - Account without initial balance should work - should set to zero
+
+
 - show per account current state, and state at the end of current month.
 
 
@@ -37,3 +41,29 @@
     - beware invoicing is done after the month - last month is in the new year, last month of previosu month is in
       current year
     - vacation days per month
+
+
+- LLM export still active recurring transactions in TOML for LLM
+    - add export from banking
+    - LLM again in toml format suggest changes based on real expences
+    - the export from LLM will define fix schema to use -
+    - then be able to import this suggested changes back
+    - before importing them show a diff of current transaction and suggested change and be able to select which will be
+      accepted.
+    - then import and change
+    - be mindful of account - only one account exported and one account compared from bank
+
+
+- LLM export of recurring transactions
+    - based on bank export
+    - same be mindful of what account exported and compared
+
+
+- suggest missing recurring transactions
+
+
+- Implement MCP server
+    - Expose APIs like
+        - Categories and yearly spend there
+        - Account statuses - now, at the end of the year
+        - Average throug aout the year
