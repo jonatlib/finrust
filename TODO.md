@@ -1,14 +1,24 @@
 - Bugs:
     - Fix tests
+    - Same color schema for accounts
+        - Add account color as an atribute (migrations etc)
+        - Make it that importer will assign colors - by sequence the accounts are created - so it is stable
+        - Update all charts which show multiple accounts to follow this color scheme
+        - Boubles on overview should follow again this color scheme - but also to show using some badge the account type
+          color
     - Frontend not whole decimal places but one zero decimal places is enough
         - Mainly on the accounts page and account detail page
     - Transactions page (recurring and extra)
         - When using filters the pagination don't take them into account leading to broken pagination
+    - Recent activities on dashboard are not sorted - showing old transactions.
     - Broken categories page
         - Stats not correct - it should be sum of all transactions per year.
         - Then would be nice to show also average per year
         - And also percentage of that category
             - Beware the categories are tree so it sums up in the tree
+    - The stats on the account detail page don't match with data in balance - i believe the balance chart.
+    - Frontend shows $ sign. Instead of curency based on account
+        - This might lead to multicurrency - don't do it now. Just use currency by first account
 
 
 - show per account current state, and state at the end of current month.
