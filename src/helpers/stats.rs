@@ -28,6 +28,32 @@ pub async fn compute_account_statistics(
     let accounts = vec![account.clone()];
     let compute = default_compute(None);
     let account_id = account.id;
+    let today = chrono::Utc::now().date_naive();
+
+    let current_state_stats = account_stats::state_at_date(
+        &compute as &dyn AccountStateCalculator,
+        db,
+        &accounts,
+        today,
+    )
+        .await
+        .unwrap_or_else(|_| vec![]);
+    let current_month_end_stats = account_stats::end_of_month_state(
+        &compute as &dyn AccountStateCalculator,
+        db,
+        &accounts,
+        today.year(),
+        today.month(),
+    )
+        .await
+        .unwrap_or_else(|_| vec![]);
+
+    let current_state = current_state_stats
+        .first()
+        .and_then(|s| s.end_of_period_state);
+    let end_of_current_month_state = current_month_end_stats
+        .first()
+        .and_then(|s| s.end_of_period_state);
 
     let statistics = match period {
         TimePeriod::Year(year) => {
@@ -105,6 +131,8 @@ pub async fn compute_account_statistics(
                 upcoming_expenses: upcoming_expenses_stats
                     .first()
                     .and_then(|s| s.upcoming_expenses),
+                current_state,
+                end_of_current_month_state,
                 end_of_period_state: end_of_period_stats
                     .first()
                     .and_then(|s| s.end_of_period_state),
@@ -192,6 +220,8 @@ pub async fn compute_account_statistics(
                 upcoming_expenses: upcoming_expenses_stats
                     .first()
                     .and_then(|s| s.upcoming_expenses),
+                current_state,
+                end_of_current_month_state,
                 end_of_period_state: end_of_period_stats
                     .first()
                     .and_then(|s| s.end_of_period_state),
@@ -274,6 +304,8 @@ pub async fn compute_account_statistics(
                 upcoming_expenses: upcoming_expenses_stats
                     .first()
                     .and_then(|s| s.upcoming_expenses),
+                current_state,
+                end_of_current_month_state,
                 end_of_period_state: end_of_period_stats
                     .first()
                     .and_then(|s| s.end_of_period_state),

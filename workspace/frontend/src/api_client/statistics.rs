@@ -11,6 +11,8 @@ pub struct AccountStatistics {
     pub average_expense: Option<Decimal>,
     pub average_income: Option<Decimal>,
     pub upcoming_expenses: Option<Decimal>,
+    pub current_state: Option<Decimal>,
+    pub end_of_current_month_state: Option<Decimal>,
     pub end_of_period_state: Option<Decimal>,
     pub goal_reached_date: Option<NaiveDate>,
 }

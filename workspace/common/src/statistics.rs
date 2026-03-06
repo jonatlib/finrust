@@ -26,6 +26,10 @@ pub struct AccountStatistics {
     pub average_income: Option<Decimal>,
     /// Upcoming expenses in the period
     pub upcoming_expenses: Option<Decimal>,
+    /// Account state at current date
+    pub current_state: Option<Decimal>,
+    /// Account state at the end of current month
+    pub end_of_current_month_state: Option<Decimal>,
     /// Account state at the end of the period
     pub end_of_period_state: Option<Decimal>,
     /// Date when goal target is reached (for Goal accounts only)
@@ -121,6 +125,8 @@ mod tests {
             average_expense: Some(Decimal::new(200, 2)),
             average_income: Some(Decimal::new(300, 2)),
             upcoming_expenses: Some(Decimal::new(150, 2)),
+            current_state: Some(Decimal::new(350, 2)),
+            end_of_current_month_state: Some(Decimal::new(375, 2)),
             end_of_period_state: Some(Decimal::new(400, 2)),
             goal_reached_date: None,
         };
@@ -138,6 +144,8 @@ mod tests {
             average_expense: None,
             average_income: None,
             upcoming_expenses: None,
+            current_state: None,
+            end_of_current_month_state: None,
             end_of_period_state: None,
             goal_reached_date: None,
         };
@@ -149,6 +157,8 @@ mod tests {
             average_expense: None,
             average_income: None,
             upcoming_expenses: None,
+            current_state: None,
+            end_of_current_month_state: None,
             end_of_period_state: None,
             goal_reached_date: None,
         };

@@ -63,6 +63,8 @@ pub fn compute_stats_to_common_stats(
     average_expense: Option<Decimal>,
     average_income: Option<Decimal>,
     upcoming_expenses: Option<Decimal>,
+    current_state: Option<Decimal>,
+    end_of_current_month_state: Option<Decimal>,
     end_of_period_state: Option<Decimal>,
 ) -> AccountStatistics {
     AccountStatistics {
@@ -72,7 +74,10 @@ pub fn compute_stats_to_common_stats(
         average_expense,
         average_income,
         upcoming_expenses,
+        current_state,
+        end_of_current_month_state,
         end_of_period_state,
+        goal_reached_date: None,
     }
 }
 
@@ -89,6 +94,8 @@ pub fn compute_stats_vec_to_collection(
         Option<Decimal>,
         Option<Decimal>,
         Option<Decimal>,
+        Option<Decimal>,
+        Option<Decimal>,
     )>,
     period: TimePeriod,
 ) -> AccountStatisticsCollection {
@@ -96,14 +103,16 @@ pub fn compute_stats_vec_to_collection(
         .into_iter()
         .map(
             |(
-                account_id,
-                min_state,
-                max_state,
-                average_expense,
-                average_income,
-                upcoming_expenses,
-                end_of_period_state,
-            )| {
+                 account_id,
+                 min_state,
+                 max_state,
+                 average_expense,
+                 average_income,
+                 upcoming_expenses,
+                 current_state,
+                 end_of_current_month_state,
+                 end_of_period_state,
+             )| {
                 compute_stats_to_common_stats(
                     account_id,
                     min_state,
@@ -111,6 +120,8 @@ pub fn compute_stats_vec_to_collection(
                     average_expense,
                     average_income,
                     upcoming_expenses,
+                    current_state,
+                    end_of_current_month_state,
                     end_of_period_state,
                 )
             },
@@ -189,6 +200,8 @@ pub fn statistics_to_raw_data(
     Option<String>,
     Option<String>,
     Option<String>,
+    Option<String>,
+    Option<String>,
 )> {
     collection
         .statistics
@@ -201,6 +214,8 @@ pub fn statistics_to_raw_data(
                 stats.average_expense.map(|d| d.to_string()),
                 stats.average_income.map(|d| d.to_string()),
                 stats.upcoming_expenses.map(|d| d.to_string()),
+                stats.current_state.map(|d| d.to_string()),
+                stats.end_of_current_month_state.map(|d| d.to_string()),
                 stats.end_of_period_state.map(|d| d.to_string()),
             )
         })
@@ -220,6 +235,8 @@ mod tests {
             Some(Decimal::new(200, 2)),
             Some(Decimal::new(300, 2)),
             Some(Decimal::new(150, 2)),
+            Some(Decimal::new(350, 2)),
+            Some(Decimal::new(375, 2)),
             Some(Decimal::new(400, 2)),
         );
 
@@ -279,11 +296,15 @@ mod tests {
                 None,
                 None,
                 None,
+                None,
+                None,
             ),
             (
                 2,
                 Some(Decimal::new(200, 2)),
                 Some(Decimal::new(600, 2)),
+                None,
+                None,
                 None,
                 None,
                 None,

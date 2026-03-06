@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use crate::api_client;
+use serde::{Deserialize, Serialize};
 
 /// The kind of account
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Deserialize, Serialize)]
@@ -62,6 +62,8 @@ pub struct AccountStatistics {
     pub average_expense: Option<String>,
     pub average_income: Option<String>,
     pub upcoming_expenses: Option<String>,
+    pub current_state: Option<String>,
+    pub end_of_current_month_state: Option<String>,
     pub end_of_period_state: Option<String>,
 }
 

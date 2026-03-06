@@ -4,12 +4,12 @@
 //! such as minimum and maximum states, average expenses and income, upcoming expenses,
 //! and end-of-period states.
 
-use chrono::{NaiveDate, Datelike};
+use chrono::{Datelike, NaiveDate};
 use polars::prelude::*;
 use rust_decimal::Decimal;
-use std::str::FromStr;
-use std::collections::HashMap;
 use sea_orm::DatabaseConnection;
+use std::collections::HashMap;
+use std::str::FromStr;
 use tracing::instrument;
 
 use model::entities::account;
@@ -237,6 +237,21 @@ pub async fn end_of_month_state(
         .compute_account_state(db, accounts, start_date, end_date)
         .await?;
     compute_end_of_period_state_from_dataframe(df, end_date)
+}
+
+/// Computes account state at a specific date.
+#[instrument(skip(calculator, db, accounts))]
+pub async fn state_at_date(
+    calculator: &dyn AccountStateCalculator,
+    db: &DatabaseConnection,
+    accounts: &[account::Model],
+    date: NaiveDate,
+) -> Result<Vec<AccountStats>> {
+    let start_date = NaiveDate::from_ymd_opt(date.year(), 1, 1).unwrap();
+    let df = calculator
+        .compute_account_state(db, accounts, start_date, date)
+        .await?;
+    compute_end_of_period_state_from_dataframe(df, date)
 }
 
 // Helper types and functions
@@ -689,7 +704,7 @@ mod tests {
             "account_id" => &[1i32, 2, 1, 3],
             "balance" => &[10i32, 20, 15, 30],
         }
-        .unwrap();
+            .unwrap();
         let mut ids = get_unique_account_ids(&df).unwrap();
         ids.sort();
         assert_eq!(ids, vec![1, 2, 3]);
@@ -701,10 +716,39 @@ mod tests {
             "account" => &[7i32, 7, 8],
             "balance" => &[1i32, 2, 3],
         }
-        .unwrap();
+            .unwrap();
         let mut ids = get_unique_account_ids(&df).unwrap();
         ids.sort();
         assert_eq!(ids, vec![7, 8]);
+    }
+
+    #[test]
+    fn test_compute_end_of_period_state_respects_cutoff_and_accounts() {
+        let d1 = NaiveDate::from_ymd_opt(2026, 3, 10).unwrap();
+        let d2 = NaiveDate::from_ymd_opt(2026, 3, 20).unwrap();
+        let d3 = NaiveDate::from_ymd_opt(2026, 3, 31).unwrap();
+
+        let df = df! {
+            "account_id" => &[1i32, 1, 1, 2, 2],
+            "date" => &[
+                d1.num_days_from_ce() as i64,
+                d2.num_days_from_ce() as i64,
+                d3.num_days_from_ce() as i64,
+                d1.num_days_from_ce() as i64,
+                d2.num_days_from_ce() as i64,
+            ],
+            "balance" => &["100.00", "120.00", "150.00", "200.00", "180.00"],
+        }
+            .unwrap();
+
+        let mut stats = compute_end_of_period_state_from_dataframe(df, d2).unwrap();
+        stats.sort_by_key(|s| s.account_id);
+
+        assert_eq!(stats.len(), 2);
+        assert_eq!(stats[0].account_id, 1);
+        assert_eq!(stats[0].end_of_period_state, Some(Decimal::new(12000, 2)));
+        assert_eq!(stats[1].account_id, 2);
+        assert_eq!(stats[1].end_of_period_state, Some(Decimal::new(18000, 2)));
     }
 
     #[test]
@@ -725,7 +769,7 @@ mod tests {
             "date" => date_strings.as_slice(),
             "balance" => balances.as_slice(),
         }
-        .unwrap();
+            .unwrap();
 
         let target = Decimal::from(50000);
         let result = calculate_goal_reached_date(&df, target).unwrap();
@@ -753,7 +797,7 @@ mod tests {
             "date" => date_strings.as_slice(),
             "balance" => balances.as_slice(),
         }
-        .unwrap();
+            .unwrap();
 
         let target = Decimal::from(50000);
         let result = calculate_goal_reached_date(&df, target).unwrap();
@@ -781,7 +825,7 @@ mod tests {
             "date" => date_strings.as_slice(),
             "balance" => balances.as_slice(),
         }
-        .unwrap();
+            .unwrap();
 
         let target = Decimal::from(50000);
         let result = calculate_goal_reached_date(&df, target).unwrap();
@@ -807,7 +851,7 @@ mod tests {
             "date" => date_strings.as_slice(),
             "balance" => balances.as_slice(),
         }
-        .unwrap();
+            .unwrap();
 
         let target = Decimal::from(50000);
         let result = calculate_goal_reached_date(&df, target).unwrap();

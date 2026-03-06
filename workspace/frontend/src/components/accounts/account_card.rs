@@ -1,10 +1,10 @@
-use yew::prelude::*;
-use yew_router::prelude::*;
-use crate::api_client::account::{AccountResponse, AccountKind};
+use crate::api_client::account::{AccountKind, AccountResponse};
 use crate::api_client::statistics::get_account_statistics_with_ignored;
 use crate::common::fetch_hook::use_fetch_with_refetch;
 use crate::hooks::FetchState;
 use crate::Route;
+use yew::prelude::*;
+use yew_router::prelude::*;
 
 #[derive(Properties, PartialEq)]
 pub struct Props {
@@ -40,7 +40,7 @@ pub fn account_card(props: &Props) -> Html {
         FetchState::Success(collection) => {
             log::debug!("Account {} stats: {:?}", account_id, collection.statistics.first());
             collection.statistics.first()
-        },
+        }
         _ => None,
     };
 
@@ -90,7 +90,7 @@ pub fn account_card(props: &Props) -> Html {
                                     match &*stats_state {
                                         FetchState::Success(_) => {
                                             if let Some(s) = stats {
-                                                if let Some(balance_decimal) = &s.end_of_period_state {
+                                                if let Some(balance_decimal) = &s.current_state {
                                                     // Convert Decimal to f64 for calculations
                                                     if let Ok(current_balance) = balance_decimal.to_string().parse::<f64>() {
                                                         let progress = (current_balance / target_num * 100.0).min(100.0).max(0.0);
@@ -194,7 +194,7 @@ pub fn account_card(props: &Props) -> Html {
                                     <div class="grid grid-cols-1 gap-2">
                                         <div class="flex justify-between items-center">
                                             <span class="text-xs text-gray-500">{"Current Balance:"}</span>
-                                            {if let Some(balance) = &s.end_of_period_state {
+                                            {if let Some(balance) = &s.current_state {
                                                 html! { <span class="text-sm font-bold">{balance}{" "}{&account.currency_code}</span> }
                                             } else {
                                                 html! { <span class="text-xs text-gray-400">{"N/A"}</span> }

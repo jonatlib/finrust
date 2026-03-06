@@ -1,7 +1,7 @@
-use yew::prelude::*;
-use crate::api_client::statistics::{get_account_statistics_with_ignored, AccountStatisticsCollection};
+use crate::api_client::statistics::get_account_statistics_with_ignored;
 use crate::common::fetch_hook::use_fetch_with_refetch;
 use crate::hooks::FetchState;
+use yew::prelude::*;
 
 #[derive(Properties, PartialEq)]
 pub struct Props {
@@ -36,9 +36,17 @@ pub fn account_stats(props: &Props) -> Html {
                                     <div class="stat bg-base-200 rounded-lg">
                                         <div class="stat-title">{"Current Balance"}</div>
                                         <div class={classes!("stat-value", "text-lg")}>
-                                            {format_decimal_option(stats.end_of_period_state)}
+                                            {format_decimal_option(stats.current_state)}
                                         </div>
-                                        <div class="stat-desc">{"End of period state"}</div>
+                                        <div class="stat-desc">{"As of today"}</div>
+                                    </div>
+
+                                    <div class="stat bg-base-200 rounded-lg">
+                                        <div class="stat-title">{"End of Month"}</div>
+                                        <div class={classes!("stat-value", "text-lg")}>
+                                            {format_decimal_option(stats.end_of_current_month_state)}
+                                        </div>
+                                        <div class="stat-desc">{"Forecast for current month end"}</div>
                                     </div>
 
                                     <div class="stat bg-base-200 rounded-lg">
