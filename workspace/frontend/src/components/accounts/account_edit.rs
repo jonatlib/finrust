@@ -1,5 +1,5 @@
 use super::account_modal::AccountModal;
-use super::{AccountChart, AccountForecast, AccountMetrics, AccountStats, GoalProgress};
+use super::{AccountCashflowChart, AccountChart, AccountForecast, AccountMetrics, AccountStats, GoalProgress};
 use crate::api_client::account::{delete_account, get_account_with_ignored, AccountKind};
 use crate::api_client::statistics::get_account_statistics_with_ignored;
 use crate::common::fetch_hook::use_fetch_with_refetch;
@@ -260,6 +260,8 @@ pub fn account_edit(props: &Props) -> Html {
                                 <AccountChart account_id={account_id} />
 
                                 <AccountForecast account_id={account_id} />
+
+                                <AccountCashflowChart account_id={account_id} />
 
                                 <ManualStatesAccountView account_id={account_id} />
                             </div>

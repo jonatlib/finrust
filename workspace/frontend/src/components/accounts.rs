@@ -1,4 +1,5 @@
 mod account_card;
+mod account_cashflow_chart;
 mod account_edit;
 mod account_modal;
 mod view;
@@ -7,6 +8,7 @@ mod account_chart;
 mod account_forecast;
 mod account_metrics;
 mod goal_progress;
+pub use account_cashflow_chart::AccountCashflowChart;
 pub use account_chart::AccountChart;
 pub use account_edit::AccountEdit;
 pub use account_forecast::AccountForecast;
