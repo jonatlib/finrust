@@ -17,6 +17,7 @@ use crate::error::Result;
 use crate::metrics::account_metrics;
 
 use super::account_metrics::monthly_equivalent;
+use super::filter_active_recurring;
 
 /// Computes the full dashboard of cross-account metrics.
 ///
@@ -78,8 +79,12 @@ pub async fn compute_dashboard_metrics(
         .sum();
 
     // Recurring transactions for burn rate and income calculations
-    let all_recurring: Vec<recurring_transaction::Model> =
+    // Only include transactions active on the reference date (not expired, not future, not simulated)
+    let all_recurring_raw: Vec<recurring_transaction::Model> =
         recurring_transaction::Entity::find().all(db).await?;
+    let all_recurring = filter_active_recurring(&all_recurring_raw, today);
+
+    trace!(total_in_db = all_recurring_raw.len(), active = all_recurring.len(), "Filtered active recurring transactions");
 
     // Monthly income: sum of positive recurring amounts, excluding internal transfers
     let monthly_income: Decimal = all_recurring
@@ -95,6 +100,8 @@ pub async fn compute_dashboard_metrics(
         .filter(|r| r.amount.is_sign_negative() && r.include_in_statistics && r.source_account_id.is_none())
         .map(|r| monthly_equivalent(r.amount.abs(), &r.period))
         .sum();
+
+    trace!(%monthly_income, %full_burn_rate, "Burn rate and income computed");
 
     // Essential burn rate: recurring expenses on RealAccount targets only
     // (these represent core operating expenses)
@@ -114,6 +121,8 @@ pub async fn compute_dashboard_metrics(
         })
         .map(|r| monthly_equivalent(r.amount.abs(), &r.period))
         .sum();
+
+    trace!(%essential_burn_rate, "Essential burn rate computed");
 
     // Free cashflow
     let free_cashflow = monthly_income - full_burn_rate;

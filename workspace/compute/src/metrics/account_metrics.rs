@@ -20,6 +20,7 @@ use model::entities::recurring_transaction;
 use crate::account::AccountStateCalculator;
 use crate::account_stats;
 use crate::error::{ComputeError, Result};
+use crate::metrics::filter_active_recurring;
 
 /// Computes all per-account metrics for a single account.
 ///
@@ -268,7 +269,7 @@ async fn compute_kind_metrics(
 ) -> Result<Option<AccountKindMetricsDto>> {
     match account.account_kind {
         AccountKind::RealAccount => {
-            let m = compute_operating_metrics(db, account, current_balance).await?;
+            let m = compute_operating_metrics(db, account, current_balance, today).await?;
             Ok(Some(AccountKindMetricsDto::Operating(m)))
         }
         AccountKind::Savings | AccountKind::Goal => {
@@ -297,6 +298,7 @@ async fn compute_operating_metrics(
     db: &DatabaseConnection,
     account: &account::Model,
     current_balance: Decimal,
+    today: NaiveDate,
 ) -> Result<OperatingMetricsDto> {
     let operating_buffer = account.target_amount.map(|t| current_balance - t);
     let sweep_potential = account
@@ -304,7 +306,7 @@ async fn compute_operating_metrics(
         .map(|t| Decimal::max(Decimal::ZERO, current_balance - t));
 
     let mandatory_coverage_months =
-        compute_mandatory_coverage(db, account.id, current_balance).await?;
+        compute_mandatory_coverage(db, account.id, current_balance, today).await?;
 
     Ok(OperatingMetricsDto {
         operating_buffer,
@@ -318,11 +320,13 @@ async fn compute_mandatory_coverage(
     db: &DatabaseConnection,
     account_id: i32,
     current_balance: Decimal,
+    today: NaiveDate,
 ) -> Result<Option<Decimal>> {
-    let recurring = recurring_transaction::Entity::find()
+    let all_recurring = recurring_transaction::Entity::find()
         .filter(recurring_transaction::Column::TargetAccountId.eq(account_id))
         .all(db)
         .await?;
+    let recurring = filter_active_recurring(&all_recurring, today);
 
     let monthly_outflow: Decimal = recurring
         .iter()
@@ -469,11 +473,12 @@ async fn compute_debt_metrics(
 ) -> Result<DebtMetricsDto> {
     let outstanding_principal = Some(current_balance.abs());
 
-    // Required monthly payment from recurring transactions
-    let recurring = recurring_transaction::Entity::find()
+    // Required monthly payment from recurring transactions (active only)
+    let all_recurring = recurring_transaction::Entity::find()
         .filter(recurring_transaction::Column::TargetAccountId.eq(account.id))
         .all(db)
         .await?;
+    let recurring = filter_active_recurring(&all_recurring, today);
 
     let required_monthly_payment: Decimal = recurring
         .iter()
