@@ -1,8 +1,10 @@
 use crate::api_client::account::{get_accounts, AccountKind, AccountResponse};
+use crate::api_client::metrics::get_dashboard_metrics;
 use crate::api_client::statistics::{get_all_accounts_statistics, AccountStatisticsCollection};
 use crate::common::fetch_hook::use_fetch_with_refetch;
 use crate::hooks::FetchState;
 use crate::router::Route;
+use common::metrics::DashboardMetricsDto;
 use rust_decimal::Decimal;
 use std::collections::{BTreeMap, HashMap};
 use yew::prelude::*;
@@ -13,6 +15,7 @@ use yew_router::prelude::Link;
 pub fn account_type_bubbles() -> Html {
     let (accounts_state, _) = use_fetch_with_refetch(get_accounts);
     let (statistics_state, _) = use_fetch_with_refetch(get_all_accounts_statistics);
+    let (metrics_state, _) = use_fetch_with_refetch(get_dashboard_metrics);
 
     match (&*accounts_state, &*statistics_state) {
         (FetchState::Loading, _) | (_, FetchState::Loading) => html! {
@@ -39,6 +42,11 @@ pub fn account_type_bubbles() -> Html {
 
             let stats_by_account = build_stats_by_account_id(statistics);
             let grouped_accounts = group_accounts_by_kind(accounts);
+
+            let avg_flows = match &*metrics_state {
+                FetchState::Success(dashboard) => build_avg_flow_map(dashboard),
+                _ => HashMap::new(),
+            };
 
             html! {
                 <div class="space-y-4">
@@ -67,6 +75,8 @@ pub fn account_type_bubbles() -> Html {
                                                 .get(&account.id)
                                                 .cloned()
                                                 .unwrap_or((None, None));
+
+                                            let avg_flow = avg_flows.get(&account.id).copied().flatten();
 
                                             html! {
                                                 <Link<Route>
@@ -97,6 +107,8 @@ pub fn account_type_bubbles() -> Html {
                                                             {format_decimal_option(month_end_state)}
                                                         </div>
 
+                                                        {render_avg_flow_badge(avg_flow)}
+
                                                         <div class="card-actions justify-end">
                                                             <span class="link link-hover text-xs">{"Open detail"}</span>
                                                         </div>
@@ -113,6 +125,25 @@ pub fn account_type_bubbles() -> Html {
             }
         }
         _ => html! { <></> },
+    }
+}
+
+/// Renders a small badge showing the 3-month average net flow.
+fn render_avg_flow_badge(avg_flow: Option<Decimal>) -> Html {
+    match avg_flow {
+        Some(flow) => {
+            let (arrow, color) = if flow >= Decimal::ZERO {
+                ("↑", "text-success")
+            } else {
+                ("↓", "text-error")
+            };
+            html! {
+                <div class={classes!("text-xs", "font-medium", color)} title="3-month average net flow">
+                    {format!("{} {:.0}/mo avg", arrow, flow)}
+                </div>
+            }
+        }
+        None => html! {},
     }
 }
 
@@ -196,6 +227,15 @@ fn build_stats_by_account_id(
     }
 
     stats_by_account
+}
+
+/// Builds a map of account ID to three_month_avg_net_flow from dashboard metrics.
+fn build_avg_flow_map(dashboard: &DashboardMetricsDto) -> HashMap<i32, Option<Decimal>> {
+    dashboard
+        .account_metrics
+        .iter()
+        .map(|m| (m.account_id, m.three_month_avg_net_flow))
+        .collect()
 }
 
 /// Formats optional monetary values for bubble labels.

@@ -78,7 +78,7 @@ pub async fn compute_dashboard_metrics(
         .map(|m| m.current_balance)
         .sum();
 
-    // Recurring transactions for burn rate and income calculations
+    // Recurring transactions for burn rate calculations
     // Only include transactions active on the reference date (not expired, not future, not simulated)
     let all_recurring_raw: Vec<recurring_transaction::Model> =
         recurring_transaction::Entity::find().all(db).await?;
@@ -86,22 +86,13 @@ pub async fn compute_dashboard_metrics(
 
     trace!(total_in_db = all_recurring_raw.len(), active = all_recurring.len(), "Filtered active recurring transactions");
 
-    // Monthly income: sum of positive recurring amounts, excluding internal transfers
-    let monthly_income: Decimal = all_recurring
-        .iter()
-        .filter(|r| r.amount.is_sign_positive() && r.include_in_statistics && r.source_account_id.is_none())
-        .map(|r| monthly_equivalent(r.amount, &r.period))
-        .sum();
-
     // Full burn rate: sum of all negative recurring amounts (as positive),
-    // excluding internal transfers (those with source_account_id)
+    // excluding internal transfers (those with source_account_id set)
     let full_burn_rate: Decimal = all_recurring
         .iter()
         .filter(|r| r.amount.is_sign_negative() && r.include_in_statistics && r.source_account_id.is_none())
         .map(|r| monthly_equivalent(r.amount.abs(), &r.period))
         .sum();
-
-    trace!(%monthly_income, %full_burn_rate, "Burn rate and income computed");
 
     // Essential burn rate: recurring expenses on RealAccount targets only
     // (these represent core operating expenses)
@@ -122,14 +113,27 @@ pub async fn compute_dashboard_metrics(
         .map(|r| monthly_equivalent(r.amount.abs(), &r.period))
         .sum();
 
-    trace!(%essential_burn_rate, "Essential burn rate computed");
+    trace!(%essential_burn_rate, %full_burn_rate, "Burn rates computed");
 
-    // Free cashflow
-    let free_cashflow = monthly_income - full_burn_rate;
+    // Free cashflow: derived from sum of per-account monthly net flows.
+    // This naturally cancels out internal transfers (positive on one account,
+    // negative on another) and includes actual income from real transactions
+    // (e.g. salary deposits), not just recurring transaction definitions.
+    let global_net_flow: Decimal = account_metrics_list
+        .iter()
+        .map(|m| m.monthly_net_flow.unwrap_or(Decimal::ZERO))
+        .sum();
+    let free_cashflow = global_net_flow;
+
+    // Monthly income: back-calculated from free cashflow and burn rate.
+    // income = free_cashflow + full_burn_rate
+    let monthly_income = free_cashflow + full_burn_rate;
+
+    trace!(%monthly_income, %free_cashflow, "Income and free cashflow computed from actual flows");
 
     // Savings rate
-    let savings_rate = if !monthly_income.is_zero() {
-        Some((monthly_income - full_burn_rate) / monthly_income)
+    let savings_rate = if monthly_income > Decimal::ZERO {
+        Some(free_cashflow / monthly_income)
     } else {
         None
     };
@@ -146,30 +150,19 @@ pub async fn compute_dashboard_metrics(
         .map(|a| a.id)
         .collect();
 
-    // Goal engine includes internal transfers TO wealth accounts (these are
-    // intentional savings/investment contributions) but excludes external income
-    // that happens to land on a wealth account
-    let goal_engine: Decimal = all_recurring
+    // Goal engine: monthly total going toward wealth building.
+    // Computed from actual per-account net flows of wealth accounts (Savings, Investment, Goal).
+    // Positive net flow on a wealth account means it is accumulating — that is the goal engine.
+    let goal_engine: Decimal = account_metrics_list
         .iter()
-        .filter(|r| {
-            r.amount.is_sign_negative()
-                && r.include_in_statistics
-                && r.source_account_id
-                .map_or(false, |src| wealth_account_ids.contains(&src))
-        })
-        .map(|r| monthly_equivalent(r.amount.abs(), &r.period))
+        .filter(|m| wealth_account_ids.contains(&m.account_id))
+        .map(|m| Decimal::max(Decimal::ZERO, m.monthly_net_flow.unwrap_or(Decimal::ZERO)))
         .sum();
 
     // Commitment ratio: fixed recurring obligations / net income
     // Only real expenses (not internal transfers)
-    let fixed_obligations: Decimal = all_recurring
-        .iter()
-        .filter(|r| r.amount.is_sign_negative() && r.include_in_statistics && r.source_account_id.is_none())
-        .map(|r| monthly_equivalent(r.amount.abs(), &r.period))
-        .sum();
-
-    let commitment_ratio = if !monthly_income.is_zero() {
-        Some(fixed_obligations / monthly_income)
+    let commitment_ratio = if monthly_income > Decimal::ZERO {
+        Some(full_burn_rate / monthly_income)
     } else {
         None
     };

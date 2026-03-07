@@ -1,5 +1,6 @@
 - Bugs:
     - Fix tests
+    - Cachflow per account per month in time chart per account
     - Same color schema for accounts
         - Add account color as an atribute (migrations etc)
         - Make it that importer will assign colors - by sequence the accounts are created - so it is stable

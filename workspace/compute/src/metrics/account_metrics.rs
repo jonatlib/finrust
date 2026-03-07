@@ -269,7 +269,7 @@ async fn compute_kind_metrics(
 ) -> Result<Option<AccountKindMetricsDto>> {
     match account.account_kind {
         AccountKind::RealAccount => {
-            let m = compute_operating_metrics(db, account, current_balance, today).await?;
+            let m = compute_operating_metrics(calculator, db, account, accounts, current_balance, today).await?;
             Ok(Some(AccountKindMetricsDto::Operating(m)))
         }
         AccountKind::Savings | AccountKind::Goal => {
@@ -294,16 +294,38 @@ async fn compute_kind_metrics(
 }
 
 /// Computes operating-account-specific metrics (buffer, sweep potential, coverage).
+///
+/// Sweep potential uses the projected end-of-month balance rather than the
+/// current mid-month balance, so it reflects the surplus after all recurring
+/// expenses for the month have been applied.
 async fn compute_operating_metrics(
+    calculator: &dyn AccountStateCalculator,
     db: &DatabaseConnection,
     account: &account::Model,
+    accounts: &[account::Model],
     current_balance: Decimal,
     today: NaiveDate,
 ) -> Result<OperatingMetricsDto> {
     let operating_buffer = account.target_amount.map(|t| current_balance - t);
+
+    // Sweep potential uses projected end-of-month balance so it accounts for
+    // all remaining expenses in the current month.
+    let end_of_month = get_last_day_of_month(today.year(), today.month());
+    let projected_eom_balance = match calculator
+        .compute_account_state(db, accounts, today, end_of_month)
+        .await
+    {
+        Ok(df) => {
+            let epoch = NaiveDate::from_ymd_opt(1970, 1, 1).unwrap();
+            let eom_num = end_of_month.signed_duration_since(epoch).num_days();
+            extract_balance_at_date(&df, eom_num).unwrap_or(current_balance)
+        }
+        Err(_) => current_balance,
+    };
+
     let sweep_potential = account
         .target_amount
-        .map(|t| Decimal::max(Decimal::ZERO, current_balance - t));
+        .map(|t| Decimal::max(Decimal::ZERO, projected_eom_balance - t));
 
     let mandatory_coverage_months =
         compute_mandatory_coverage(db, account.id, current_balance, today).await?;
@@ -313,6 +335,36 @@ async fn compute_operating_metrics(
         sweep_potential,
         mandatory_coverage_months,
     })
+}
+
+/// Extracts the balance closest to (but not exceeding) the target date from a DataFrame.
+fn extract_balance_at_date(df: &DataFrame, target_date_num: i64) -> Option<Decimal> {
+    let date_col = df.column("date").ok()?;
+    let balance_col = df.column("balance").ok()?;
+
+    let mut best: Option<(i64, Decimal)> = None;
+
+    for i in 0..df.height() {
+        let date = date_col.get(i).ok()?.try_extract::<i64>().ok()?;
+        if date > target_date_num {
+            continue;
+        }
+        let bal_any = balance_col.get(i).ok()?;
+        let bal_str = match bal_any {
+            AnyValue::String(s) => s.to_string(),
+            AnyValue::StringOwned(s) => s.to_string(),
+            other => other.to_string(),
+        };
+        let bal = Decimal::from_str(&bal_str).ok()?;
+
+        match &best {
+            Some((d, _)) if date > *d => best = Some((date, bal)),
+            None => best = Some((date, bal)),
+            _ => {}
+        }
+    }
+
+    best.map(|(_, bal)| bal)
 }
 
 /// Computes how many months of mandatory (recurring) outflows the current balance covers.
