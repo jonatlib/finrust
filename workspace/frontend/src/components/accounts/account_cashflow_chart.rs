@@ -208,11 +208,79 @@ fn cashflow_plotly_chart(props: &CashflowPlotlyChartProps) -> Html {
                     }
                 });
 
+                // Combine all labels and values for cumulative sum and trendline
+                let all_labels: Vec<String> = hist_labels.iter()
+                    .chain(forecast_labels.iter())
+                    .cloned()
+                    .collect();
+                let all_values: Vec<f64> = hist_values.iter()
+                    .chain(forecast_values.iter())
+                    .copied()
+                    .collect();
+
+                // Cumulative sum trace
+                let mut cumsum = Vec::with_capacity(all_values.len());
+                let mut running = 0.0_f64;
+                for v in &all_values {
+                    running += v;
+                    cumsum.push(running);
+                }
+
+                let cumsum_trace_json = serde_json::json!({
+                    "type": "scatter",
+                    "mode": "lines+markers",
+                    "x": all_labels,
+                    "y": cumsum,
+                    "name": "Cumulative",
+                    "yaxis": "y2",
+                    "line": { "color": "rgb(59, 130, 246)", "width": 2 },
+                    "marker": { "size": 4 }
+                });
+
+                // 3-month moving average trendline
+                let window = 3;
+                let trend_values: Vec<Option<f64>> = (0..all_values.len())
+                    .map(|i| {
+                        if i + 1 < window {
+                            None
+                        } else {
+                            let sum: f64 = all_values[i + 1 - window..=i].iter().sum();
+                            Some(sum / window as f64)
+                        }
+                    })
+                    .collect();
+
+                // Filter to only points where the moving average is defined
+                let trend_labels: Vec<&String> = all_labels.iter()
+                    .zip(trend_values.iter())
+                    .filter_map(|(l, v)| v.map(|_| l))
+                    .collect();
+                let trend_y: Vec<f64> = trend_values.iter()
+                    .filter_map(|v| *v)
+                    .collect();
+
+                let trend_trace_json = serde_json::json!({
+                    "type": "scatter",
+                    "mode": "lines",
+                    "x": trend_labels,
+                    "y": trend_y,
+                    "name": "3M Avg",
+                    "line": { "color": "rgb(168, 85, 247)", "width": 2, "dash": "dash" }
+                });
+
                 let layout = Layout::new()
                     .title(plotly::common::Title::with_text("Monthly Cashflow"))
                     .x_axis(plotly::layout::Axis::new().title(plotly::common::Title::with_text("Month")))
                     .y_axis(plotly::layout::Axis::new().title(plotly::common::Title::with_text("Cashflow")))
                     .height(400);
+
+                // Add secondary y-axis for cumulative sum via raw JSON merge
+                let mut layout_json: serde_json::Value = serde_json::to_value(&layout).unwrap();
+                layout_json["yaxis2"] = serde_json::json!({
+                    "title": { "text": "Cumulative" },
+                    "overlaying": "y",
+                    "side": "right"
+                });
 
                 let hist_js = js_sys::JSON::parse(
                     &serde_json::to_string(&hist_trace_json).unwrap()
@@ -220,13 +288,21 @@ fn cashflow_plotly_chart(props: &CashflowPlotlyChartProps) -> Html {
                 let forecast_js = js_sys::JSON::parse(
                     &serde_json::to_string(&forecast_trace_json).unwrap()
                 ).unwrap();
+                let cumsum_js = js_sys::JSON::parse(
+                    &serde_json::to_string(&cumsum_trace_json).unwrap()
+                ).unwrap();
+                let trend_js = js_sys::JSON::parse(
+                    &serde_json::to_string(&trend_trace_json).unwrap()
+                ).unwrap();
 
                 let data_js = js_sys::Array::new();
                 data_js.push(&hist_js);
                 data_js.push(&forecast_js);
+                data_js.push(&cumsum_js);
+                data_js.push(&trend_js);
 
-                let layout_json = serde_json::to_string(&layout).unwrap();
-                let layout_js = js_sys::JSON::parse(&layout_json).unwrap();
+                let layout_str = serde_json::to_string(&layout_json).unwrap();
+                let layout_js = js_sys::JSON::parse(&layout_str).unwrap();
 
                 newPlot(div_id, data_js.into(), layout_js);
             }
