@@ -1,5 +1,5 @@
+use crate::api_client::account::{create_account, update_account, AccountKind, AccountResponse, CreateAccountRequest, UpdateAccountRequest};
 use yew::prelude::*;
-use crate::api_client::account::{AccountKind, AccountResponse, CreateAccountRequest, UpdateAccountRequest, create_account, update_account};
 
 #[derive(Properties, PartialEq)]
 pub struct AccountModalProps {
@@ -151,6 +151,32 @@ pub fn account_modal(props: &AccountModalProps) -> Html {
     // Track selected account kind for conditional rendering
     let selected_kind = use_state(|| default_kind);
 
+    let (show_target, target_label) = match *selected_kind {
+        AccountKind::Goal => (true, "Target Amount"),
+        AccountKind::RealAccount => (true, "Buffer Target"),
+        AccountKind::Savings => (true, "Target Amount"),
+        _ => (false, ""),
+    };
+
+    let target_field_html = if show_target {
+        html! {
+            <div class="form-control">
+                <label class="label"><span class="label-text">{target_label}</span></label>
+                <input
+                    type="number"
+                    name="target_amount"
+                    class="input input-bordered w-full"
+                    placeholder="e.g. 10000"
+                    value={default_target_amount.clone()}
+                    step="0.01"
+                    disabled={*is_submitting}
+                />
+            </div>
+        }
+    } else {
+        html! {}
+    };
+
     html! {
         <dialog class={classes!("modal", props.show.then_some("modal-open"))} id="account_modal">
             <div class="modal-box w-11/12 max-w-2xl">
@@ -239,24 +265,7 @@ pub fn account_modal(props: &AccountModalProps) -> Html {
                         </div>
                     </div>
 
-                    {if *selected_kind == AccountKind::Goal {
-                        html! {
-                            <div class="form-control">
-                                <label class="label"><span class="label-text">{"Target Amount"}</span></label>
-                                <input
-                                    type="number"
-                                    name="target_amount"
-                                    class="input input-bordered w-full"
-                                    placeholder="e.g. 10000"
-                                    value={default_target_amount}
-                                    step="0.01"
-                                    disabled={*is_submitting}
-                                />
-                            </div>
-                        }
-                    } else {
-                        html! {}
-                    }}
+                    {target_field_html}
 
                     <div class="form-control">
                         <label class="label"><span class="label-text">{"Ledger Name (Optional)"}</span></label>

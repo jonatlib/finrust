@@ -1,13 +1,13 @@
-use yew::prelude::*;
-use yew_router::prelude::*;
-use crate::api_client::account::{get_account_with_ignored, delete_account, AccountKind};
+use super::account_modal::AccountModal;
+use super::{AccountChart, AccountForecast, AccountMetrics, AccountStats, GoalProgress};
+use crate::api_client::account::{delete_account, get_account_with_ignored, AccountKind};
 use crate::api_client::statistics::get_account_statistics_with_ignored;
 use crate::common::fetch_hook::use_fetch_with_refetch;
-use crate::hooks::FetchState;
-use super::account_modal::AccountModal;
-use super::{AccountStats, AccountChart, AccountForecast, GoalProgress};
 use crate::components::manual_states::ManualStatesAccountView;
+use crate::hooks::FetchState;
 use crate::Route;
+use yew::prelude::*;
+use yew_router::prelude::*;
 
 #[derive(Properties, PartialEq)]
 pub struct Props {
@@ -254,6 +254,8 @@ pub fn account_edit(props: &Props) -> Html {
                                 }}
 
                                 <AccountStats account_id={account_id} />
+
+                                <AccountMetrics account_id={account_id} />
 
                                 <AccountChart account_id={account_id} />
 

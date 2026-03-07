@@ -9,6 +9,7 @@ use crate::handlers::{
         create_manual_account_state, delete_manual_account_state, get_all_manual_account_states,
         get_manual_account_state, get_manual_account_states, update_manual_account_state,
     },
+    metrics::{get_account_metrics, get_dashboard_metrics},
     recurring_income::{
         create_recurring_income, delete_recurring_income, get_recurring_income,
         get_recurring_incomes, update_recurring_income,
@@ -19,21 +20,21 @@ use crate::handlers::{
     },
     statistics::{get_account_statistics, get_all_accounts_statistics},
     tags::{
-        create_tag, delete_tag, get_tag, get_tags, update_tag,
-        get_tag_children, link_tag_to_parent, unlink_tag_from_parent,
+        create_tag, delete_tag, get_tag, get_tag_children, get_tags,
+        link_tag_to_parent, unlink_tag_from_parent, update_tag,
     },
     timeseries::{get_account_timeseries, get_all_accounts_timeseries},
     transactions::{
-        create_transaction, delete_transaction, get_account_transactions, get_transaction,
-        get_transactions, update_transaction, create_recurring_instance,
-        create_recurring_transaction, get_recurring_transactions, get_recurring_transaction,
-        update_recurring_transaction, delete_recurring_transaction, get_missing_instances,
-        bulk_create_instances,
-        get_recurring_instances, get_recurring_instance,
-        update_recurring_instance, delete_recurring_instance,
-        create_imported_transaction, get_imported_transactions, get_account_imported_transactions,
-        get_imported_transaction, update_imported_transaction, delete_imported_transaction,
-        reconcile_imported_transaction, clear_imported_transaction_reconciliation,
+        bulk_create_instances, clear_imported_transaction_reconciliation, create_imported_transaction, create_recurring_instance,
+        create_recurring_transaction, create_transaction, delete_imported_transaction,
+        delete_recurring_instance, delete_recurring_transaction, delete_transaction,
+        get_account_imported_transactions, get_account_transactions, get_imported_transaction,
+        get_imported_transactions,
+        get_missing_instances, get_recurring_instance,
+        get_recurring_instances, get_recurring_transaction,
+        get_recurring_transactions, get_transaction, get_transactions,
+        reconcile_imported_transaction, update_imported_transaction, update_recurring_instance,
+        update_recurring_transaction, update_transaction,
     },
     users::{create_user, delete_user, get_user, get_users, update_user},
 };
@@ -152,6 +153,9 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/scenarios/:scenario_id", put(update_scenario))
         .route("/api/v1/scenarios/:scenario_id", delete(delete_scenario))
         .route("/api/v1/scenarios/:scenario_id/apply", post(apply_scenario))
+        // Metrics routes
+        .route("/api/v1/metrics/dashboard", get(get_dashboard_metrics))
+        .route("/api/v1/accounts/:account_id/metrics", get(get_account_metrics))
         // API v1 routes (existing statistics and timeseries)
         .route(
             "/api/v1/accounts/:account_id/statistics",

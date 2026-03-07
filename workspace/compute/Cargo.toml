@@ -7,6 +7,7 @@ edition = "2024"
 
 [dependencies]
 model = { path = "../model" }
+common = { path = "../common" }
 
 sea-orm = { version = "^1.1.12", features = ["sqlx-sqlite", "runtime-tokio-native-tls", "macros"] }
 rusty-money = "^0.4.1"

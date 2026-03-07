@@ -2,6 +2,7 @@ use super::account_bubbles::AccountTypeBubbles;
 use super::activity::RecentActivity;
 use super::category_stats::CategoryStats;
 use super::chart::{BalanceBreakdownChart, NetWorthChart};
+use super::metrics::DashboardMetrics;
 use super::stats::Stats;
 use yew::prelude::*;
 
@@ -10,6 +11,9 @@ pub fn dashboard() -> Html {
     html! {
         <>
             <Stats />
+            <div class="mt-6">
+                <DashboardMetrics />
+            </div>
             <div class="card bg-base-100 shadow mt-6">
                 <div class="card-body">
                     <h2 class="card-title">{"Account Bubbles"}</h2>

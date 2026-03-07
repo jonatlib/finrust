@@ -4,7 +4,12 @@
 
 mod statistics;
 mod timeseries;
+pub mod metrics;
 
+pub use metrics::{
+    AccountKindMetricsDto, AccountMetricsDto, DashboardMetricsDto, DebtMetricsDto,
+    InvestmentMetricsDto, OperatingMetricsDto, ReserveMetricsDto,
+};
 pub use statistics::{AccountStatistics, AccountStatisticsCollection, TimePeriod};
 pub use timeseries::{AccountStatePoint, AccountStateTimeseries, DateRange};
 

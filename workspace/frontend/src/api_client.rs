@@ -6,10 +6,11 @@ pub mod timeseries;
 pub mod recurring_transaction;
 pub mod category;
 pub mod scenario;
+pub mod metrics;
 
+use crate::settings;
 use gloo_net::http::Request;
 use serde::{Deserialize, Serialize};
-use crate::settings;
 
 // API_BASE is now retrieved from settings
 fn api_base() -> String {

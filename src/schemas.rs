@@ -1,6 +1,8 @@
 use chrono::NaiveDate;
 use common::{
-    AccountStateTimeseries, AccountStatistics, AccountStatisticsCollection, DateRange, TimePeriod,
+    AccountKindMetricsDto, AccountMetricsDto, AccountStateTimeseries, AccountStatistics,
+    AccountStatisticsCollection, DashboardMetricsDto, DateRange, DebtMetricsDto,
+    InvestmentMetricsDto, OperatingMetricsDto, ReserveMetricsDto, TimePeriod,
 };
 use moka::future::Cache;
 use sea_orm::DatabaseConnection;
@@ -151,6 +153,8 @@ pub struct HealthResponse {
         crate::handlers::timeseries::get_account_timeseries,
         crate::handlers::statistics::get_all_accounts_statistics,
         crate::handlers::timeseries::get_all_accounts_timeseries,
+        crate::handlers::metrics::get_dashboard_metrics,
+        crate::handlers::metrics::get_account_metrics,
     ),
     components(
         schemas(
@@ -211,6 +215,15 @@ pub struct HealthResponse {
             TimePeriod,
             AccountStateTimeseries,
             DateRange,
+            DashboardMetricsDto,
+            AccountMetricsDto,
+            AccountKindMetricsDto,
+            OperatingMetricsDto,
+            ReserveMetricsDto,
+            InvestmentMetricsDto,
+            DebtMetricsDto,
+            ApiResponse<DashboardMetricsDto>,
+            ApiResponse<AccountMetricsDto>,
         )
     ),
     tags(
@@ -223,6 +236,7 @@ pub struct HealthResponse {
         (name = "imported-transactions", description = "Imported transaction CRUD operations and reconciliation"),
         (name = "recurring-incomes", description = "Recurring income operations"),
         (name = "scenarios", description = "What-if scenario operations for hypothetical financial analysis"),
+        (name = "metrics", description = "Financial metrics and dashboard endpoints"),
         (name = "statistics", description = "Account statistics endpoints"),
         (name = "timeseries", description = "Account timeseries endpoints"),
     ),
