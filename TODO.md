@@ -1,3 +1,5 @@
+Fin avg expense per month and tumbling and chart and same for income
+
 - Bugs:
     - Fix tests
     - Same color schema for accounts
