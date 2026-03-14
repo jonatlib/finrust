@@ -24,6 +24,9 @@ Fin avg expense per month and tumbling and chart and same for income
         - This might lead to multicurrency - don't do it now. Just use currency by first account
 
 
+- import - add extra yaml file, which will map account types etc and help with actual improt being always the same
+
+
 - show per account current state, and state at the end of current month.
 
 
