@@ -38,12 +38,12 @@ pub async fn compute_account_statistics(
     )
         .await
         .unwrap_or_else(|_| vec![]);
-    let current_month_end_stats = account_stats::end_of_month_state(
+    let month_end_date = account_stats::get_last_day_of_month(today.year(), today.month());
+    let current_month_end_stats = account_stats::state_at_date(
         &compute as &dyn AccountStateCalculator,
         db,
         &accounts,
-        today.year(),
-        today.month(),
+        month_end_date,
     )
         .await
         .unwrap_or_else(|_| vec![]);

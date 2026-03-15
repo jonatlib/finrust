@@ -31,6 +31,18 @@ pub fn account_stats(props: &Props) -> Html {
                     },
                     FetchState::Success(collection) => {
                         if let Some(stats) = collection.statistics.first() {
+                            let net_flow = match (stats.average_income, stats.average_expense) {
+                                (Some(inc), Some(exp)) => Some(inc - exp),
+                                (Some(inc), None) => Some(inc),
+                                (None, Some(exp)) => Some(-exp),
+                                _ => None,
+                            };
+                            let net_flow_class = match net_flow {
+                                Some(v) if v >= rust_decimal::Decimal::ZERO => "stat-value text-lg text-success",
+                                Some(_) => "stat-value text-lg text-error",
+                                None => "stat-value text-lg",
+                            };
+
                             html! {
                                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
                                     <div class="stat bg-base-200 rounded-lg">
@@ -46,39 +58,7 @@ pub fn account_stats(props: &Props) -> Html {
                                         <div class={classes!("stat-value", "text-lg")}>
                                             {format_decimal_option(stats.end_of_current_month_state)}
                                         </div>
-                                        <div class="stat-desc">{"Forecast for current month end"}</div>
-                                    </div>
-
-                                    <div class="stat bg-base-200 rounded-lg">
-                                        <div class="stat-title">{"Average Income"}</div>
-                                        <div class="stat-value text-lg text-success">
-                                            {format_decimal_option(stats.average_income)}
-                                        </div>
-                                        <div class="stat-desc">{"Per period"}</div>
-                                    </div>
-
-                                    <div class="stat bg-base-200 rounded-lg">
-                                        <div class="stat-title">{"Average Expense"}</div>
-                                        <div class="stat-value text-lg text-error">
-                                            {format_decimal_option(stats.average_expense)}
-                                        </div>
-                                        <div class="stat-desc">{"Per period"}</div>
-                                    </div>
-
-                                    <div class="stat bg-base-200 rounded-lg">
-                                        <div class="stat-title">{"Minimum State"}</div>
-                                        <div class="stat-value text-lg">
-                                            {format_decimal_option(stats.min_state)}
-                                        </div>
-                                        <div class="stat-desc">{"Lowest balance"}</div>
-                                    </div>
-
-                                    <div class="stat bg-base-200 rounded-lg">
-                                        <div class="stat-title">{"Maximum State"}</div>
-                                        <div class="stat-value text-lg">
-                                            {format_decimal_option(stats.max_state)}
-                                        </div>
-                                        <div class="stat-desc">{"Highest balance"}</div>
+                                        <div class="stat-desc">{"Projected balance at month end"}</div>
                                     </div>
 
                                     <div class="stat bg-base-200 rounded-lg">
@@ -86,7 +66,31 @@ pub fn account_stats(props: &Props) -> Html {
                                         <div class="stat-value text-lg text-warning">
                                             {format_decimal_option(stats.upcoming_expenses)}
                                         </div>
-                                        <div class="stat-desc">{"Forecasted"}</div>
+                                        <div class="stat-desc">{"Remaining this period"}</div>
+                                    </div>
+
+                                    <div class="stat bg-base-200 rounded-lg">
+                                        <div class="stat-title">{"Avg. Monthly Income"}</div>
+                                        <div class="stat-value text-lg text-success">
+                                            {format_decimal_option(stats.average_income)}
+                                        </div>
+                                        <div class="stat-desc">{"Total income averaged per month"}</div>
+                                    </div>
+
+                                    <div class="stat bg-base-200 rounded-lg">
+                                        <div class="stat-title">{"Avg. Monthly Expense"}</div>
+                                        <div class="stat-value text-lg text-error">
+                                            {format_decimal_option(stats.average_expense)}
+                                        </div>
+                                        <div class="stat-desc">{"Total expense averaged per month"}</div>
+                                    </div>
+
+                                    <div class="stat bg-base-200 rounded-lg">
+                                        <div class="stat-title">{"Monthly Net Flow"}</div>
+                                        <div class={net_flow_class}>
+                                            {format_decimal_option(net_flow)}
+                                        </div>
+                                        <div class="stat-desc">{"Avg. income minus expense"}</div>
                                     </div>
                                 </div>
                             }

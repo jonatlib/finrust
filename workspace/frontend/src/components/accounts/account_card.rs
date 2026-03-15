@@ -220,7 +220,7 @@ pub fn account_card(props: &Props) -> Html {
                                         </div>
 
                                         <div class="flex justify-between items-center">
-                                            <span class="text-xs text-gray-500">{"Avg Income:"}</span>
+                                            <span class="text-xs text-gray-500">{"Monthly Income:"}</span>
                                             {if let Some(income) = &s.average_income {
                                                 html! { <span class="text-sm font-bold text-success">{income}{" "}{&account.currency_code}</span> }
                                             } else {
@@ -229,7 +229,7 @@ pub fn account_card(props: &Props) -> Html {
                                         </div>
 
                                         <div class="flex justify-between items-center">
-                                            <span class="text-xs text-gray-500">{"Avg Expense:"}</span>
+                                            <span class="text-xs text-gray-500">{"Monthly Expense:"}</span>
                                             {if let Some(expense) = &s.average_expense {
                                                 html! { <span class="text-sm font-bold text-error">{expense}{" "}{&account.currency_code}</span> }
                                             } else {

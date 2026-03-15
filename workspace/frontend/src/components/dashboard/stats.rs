@@ -87,13 +87,13 @@ pub fn stats() -> Html {
                 </div>
                 <div class="stats shadow bg-base-100">
                     <div class="stat">
-                        <div class="stat-title">{"Income (60d)"}</div>
+                        <div class="stat-title">{"Avg. Monthly Income"}</div>
                         <div class="stat-value"><span class="loading loading-spinner loading-sm"></span></div>
                     </div>
                 </div>
                 <div class="stats shadow bg-base-100">
                     <div class="stat">
-                        <div class="stat-title">{"Expenses (60d)"}</div>
+                        <div class="stat-title">{"Avg. Monthly Expenses"}</div>
                         <div class="stat-value"><span class="loading loading-spinner loading-sm"></span></div>
                     </div>
                 </div>
@@ -112,13 +112,13 @@ pub fn stats() -> Html {
             </div>
             <div class="stats shadow bg-base-100">
                 <div class="stat">
-                    <div class="stat-title">{"Income (60d)"}</div>
+                    <div class="stat-title">{"Avg. Monthly Income"}</div>
                     <div class="stat-value text-success">{format_currency(income)}</div>
                 </div>
             </div>
             <div class="stats shadow bg-base-100">
                 <div class="stat">
-                    <div class="stat-title">{"Expenses (60d)"}</div>
+                    <div class="stat-title">{"Avg. Monthly Expenses"}</div>
                     <div class="stat-value text-error">{format_currency(expenses)}</div>
                 </div>
             </div>

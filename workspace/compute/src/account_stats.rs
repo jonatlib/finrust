@@ -473,20 +473,26 @@ fn compute_basic_stats_from_dataframe(
         points.sort_by_key(|(d, _)| *d);
 
         let mut sum_pos = Decimal::ZERO;
-        let mut cnt_pos: u32 = 0;
         let mut sum_neg_abs = Decimal::ZERO;
-        let mut cnt_neg: u32 = 0;
+
+        let mut monthly_expense: HashMap<(i32, u32), Decimal> = HashMap::new();
+        let mut monthly_income: HashMap<(i32, u32), Decimal> = HashMap::new();
 
         for w in points.windows(2) {
             let (_, prev) = w[0];
-            let (_, curr) = w[1];
+            let (date_num, curr) = w[1];
             let delta = curr - prev;
+
             if delta > Decimal::ZERO {
                 sum_pos += delta;
-                cnt_pos += 1;
+                if let Some(d) = NaiveDate::from_num_days_from_ce_opt(date_num as i32) {
+                    *monthly_income.entry((d.year(), d.month())).or_insert(Decimal::ZERO) += delta;
+                }
             } else if delta < Decimal::ZERO {
                 sum_neg_abs += -delta;
-                cnt_neg += 1;
+                if let Some(d) = NaiveDate::from_num_days_from_ce_opt(date_num as i32) {
+                    *monthly_expense.entry((d.year(), d.month())).or_insert(Decimal::ZERO) += -delta;
+                }
             }
         }
 
@@ -502,24 +508,24 @@ fn compute_basic_stats_from_dataframe(
 
         match stat_type {
             StatType::AverageExpense => {
-                let avg = if cnt_neg > 0 {
-                    sum_neg_abs / Decimal::from(cnt_neg as i64)
+                let avg = if !monthly_expense.is_empty() {
+                    let total: Decimal = monthly_expense.values().copied().sum();
+                    total / Decimal::from(monthly_expense.len() as i64)
                 } else {
                     Decimal::ZERO
                 };
                 stat.average_expense = Some(avg);
             }
             StatType::AverageIncome => {
-                let avg = if cnt_pos > 0 {
-                    sum_pos / Decimal::from(cnt_pos as i64)
+                let avg = if !monthly_income.is_empty() {
+                    let total: Decimal = monthly_income.values().copied().sum();
+                    total / Decimal::from(monthly_income.len() as i64)
                 } else {
                     Decimal::ZERO
                 };
                 stat.average_income = Some(avg);
             }
             StatType::UpcomingExpenses => {
-                // We interpret the provided df as the future window (from_date..=end_date)
-                // Sum all negative deltas (as positive amounts) as upcoming expenses.
                 stat.upcoming_expenses = Some(sum_neg_abs);
             }
         }
@@ -623,7 +629,7 @@ fn get_unique_account_ids(df: &DataFrame) -> Result<Vec<i32>> {
     Ok(ids.into_no_null_iter().collect())
 }
 
-fn get_last_day_of_month(year: i32, month: u32) -> NaiveDate {
+pub fn get_last_day_of_month(year: i32, month: u32) -> NaiveDate {
     // Get the first day of the next month, then subtract one day
     let next_month = if month == 12 { 1 } else { month + 1 };
     let next_year = if month == 12 { year + 1 } else { year };
