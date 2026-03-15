@@ -1,7 +1,5 @@
 - Bugs:
     - Fix tests
-    - Frontend not whole decimal places but one zero decimal places is enough
-        - Mainly on the accounts page and account detail page
     - Transactions page (recurring and extra)
         - When using filters the pagination don't take them into account leading to broken pagination
     - Recent activities on dashboard are not sorted - showing old transactions.
@@ -12,9 +10,6 @@
             - Beware the categories are tree so it sums up in the tree
     - New categories per account
     - The stats on the account detail page don't match with data in balance - i believe the balance chart.
-    - Frontend shows $ sign. Instead of curency based on account
-        - This might lead to multicurrency - don't do it now. Just use currency by first account
-
 
 - import - add extra yaml file, which will map account types etc and help with actual improt being always the same
 

@@ -276,7 +276,7 @@ pub fn transaction_edit(props: &Props) -> Html {
                                             <div>
                                                 <div class="text-sm text-gray-500">{"Amount"}</div>
                                                 <div class={classes!("text-xl", "font-bold", amount_class)}>
-                                                    {format!("{:.2}", transaction.amount)}
+                                                    {format!("{:.1}", transaction.amount)}
                                                 </div>
                                             </div>
                                             <div>

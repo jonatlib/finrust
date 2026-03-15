@@ -85,7 +85,7 @@ pub fn category_stats() -> Html {
                                                             </td>
                                                             <td class="text-right">{stat.transaction_count}</td>
                                                             <td class={classes!("text-right", "font-mono", amount_class)}>
-                                                                {format!("{:.2}", amount)}
+                                                                {format!("{:.1}", amount)}
                                                             </td>
                                                         </tr>
                                                     }

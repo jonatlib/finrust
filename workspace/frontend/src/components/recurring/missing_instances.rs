@@ -7,6 +7,7 @@ use crate::api_client::recurring_transaction::{
 };
 use crate::common::fetch_hook::use_fetch_with_refetch;
 use crate::common::toast::ToastContext;
+use crate::formatting::use_currency;
 use crate::hooks::FetchState;
 use crate::router::Route;
 
@@ -19,6 +20,7 @@ pub struct MissingInstancesProps {
 #[function_component(MissingInstances)]
 pub fn missing_instances(props: &MissingInstancesProps) -> Html {
     let toast_ctx = use_context::<ToastContext>().expect("ToastContext not found");
+    let currency = use_currency();
     let selected = use_state(|| HashSet::<String>::new());
     let is_creating = use_state(|| false);
 
@@ -136,10 +138,13 @@ pub fn missing_instances(props: &MissingInstancesProps) -> Html {
         })
     };
 
-    let format_currency = |amount: &str| -> String {
-        match amount.parse::<f64>() {
-            Ok(val) => format!("${:.2}", val.abs()),
-            Err(_) => amount.to_string(),
+    let format_currency = {
+        let currency = currency.clone();
+        move |amount: &str| -> String {
+            match amount.parse::<f64>() {
+                Ok(val) => format!("{:.1} {}", val.abs(), currency),
+                Err(_) => amount.to_string(),
+            }
         }
     };
 

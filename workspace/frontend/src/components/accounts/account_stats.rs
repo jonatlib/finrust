@@ -113,7 +113,7 @@ pub fn account_stats(props: &Props) -> Html {
 
 fn format_decimal_option(value: Option<rust_decimal::Decimal>) -> String {
     match value {
-        Some(d) => format!("{:.2}", d),
+        Some(d) => format!("{:.1}", d),
         None => "N/A".to_string(),
     }
 }

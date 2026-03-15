@@ -2,17 +2,22 @@ use yew::prelude::*;
 use rust_decimal::prelude::*;
 use crate::api_client::transaction::get_transactions;
 use crate::common::fetch_hook::use_fetch_with_refetch;
+use crate::formatting::use_currency;
 use crate::hooks::FetchState;
 
 #[function_component(RecentActivity)]
 pub fn recent_activity() -> Html {
     let (transactions_state, _) = use_fetch_with_refetch(|| get_transactions(None, None));
+    let currency = use_currency();
 
-    let format_currency = |amount: Decimal| -> String {
-        if amount >= Decimal::ZERO {
-            format!("+${:.2}", amount)
-        } else {
-            format!("-${:.2}", amount.abs())
+    let format_currency = {
+        let currency = currency.clone();
+        move |amount: Decimal| -> String {
+            if amount >= Decimal::ZERO {
+                format!("+{:.1} {}", amount, currency)
+            } else {
+                format!("-{:.1} {}", amount.abs(), currency)
+            }
         }
     };
 

@@ -7,20 +7,24 @@ mod pages;
 mod router;
 pub mod api_client;
 pub mod colors;
+pub mod formatting;
 pub mod hooks;
 pub mod common;
 pub mod settings;
 
 use common::toast::ToastProvider;
+use formatting::CurrencyProvider;
 use router::{Route, switch};
 
 #[function_component(App)]
 pub fn app() -> Html {
     html! {
         <ToastProvider>
-            <BrowserRouter>
-                <Switch<Route> render={switch} />
-            </BrowserRouter>
+            <CurrencyProvider>
+                <BrowserRouter>
+                    <Switch<Route> render={switch} />
+                </BrowserRouter>
+            </CurrencyProvider>
         </ToastProvider>
     }
 }

@@ -103,9 +103,9 @@ pub fn instance_modal(props: &InstanceModalProps) -> Html {
     let default_amount_display = match props.transaction.amount.parse::<f64>() {
         Ok(val) => {
             if val >= 0.0 {
-                format!("+{:.2}", val)
+                format!("+{:.1}", val)
             } else {
-                format!("{:.2}", val)
+                format!("{:.1}", val)
             }
         }
         Err(_) => props.transaction.amount.clone(),

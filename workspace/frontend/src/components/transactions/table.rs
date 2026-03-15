@@ -1,4 +1,5 @@
 use yew::prelude::*;
+use crate::formatting::use_currency;
 use crate::mock_data::{get_mock_transactions, get_mock_categories, get_mock_accounts};
 use std::collections::HashMap;
 
@@ -7,6 +8,7 @@ pub fn transaction_table() -> Html {
     let transactions = get_mock_transactions();
     let categories = get_mock_categories();
     let accounts = get_mock_accounts();
+    let currency = use_currency();
 
     let cat_map: HashMap<String, String> = categories.iter()
         .map(|c| (c.id.clone(), c.name.clone()))
@@ -16,8 +18,11 @@ pub fn transaction_table() -> Html {
         .map(|a| (a.id, a.name.clone()))
         .collect();
 
-    let format_currency = |amount: f64| -> String {
-        format!("${:.2}", amount.abs())
+    let format_currency = {
+        let currency = currency.clone();
+        move |amount: f64| -> String {
+            format!("{:.1} {}", amount.abs(), currency)
+        }
     };
 
     html! {

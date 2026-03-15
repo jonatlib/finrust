@@ -5,6 +5,7 @@ use crate::api_client::recurring_transaction::{RecurringInstanceResponse, get_re
 use crate::api_client::account::get_accounts;
 use crate::common::fetch_hook::use_fetch_with_refetch;
 use crate::common::toast::ToastContext;
+use crate::formatting::use_currency;
 use crate::hooks::FetchState;
 use crate::router::Route;
 
@@ -38,6 +39,7 @@ pub fn instances_list(props: &InstancesListProps) -> Html {
     });
     let (accounts_state, _) = use_fetch_with_refetch(get_accounts);
     let toast_ctx = use_context::<ToastContext>().expect("ToastContext not found");
+    let currency = use_currency();
 
     let sort_column = use_state(|| SortColumn::DueDate);
     let sort_direction = use_state(|| SortDirection::Descending);
@@ -50,10 +52,13 @@ pub fn instances_list(props: &InstancesListProps) -> Html {
         _ => vec![],
     };
 
-    let format_currency = |amount: &str| -> String {
-        match amount.parse::<f64>() {
-            Ok(val) => format!("${:.2}", val.abs()),
-            Err(_) => amount.to_string(),
+    let format_currency = {
+        let currency = currency.clone();
+        move |amount: &str| -> String {
+            match amount.parse::<f64>() {
+                Ok(val) => format!("{:.1} {}", val.abs(), currency),
+                Err(_) => amount.to_string(),
+            }
         }
     };
 

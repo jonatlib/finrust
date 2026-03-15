@@ -7,6 +7,7 @@ use crate::api_client::category::get_categories;
 use crate::api_client::scenario::get_scenarios;
 use crate::common::fetch_hook::use_fetch_with_refetch;
 use crate::common::toast::ToastContext;
+use crate::formatting::use_currency;
 use crate::hooks::FetchState;
 use crate::components::instances::instance_edit_modal::InstanceEditModal;
 use std::collections::HashMap;
@@ -21,6 +22,7 @@ pub fn recurring_detail_page(props: &RecurringDetailPageProps) -> Html {
     let id = props.id;
     let navigator = use_navigator().unwrap();
     let toast_ctx = use_context::<ToastContext>().expect("ToastContext not found");
+    let currency = use_currency();
 
     // Fetch recurring transaction details
     let (transaction_state, transaction_refetch) = use_fetch_with_refetch(move || {
@@ -124,10 +126,13 @@ pub fn recurring_detail_page(props: &RecurringDetailPageProps) -> Html {
         })
     };
 
-    let format_currency = |amount: &str| -> String {
-        match amount.parse::<f64>() {
-            Ok(val) => format!("${:.2}", val.abs()),
-            Err(_) => amount.to_string(),
+    let format_currency = {
+        let currency = currency.clone();
+        move |amount: &str| -> String {
+            match amount.parse::<f64>() {
+                Ok(val) => format!("{:.1} {}", val.abs(), currency),
+                Err(_) => amount.to_string(),
+            }
         }
     };
 

@@ -294,7 +294,7 @@ pub fn scenario_detail_page(props: &ScenarioDetailPageProps) -> Html {
                                                                 <td>{tx.date.format("%Y-%m-%d").to_string()}</td>
                                                                 <td>{&tx.name}</td>
                                                                 <td class={if tx.amount.is_sign_negative() { "text-error" } else { "text-success" }}>
-                                                                    {format!("{:.2}", tx.amount)}
+                                                                    {format!("{:.1}", tx.amount)}
                                                                 </td>
                                                                 <td>{account_name}</td>
                                                                 <td><span class="badge badge-sm">{"One-off"}</span></td>
@@ -333,7 +333,7 @@ pub fn scenario_detail_page(props: &ScenarioDetailPageProps) -> Html {
                                                                 </td>
                                                                 <td>{&rec.name}</td>
                                                                 <td class={if amount < 0.0 { "text-error" } else { "text-success" }}>
-                                                                    {format!("{:.2}", amount)}
+                                                                    {format!("{:.1}", amount)}
                                                                 </td>
                                                                 <td>{account_name}</td>
                                                                 <td><span class="badge badge-sm badge-primary">{"Recurring"}</span></td>

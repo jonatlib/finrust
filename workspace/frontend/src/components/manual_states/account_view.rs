@@ -74,5 +74,5 @@ pub fn manual_states_account_view(props: &Props) -> Html {
 }
 
 fn format_amount(amount: rust_decimal::Decimal) -> String {
-    format!("{:.2}", amount)
+    format!("{:.1}", amount)
 }

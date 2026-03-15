@@ -53,14 +53,14 @@ fn render_goal_progress(account: &AccountResponse, stats: Option<&AccountStatist
                                     <div class="stat bg-base-200 rounded-lg">
                                         <div class="stat-title">{"Current Amount"}</div>
                                         <div class="stat-value text-2xl text-primary">
-                                            {format!("{:.2}", current)}
+                                            {format!("{:.1}", current)}
                                         </div>
                                         <div class="stat-desc">{&account.currency_code}</div>
                                     </div>
                                     <div class="stat bg-base-200 rounded-lg">
                                         <div class="stat-title">{"Target Amount"}</div>
                                         <div class="stat-value text-2xl">
-                                            {format!("{:.2}", target)}
+                                            {format!("{:.1}", target)}
                                         </div>
                                         <div class="stat-desc">{&account.currency_code}</div>
                                     </div>
@@ -68,7 +68,7 @@ fn render_goal_progress(account: &AccountResponse, stats: Option<&AccountStatist
                                         <div class="stat-title">{"Amount to Go"}</div>
                                         <div class={classes!("stat-value", "text-2xl", if remaining <= 0.0 { "text-success" } else { "text-warning" })}>
                                             {if remaining > 0.0 {
-                                                format!("{:.2}", remaining)
+                                                format!("{:.1}", remaining)
                                             } else {
                                                 "Goal Reached!".to_string()
                                             }}

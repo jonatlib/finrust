@@ -521,9 +521,9 @@ fn render_transaction_row(transaction: &TransactionResponse, account_map: &HashM
     let transaction_id = transaction.id;
     let format_amount = |amount: rust_decimal::Decimal| -> String {
         if amount >= rust_decimal::Decimal::ZERO {
-            format!("+{:.2}", amount)
+            format!("+{:.1}", amount)
         } else {
-            format!("{:.2}", amount)
+            format!("{:.1}", amount)
         }
     };
 

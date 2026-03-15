@@ -249,7 +249,7 @@ fn build_avg_flow_map(dashboard: &DashboardMetricsDto) -> HashMap<i32, Option<De
 /// Formats optional monetary values for bubble labels.
 fn format_decimal_option(value: Option<Decimal>) -> String {
     match value {
-        Some(decimal) => format!("{:.2}", decimal),
+        Some(decimal) => format!("{:.1}", decimal),
         None => "N/A".to_string(),
     }
 }

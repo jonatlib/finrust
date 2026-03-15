@@ -1,6 +1,7 @@
 use crate::api_client::account::{AccountKind, AccountResponse};
 use crate::api_client::statistics::get_account_statistics_with_ignored;
 use crate::common::fetch_hook::use_fetch_with_refetch;
+use crate::formatting::fmt_amount_f64;
 use crate::hooks::FetchState;
 use crate::Route;
 use yew::prelude::*;
@@ -107,11 +108,11 @@ pub fn account_card(props: &Props) -> Html {
                                                             <>
                                                                 <div class="flex justify-between items-center mb-2">
                                                                     <span class="text-xs text-gray-500">{"Current:"}</span>
-                                                                    <span class="text-sm font-bold">{format!("{:.2}", current_balance)}{" "}{&account.currency_code}</span>
+                                                                    <span class="text-sm font-bold">{fmt_amount_f64(current_balance)}{" "}{&account.currency_code}</span>
                                                                 </div>
                                                                 <div class="flex justify-between items-center mb-2">
                                                                     <span class="text-xs text-gray-500">{"Target:"}</span>
-                                                                    <span class="text-sm font-bold">{format!("{:.2}", target_num)}{" "}{&account.currency_code}</span>
+                                                                    <span class="text-sm font-bold">{fmt_amount_f64(target_num)}{" "}{&account.currency_code}</span>
                                                                 </div>
                                                                 <div class="w-full bg-base-300 rounded-full h-4 overflow-hidden">
                                                                     <div
@@ -130,7 +131,7 @@ pub fn account_card(props: &Props) -> Html {
                                                                     html! {
                                                                         <>
                                                                             <div class="text-xs text-gray-500 text-center mt-2">
-                                                                                {format!("{:.2} {} to go", remaining, &account.currency_code)}
+                                                                                {format!("{} {} to go", fmt_amount_f64(remaining), &account.currency_code)}
                                                                             </div>
                                                                             {if let Some(goal_date) = &s.goal_reached_date {
                                                                                 html! {
@@ -204,7 +205,7 @@ pub fn account_card(props: &Props) -> Html {
                                         <div class="flex justify-between items-center">
                                             <span class="text-xs text-gray-500">{"Current Balance:"}</span>
                                             {if let Some(balance) = &s.current_state {
-                                                html! { <span class="text-sm font-bold">{balance}{" "}{&account.currency_code}</span> }
+                                                html! { <span class="text-sm font-bold">{format!("{:.1}", balance)}{" "}{&account.currency_code}</span> }
                                             } else {
                                                 html! { <span class="text-xs text-gray-400">{"N/A"}</span> }
                                             }}
@@ -213,7 +214,7 @@ pub fn account_card(props: &Props) -> Html {
                                         <div class="flex justify-between items-center">
                                             <span class="text-xs text-gray-500">{"Min State:"}</span>
                                             {if let Some(min) = &s.min_state {
-                                                html! { <span class="text-sm font-bold">{min}{" "}{&account.currency_code}</span> }
+                                                html! { <span class="text-sm font-bold">{format!("{:.1}", min)}{" "}{&account.currency_code}</span> }
                                             } else {
                                                 html! { <span class="text-xs text-gray-400">{"N/A"}</span> }
                                             }}
@@ -222,7 +223,7 @@ pub fn account_card(props: &Props) -> Html {
                                         <div class="flex justify-between items-center">
                                             <span class="text-xs text-gray-500">{"Max State:"}</span>
                                             {if let Some(max) = &s.max_state {
-                                                html! { <span class="text-sm font-bold">{max}{" "}{&account.currency_code}</span> }
+                                                html! { <span class="text-sm font-bold">{format!("{:.1}", max)}{" "}{&account.currency_code}</span> }
                                             } else {
                                                 html! { <span class="text-xs text-gray-400">{"N/A"}</span> }
                                             }}
@@ -231,7 +232,7 @@ pub fn account_card(props: &Props) -> Html {
                                         <div class="flex justify-between items-center">
                                             <span class="text-xs text-gray-500">{"Monthly Income:"}</span>
                                             {if let Some(income) = &s.average_income {
-                                                html! { <span class="text-sm font-bold text-success">{income}{" "}{&account.currency_code}</span> }
+                                                html! { <span class="text-sm font-bold text-success">{format!("{:.1}", income)}{" "}{&account.currency_code}</span> }
                                             } else {
                                                 html! { <span class="text-xs text-gray-400">{"N/A"}</span> }
                                             }}
@@ -240,7 +241,7 @@ pub fn account_card(props: &Props) -> Html {
                                         <div class="flex justify-between items-center">
                                             <span class="text-xs text-gray-500">{"Monthly Expense:"}</span>
                                             {if let Some(expense) = &s.average_expense {
-                                                html! { <span class="text-sm font-bold text-error">{expense}{" "}{&account.currency_code}</span> }
+                                                html! { <span class="text-sm font-bold text-error">{format!("{:.1}", expense)}{" "}{&account.currency_code}</span> }
                                             } else {
                                                 html! { <span class="text-xs text-gray-400">{"N/A"}</span> }
                                             }}

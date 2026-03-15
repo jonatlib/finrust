@@ -5,9 +5,8 @@ use common::metrics::{AccountKindMetricsDto, DashboardMetricsDto};
 use rust_decimal::Decimal;
 use yew::prelude::*;
 
-/// Formats a Decimal value as a currency string with 2 decimal places.
 fn fmt_currency(amount: Decimal) -> String {
-    format!("{:.2}", amount)
+    format!("{:.1}", amount)
 }
 
 /// Formats an optional Decimal as currency or "N/A".

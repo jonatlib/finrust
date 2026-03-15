@@ -5,6 +5,7 @@ use crate::api_client::account::get_accounts;
 use crate::api_client::statistics::get_all_accounts_statistics;
 use crate::api_client::timeseries::get_all_accounts_timeseries;
 use crate::common::fetch_hook::use_fetch_with_refetch;
+use crate::formatting::use_currency;
 use crate::hooks::FetchState;
 
 #[function_component(Stats)]
@@ -16,9 +17,13 @@ pub fn stats() -> Html {
         get_all_accounts_timeseries(start_date, end_date).await
     });
     let (statistics_state, _) = use_fetch_with_refetch(get_all_accounts_statistics);
+    let currency = use_currency();
 
-    let format_currency = |amount: Decimal| -> String {
-        format!("${:.2}", amount)
+    let format_currency = {
+        let currency = currency.clone();
+        move |amount: Decimal| -> String {
+            format!("{:.1} {}", amount, currency)
+        }
     };
 
     // Calculate net worth from latest timeseries data

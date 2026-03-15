@@ -259,7 +259,7 @@ pub fn manual_states() -> Html {
                                                         <td>
                                                             <span class="badge badge-sm badge-ghost">{account_name}</span>
                                                         </td>
-                                                        <td class="font-mono font-semibold text-lg">{format!("{:.2}", state.amount)}</td>
+                                                        <td class="font-mono font-semibold text-lg">{format!("{:.1}", state.amount)}</td>
                                                         <td>
                                                             <div class="flex gap-2">
                                                                 <button

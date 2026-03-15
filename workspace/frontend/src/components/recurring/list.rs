@@ -6,6 +6,7 @@ use crate::api_client::category::get_categories;
 use crate::api_client::account::get_accounts;
 use crate::common::fetch_hook::use_fetch_with_refetch;
 use crate::components::common::pagination::Pagination;
+use crate::formatting::use_currency;
 use crate::hooks::FetchState;
 use crate::router::Route;
 
@@ -37,6 +38,7 @@ pub struct RecurringListProps {
 
 #[function_component(RecurringList)]
 pub fn recurring_list(props: &RecurringListProps) -> Html {
+    let currency = use_currency();
     let current_page = use_state(|| 1u64);
     let items_per_page = 50u64;
     let fetch_state = use_state(|| FetchState::Loading);
@@ -110,10 +112,13 @@ pub fn recurring_list(props: &RecurringListProps) -> Html {
         _ => vec![],
     };
 
-    let format_currency = |amount: &str| -> String {
-        match amount.parse::<f64>() {
-            Ok(val) => format!("${:.2}", val.abs()),
-            Err(_) => amount.to_string(),
+    let format_currency = {
+        let currency = currency.clone();
+        move |amount: &str| -> String {
+            match amount.parse::<f64>() {
+                Ok(val) => format!("{:.1} {}", val.abs(), currency),
+                Err(_) => amount.to_string(),
+            }
         }
     };
 

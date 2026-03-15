@@ -1,10 +1,12 @@
 use yew::prelude::*;
+use crate::formatting::use_currency;
 use crate::mock_data::{get_mock_budgets, get_mock_categories, get_mock_transactions};
 use std::collections::HashMap;
 use chrono::{Datelike, Local};
 
 #[function_component(Budgets)]
 pub fn budgets() -> Html {
+    let currency = use_currency();
     let budgets = get_mock_budgets();
     let categories = get_mock_categories();
     let transactions = get_mock_transactions();
@@ -46,10 +48,10 @@ pub fn budgets() -> Html {
                             <div class="card-body p-5">
                                 <div class="flex justify-between mb-2">
                                     <span class="font-bold" style={format!("color: {}", cat_color)}>{cat_name}</span>
-                                    <span class="text-sm">{format!("${:.2} / ${:.2}", actual, b.amount)}</span>
+                                    <span class="text-sm">{format!("{:.1} / {:.1} {}", actual, b.amount, currency)}</span>
                                 </div>
                                 <progress class={classes!("progress", "w-full", color_class)} value={percent.to_string()} max="100"></progress>
-                                <div class="text-right text-xs mt-1 opacity-70">{format!("${:.2} remaining", remaining)}</div>
+                                <div class="text-right text-xs mt-1 opacity-70">{format!("{:.1} {} remaining", remaining, currency)}</div>
                             </div>
                         </div>
                     }

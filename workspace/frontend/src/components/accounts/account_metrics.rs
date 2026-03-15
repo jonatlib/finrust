@@ -45,7 +45,7 @@ pub fn account_metrics_component(props: &Props) -> Html {
 }
 
 fn fmt_currency(amount: Decimal) -> String {
-    format!("{:.2}", amount)
+    format!("{:.1}", amount)
 }
 
 fn fmt_opt(value: Option<Decimal>) -> String {
