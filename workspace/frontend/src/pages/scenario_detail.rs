@@ -618,7 +618,7 @@ fn stacked_area_chart(props: &StackedAreaChartProps) -> Html {
 
             let mut plot = Plot::new();
 
-            for account in accounts.iter() {
+            for (idx, account) in accounts.iter().enumerate() {
                 if let Some(data) = account_data.get(&account.id) {
                     let mut sorted_data = data.clone();
                     sorted_data.sort_by_key(|(date, _)| *date);
@@ -626,10 +626,14 @@ fn stacked_area_chart(props: &StackedAreaChartProps) -> Html {
                     let dates: Vec<String> = sorted_data.iter().map(|(d, _)| d.to_string()).collect();
                     let balances: Vec<f64> = sorted_data.iter().map(|(_, b)| *b).collect();
 
+                    let color_str = account.color.clone()
+                        .unwrap_or_else(|| crate::colors::color_by_index(idx).to_string());
+
                     let trace = Scatter::new(dates, balances)
                         .name(&account.name)
                         .mode(Mode::Lines)
-                        .stack_group("one");
+                        .stack_group("one")
+                        .line(plotly::common::Line::new().color(color_str));
 
                     plot.add_trace(trace);
                 }

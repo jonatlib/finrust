@@ -64,19 +64,21 @@ pub fn account_type_bubbles() -> Html {
 
                     <div class="space-y-4">
                         {for grouped_accounts.iter().map(|(kind, grouped)| {
-                            let style = kind_style(kind);
-
                             html! {
                                 <div>
                                     <h3 class="text-sm font-semibold mb-2">{kind.display_name()}</h3>
                                     <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
-                                        {for grouped.iter().map(|account| {
+                                        {for grouped.iter().enumerate().map(|(idx, account)| {
                                             let (current_state, month_end_state) = stats_by_account
                                                 .get(&account.id)
                                                 .cloned()
                                                 .unwrap_or((None, None));
 
                                             let avg_flow = avg_flows.get(&account.id).copied().flatten();
+                                            let accent = account.color.clone()
+                                                .unwrap_or_else(|| crate::colors::color_by_index(idx).to_string());
+                                            let border_style = format!("border-left: 4px solid {}", accent);
+                                            let kind_style = kind_style(&account.account_kind);
 
                                             html! {
                                                 <Link<Route>
@@ -89,12 +91,18 @@ pub fn account_type_bubbles() -> Html {
                                                         "hover:shadow-md",
                                                         "transition-shadow",
                                                         "cursor-pointer",
-                                                        style.card_class,
+                                                        "bg-base-100",
                                                     )}
                                                 >
-                                                    <div class="card-body p-3 gap-1">
+                                                    <div class="card-body p-3 gap-1" style={border_style}>
                                                         <div class="flex items-start justify-between gap-2">
-                                                            <h4 class="card-title text-sm leading-tight">{&account.name}</h4>
+                                                            <div class="flex items-center gap-2">
+                                                                <h4 class="card-title text-sm leading-tight">{&account.name}</h4>
+                                                                <span class={classes!("badge", "badge-xs", "gap-1", "badge-outline", kind_style.legend_badge_class)}>
+                                                                    <span class={classes!("inline-block", "w-1.5", "h-1.5", "rounded-full", kind_style.legend_dot_class)}></span>
+                                                                    {account.account_kind.display_name()}
+                                                                </span>
+                                                            </div>
                                                             <span class="badge badge-ghost badge-xs">{&account.currency_code}</span>
                                                         </div>
 

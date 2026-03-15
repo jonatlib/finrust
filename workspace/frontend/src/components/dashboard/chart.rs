@@ -180,14 +180,17 @@ pub fn balance_breakdown_chart() -> Html {
                         .insert(point.date.format("%Y-%m-%d").to_string(), point.balance);
                 }
 
-                // Create traces for each account
-                let traces: Vec<_> = included_accounts.iter().map(|account| {
+                // Create traces for each account, using persistent account colors
+                let traces: Vec<_> = included_accounts.iter().enumerate().map(|(idx, account)| {
                     let values: Vec<f64> = dates.iter().map(|date_str| {
                         account_data.get(&account.id)
                             .and_then(|date_map| date_map.get(date_str))
                             .map(|balance| balance.to_f64().unwrap_or(0.0))
                             .unwrap_or(0.0)
                     }).collect();
+
+                    let color = account.color.clone()
+                        .unwrap_or_else(|| crate::colors::color_by_index(idx).to_string());
 
                     serde_json::json!({
                         "x": dates.clone(),
@@ -196,7 +199,8 @@ pub fn balance_breakdown_chart() -> Html {
                         "mode": "lines",
                         "stackgroup": "one",
                         "name": account.name,
-                        "fill": "tonexty"
+                        "fill": "tonexty",
+                        "line": {"color": color}
                     })
                 }).collect();
 

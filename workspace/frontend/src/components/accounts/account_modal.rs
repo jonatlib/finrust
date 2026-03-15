@@ -1,4 +1,5 @@
 use crate::api_client::account::{create_account, update_account, AccountKind, AccountResponse, CreateAccountRequest, UpdateAccountRequest};
+use crate::colors;
 use yew::prelude::*;
 
 #[derive(Properties, PartialEq)]
@@ -45,6 +46,7 @@ pub fn account_modal(props: &AccountModalProps) -> Html {
                 let account_kind_str = form_data.get("account_kind").as_string().unwrap_or("RealAccount".to_string());
                 let include_in_statistics = form_data.get("include_in_statistics").as_string().map(|v| v == "on").unwrap_or(true);
                 let target_amount = form_data.get("target_amount").as_string().filter(|s| !s.is_empty());
+                let color = form_data.get("color").as_string().filter(|s| !s.is_empty());
 
                 // Parse account kind
                 let account_kind = match account_kind_str.as_str() {
@@ -77,6 +79,7 @@ pub fn account_modal(props: &AccountModalProps) -> Html {
                         ledger_name: if ledger_name.as_ref().map(|l| l.is_empty()).unwrap_or(true) { Some(String::new()) } else { ledger_name },
                         account_kind: Some(account_kind),
                         target_amount: target_amount.clone(),
+                        color: color.clone(),
                     };
 
                     wasm_bindgen_futures::spawn_local(async move {
@@ -106,6 +109,7 @@ pub fn account_modal(props: &AccountModalProps) -> Html {
                         ledger_name: if ledger_name.as_ref().map(|l| l.is_empty()).unwrap_or(true) { None } else { ledger_name },
                         account_kind: Some(account_kind),
                         target_amount,
+                        color: color.clone(),
                     };
 
                     wasm_bindgen_futures::spawn_local(async move {
@@ -147,6 +151,9 @@ pub fn account_modal(props: &AccountModalProps) -> Html {
     let default_include_stats = props.account.as_ref().map(|a| a.include_in_statistics).unwrap_or(true);
     let default_kind = props.account.as_ref().map(|a| a.account_kind).unwrap_or(AccountKind::RealAccount);
     let default_target_amount = props.account.as_ref().and_then(|a| a.target_amount.clone()).unwrap_or_default();
+    let default_color = props.account.as_ref()
+        .and_then(|a| a.color.clone())
+        .unwrap_or_else(|| colors::ACCOUNT_COLORS[0].to_string());
 
     // Track selected account kind for conditional rendering
     let selected_kind = use_state(|| default_kind);
@@ -267,16 +274,28 @@ pub fn account_modal(props: &AccountModalProps) -> Html {
 
                     {target_field_html}
 
-                    <div class="form-control">
-                        <label class="label"><span class="label-text">{"Ledger Name (Optional)"}</span></label>
-                        <input
-                            type="text"
-                            name="ledger_name"
-                            class="input input-bordered w-full"
-                            placeholder="e.g. Assets:Checking"
-                            value={default_ledger}
-                            disabled={*is_submitting}
-                        />
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="form-control">
+                            <label class="label"><span class="label-text">{"Ledger Name (Optional)"}</span></label>
+                            <input
+                                type="text"
+                                name="ledger_name"
+                                class="input input-bordered w-full"
+                                placeholder="e.g. Assets:Checking"
+                                value={default_ledger}
+                                disabled={*is_submitting}
+                            />
+                        </div>
+                        <div class="form-control">
+                            <label class="label"><span class="label-text">{"Chart Color"}</span></label>
+                            <input
+                                type="color"
+                                name="color"
+                                class="input input-bordered w-full h-10 p-1 cursor-pointer"
+                                value={default_color}
+                                disabled={*is_submitting}
+                            />
+                        </div>
                     </div>
 
                     <div class="form-control">

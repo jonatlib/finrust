@@ -52,15 +52,24 @@ pub fn account_card(props: &Props) -> Html {
         })
     };
 
+    let accent_color = account.color.clone()
+        .unwrap_or_else(|| crate::colors::color_by_index(account.id as usize).to_string());
+    let border_style = format!("border-left: 4px solid {}", accent_color);
+
     html! {
         <div
             class="card bg-base-100 shadow hover:shadow-lg transition-shadow cursor-pointer"
             onclick={on_card_click}
+            style={border_style}
         >
             <div class="card-body">
                 <div class="flex justify-between items-start">
                     <div>
-                        <h3 class="card-title text-base">{&account.name}</h3>
+                        <div class="flex items-center gap-2">
+                            <span class="inline-block w-3 h-3 rounded-full flex-shrink-0"
+                                style={format!("background-color: {}", accent_color)}></span>
+                            <h3 class="card-title text-base">{&account.name}</h3>
+                        </div>
                         {if let Some(desc) = &account.description {
                             html! { <p class="text-xs text-gray-500 mt-1">{desc}</p> }
                         } else {

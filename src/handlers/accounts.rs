@@ -1,3 +1,4 @@
+use crate::helpers::colors;
 use crate::schemas::{ApiResponse, AppState, ErrorResponse};
 use axum::{
     extract::{Path, Query, State},
@@ -67,6 +68,8 @@ pub struct CreateAccountRequest {
     pub account_kind: Option<AccountKind>,
     /// Target amount for Goal accounts
     pub target_amount: Option<rust_decimal::Decimal>,
+    /// Hex color for charts (e.g. "#3b82f6"). Auto-assigned if omitted.
+    pub color: Option<String>,
 }
 
 /// Request body for updating an account
@@ -86,6 +89,8 @@ pub struct UpdateAccountRequest {
     pub account_kind: Option<AccountKind>,
     /// Target amount for Goal accounts
     pub target_amount: Option<rust_decimal::Decimal>,
+    /// Hex color for charts (e.g. "#3b82f6")
+    pub color: Option<String>,
 }
 
 /// Account response model
@@ -100,6 +105,7 @@ pub struct AccountResponse {
     pub ledger_name: Option<String>,
     pub account_kind: AccountKind,
     pub target_amount: Option<rust_decimal::Decimal>,
+    pub color: Option<String>,
 }
 
 impl From<account::Model> for AccountResponse {
@@ -114,6 +120,7 @@ impl From<account::Model> for AccountResponse {
             ledger_name: model.ledger_name,
             account_kind: model.account_kind.into(),
             target_amount: model.target_amount,
+            color: model.color,
         }
     }
 }
@@ -165,6 +172,17 @@ pub async fn create_account(
         }
     }
 
+    let assigned_color = match &request.color {
+        Some(c) => Some(c.clone()),
+        None => {
+            let count = account::Entity::find()
+                .count(&state.db)
+                .await
+                .unwrap_or(0) as usize;
+            Some(colors::color_by_index(count).to_string())
+        }
+    };
+
     let new_account = account::ActiveModel {
         name: Set(request.name.clone()),
         description: Set(request.description.clone()),
@@ -174,6 +192,7 @@ pub async fn create_account(
         ledger_name: Set(request.ledger_name.clone()),
         account_kind: Set(request.account_kind.unwrap_or(AccountKind::RealAccount).into()),
         target_amount: Set(request.target_amount),
+        color: Set(assigned_color),
         ..Default::default()
     };
 
@@ -421,6 +440,11 @@ pub async fn update_account(
         debug!("Updating account target_amount to: {:?}", request.target_amount);
         account_active.target_amount = Set(request.target_amount);
         updated_fields.push(format!("target_amount: {:?}", request.target_amount));
+    }
+    if let Some(color) = request.color {
+        debug!("Updating account color to: {}", color);
+        account_active.color = Set(Some(color.clone()));
+        updated_fields.push(format!("color: {}", color));
     }
 
     if updated_fields.is_empty() {

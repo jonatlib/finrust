@@ -6,6 +6,7 @@ mod mock_data;
 mod pages;
 mod router;
 pub mod api_client;
+pub mod colors;
 pub mod hooks;
 pub mod common;
 pub mod settings;

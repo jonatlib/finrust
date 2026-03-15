@@ -43,6 +43,8 @@ pub struct Model {
     pub account_kind: AccountKind,
     /// Target amount for Goal accounts
     pub target_amount: Option<Decimal>,
+    /// Hex color for consistent display across charts and dashboards (e.g. "#3b82f6")
+    pub color: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

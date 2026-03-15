@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use chrono::{Months, NaiveDate};
+use crate::helpers::colors;
 use rust_decimal::Decimal;
 use sea_orm::{ActiveModelTrait, Database, DatabaseConnection, EntityTrait, Set};
 use serde::Deserialize;
@@ -230,6 +231,7 @@ pub async fn import_django(json_path: &str, database_url: &str) -> Result<()> {
 
     // Fourth pass: Import accounts
     info!("Importing accounts...");
+    let mut account_color_index: usize = 0;
     for record in records.iter() {
         if record.model == "account.moneyaccountmodel" {
             let django_account: DjangoAccount = serde_json::from_value(record.fields.clone())?;
@@ -237,6 +239,9 @@ pub async fn import_django(json_path: &str, database_url: &str) -> Result<()> {
             let currency_code = currency_map.get(&django_account.currency)
                 .unwrap_or(&default_currency_code)
                 .clone();
+
+            let color = colors::color_by_index(account_color_index).to_string();
+            account_color_index += 1;
 
             let new_account = account::ActiveModel {
                 name: Set(django_account.name.clone()),
@@ -246,6 +251,7 @@ pub async fn import_django(json_path: &str, database_url: &str) -> Result<()> {
                 include_in_statistics: Set(django_account.include_in_statistics),
                 ledger_name: Set(None),
                 account_kind: Set(account::AccountKind::RealAccount),
+                color: Set(Some(color)),
                 ..Default::default()
             };
 

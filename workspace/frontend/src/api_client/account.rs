@@ -51,6 +51,7 @@ pub struct AccountResponse {
     pub ledger_name: Option<String>,
     pub account_kind: AccountKind,
     pub target_amount: Option<String>,
+    pub color: Option<String>,
 }
 
 /// Account statistics response
@@ -94,6 +95,7 @@ pub struct CreateAccountRequest {
     pub ledger_name: Option<String>,
     pub account_kind: Option<AccountKind>,
     pub target_amount: Option<String>,
+    pub color: Option<String>,
 }
 
 /// Request body for updating an account
@@ -106,6 +108,7 @@ pub struct UpdateAccountRequest {
     pub ledger_name: Option<String>,
     pub account_kind: Option<AccountKind>,
     pub target_amount: Option<String>,
+    pub color: Option<String>,
 }
 
 /// Get all accounts
