@@ -1,12 +1,14 @@
 use crate::helpers::stats::{compute_account_statistics, determine_time_period};
-use crate::schemas::{ApiResponse, AppState, CachedData, StatisticsQuery, ErrorResponse};
+use crate::schemas::{ApiResponse, AppState, CachedData, MonthlyMinBalanceQuery, StatisticsQuery, ErrorResponse};
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     response::Json,
 };
 use axum_valid::Valid;
-use common::AccountStatisticsCollection;
+use chrono::{Datelike, Months};
+use common::{AccountStatisticsCollection, MonthlyMinBalance, MonthlyMinBalanceSeries};
+use compute::{account::AccountStateCalculator, account_stats, default_compute};
 use model::entities::account;
 use sea_orm::EntityTrait;
 use tracing::{instrument, error, warn, info, debug, trace};
@@ -188,4 +190,109 @@ pub async fn get_all_accounts_statistics(
     };
 
     Ok(Json(response))
+}
+
+/// Get monthly minimum balance for a specific account over time.
+///
+/// Returns the minimum balance observed during each calendar month,
+/// allowing the user to see whether the account floor is trending
+/// upward or downward.
+#[utoipa::path(
+    get,
+    path = "/api/v1/accounts/{account_id}/monthly-min-balance",
+    tag = "statistics",
+    params(
+        ("account_id" = i32, Path, description = "Account ID"),
+        ("months" = Option<u32>, Query, description = "Number of past months to include (default 12)"),
+    ),
+    responses(
+        (status = 200, description = "Monthly minimum balance series", body = ApiResponse<MonthlyMinBalanceSeries>),
+        (status = 404, description = "Account not found", body = ErrorResponse),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    )
+)]
+#[instrument]
+pub async fn get_monthly_min_balance(
+    Path(account_id): Path<i32>,
+    Valid(Query(query)): Valid<Query<MonthlyMinBalanceQuery>>,
+    State(state): State<AppState>,
+) -> Result<Json<ApiResponse<MonthlyMinBalanceSeries>>, StatusCode> {
+    trace!("Entering get_monthly_min_balance for account_id: {}", account_id);
+
+    let account_model = match account::Entity::find_by_id(account_id)
+        .one(&state.db)
+        .await
+    {
+        Ok(Some(account)) => {
+            debug!("Found account: {}", account.name);
+            account
+        }
+        Ok(None) => {
+            warn!("Account with ID {} not found", account_id);
+            return Err(StatusCode::NOT_FOUND);
+        }
+        Err(db_error) => {
+            error!(
+                "Failed to retrieve account with ID {}: {}",
+                account_id, db_error
+            );
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+
+    let months = query.months.unwrap_or(12);
+    let today = chrono::Utc::now().date_naive();
+    let end_date = today;
+    let start_date = today
+        .checked_sub_months(Months::new(months))
+        .unwrap_or_else(|| chrono::NaiveDate::from_ymd_opt(today.year() - 1, today.month(), 1).unwrap());
+
+    let compute = default_compute(None);
+
+    debug!("Computing monthly min balance from {} to {} ({} months)", start_date, end_date, months);
+
+    match account_stats::min_balance_per_month(
+        &compute as &dyn AccountStateCalculator,
+        &state.db,
+        &account_model,
+        start_date,
+        end_date,
+    )
+    .await
+    {
+        Ok(raw_points) => {
+            let data_points: Vec<MonthlyMinBalance> = raw_points
+                .into_iter()
+                .map(|(year, _date, min_bal)| MonthlyMinBalance {
+                    year,
+                    month: _date.month(),
+                    min_balance: min_bal,
+                })
+                .collect();
+
+            let series = MonthlyMinBalanceSeries {
+                account_id,
+                data_points,
+            };
+
+            info!(
+                account_id,
+                point_count = series.data_points.len(),
+                "Monthly min balance computed successfully"
+            );
+
+            Ok(Json(ApiResponse {
+                data: series,
+                message: "Monthly minimum balance retrieved successfully".to_string(),
+                success: true,
+            }))
+        }
+        Err(e) => {
+            error!(
+                "Failed to compute monthly min balance for account ID {}: {}",
+                account_id, e
+            );
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
 }

@@ -10,7 +10,10 @@ pub use metrics::{
     AccountKindMetricsDto, AccountMetricsDto, DashboardMetricsDto, DebtMetricsDto,
     InvestmentMetricsDto, OperatingMetricsDto, ReserveMetricsDto,
 };
-pub use statistics::{AccountStatistics, AccountStatisticsCollection, TimePeriod};
+pub use statistics::{
+    AccountStatistics, AccountStatisticsCollection, MonthlyMinBalance, MonthlyMinBalanceSeries,
+    TimePeriod,
+};
 pub use timeseries::{AccountStatePoint, AccountStateTimeseries, DateRange};
 
 use serde::{Deserialize, Serialize};

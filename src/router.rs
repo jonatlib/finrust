@@ -18,7 +18,7 @@ use crate::handlers::{
         apply_scenario, create_scenario, delete_scenario, get_scenario, get_scenarios,
         update_scenario,
     },
-    statistics::{get_account_statistics, get_all_accounts_statistics},
+    statistics::{get_account_statistics, get_all_accounts_statistics, get_monthly_min_balance},
     tags::{
         create_tag, delete_tag, get_tag, get_tag_children, get_tags,
         link_tag_to_parent, unlink_tag_from_parent, update_tag,
@@ -160,6 +160,10 @@ pub fn create_router(state: AppState) -> Router {
         .route(
             "/api/v1/accounts/:account_id/statistics",
             get(get_account_statistics),
+        )
+        .route(
+            "/api/v1/accounts/:account_id/monthly-min-balance",
+            get(get_monthly_min_balance),
         )
         .route(
             "/api/v1/accounts/:account_id/timeseries",

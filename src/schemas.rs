@@ -2,7 +2,8 @@ use chrono::NaiveDate;
 use common::{
     AccountKindMetricsDto, AccountMetricsDto, AccountStateTimeseries, AccountStatistics,
     AccountStatisticsCollection, DashboardMetricsDto, DateRange, DebtMetricsDto,
-    InvestmentMetricsDto, OperatingMetricsDto, ReserveMetricsDto, TimePeriod,
+    InvestmentMetricsDto, MonthlyMinBalance, MonthlyMinBalanceSeries, OperatingMetricsDto,
+    ReserveMetricsDto, TimePeriod,
 };
 use moka::future::Cache;
 use sea_orm::DatabaseConnection;
@@ -41,6 +42,14 @@ pub struct StatisticsQuery {
     /// Include accounts excluded from statistics
     #[serde(default)]
     pub include_ignored: bool,
+}
+
+/// Query parameters for monthly minimum balance endpoint
+#[derive(Debug, Deserialize, ToSchema, Validate)]
+pub struct MonthlyMinBalanceQuery {
+    /// Number of past months to include (default 12, max 120)
+    #[validate(range(min = 1, max = 120))]
+    pub months: Option<u32>,
 }
 
 /// Query parameters for timeseries endpoints
@@ -150,6 +159,7 @@ pub struct HealthResponse {
         crate::handlers::scenarios::delete_scenario,
         crate::handlers::scenarios::apply_scenario,
         crate::handlers::statistics::get_account_statistics,
+        crate::handlers::statistics::get_monthly_min_balance,
         crate::handlers::timeseries::get_account_timeseries,
         crate::handlers::statistics::get_all_accounts_statistics,
         crate::handlers::timeseries::get_all_accounts_timeseries,
@@ -208,6 +218,7 @@ pub struct HealthResponse {
             ApiResponse<Vec<crate::handlers::scenarios::ScenarioResponse>>,
             ErrorResponse,
             HealthResponse,
+            MonthlyMinBalanceQuery,
             StatisticsQuery,
             TimeseriesQuery,
             AccountStatisticsCollection,
@@ -222,6 +233,9 @@ pub struct HealthResponse {
             ReserveMetricsDto,
             InvestmentMetricsDto,
             DebtMetricsDto,
+            MonthlyMinBalance,
+            MonthlyMinBalanceSeries,
+            ApiResponse<MonthlyMinBalanceSeries>,
             ApiResponse<DashboardMetricsDto>,
             ApiResponse<AccountMetricsDto>,
         )

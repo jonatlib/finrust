@@ -36,6 +36,29 @@ pub struct AccountStatistics {
     pub goal_reached_date: Option<NaiveDate>,
 }
 
+/// A single data point representing the minimum balance for a given month.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+pub struct MonthlyMinBalance {
+    /// Year of the data point
+    pub year: i32,
+    /// Month of the data point (1-12)
+    pub month: u32,
+    /// Minimum account balance observed during this month
+    pub min_balance: Decimal,
+}
+
+/// Time series of monthly minimum balances for a single account.
+///
+/// Useful for visualising whether an account's floor balance is trending
+/// up or down over time.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+pub struct MonthlyMinBalanceSeries {
+    /// The account identifier
+    pub account_id: i32,
+    /// Ordered data points (oldest first)
+    pub data_points: Vec<MonthlyMinBalance>,
+}
+
 /// Collection of statistics for multiple accounts
 ///
 /// This structure groups statistics by time period and provides
@@ -184,5 +207,36 @@ mod tests {
             TimePeriod::date_range(start, end).description(),
             "2024-01-01 to 2024-12-31"
         );
+    }
+
+    #[test]
+    fn test_monthly_min_balance_series_serialization_roundtrip() {
+        let series = MonthlyMinBalanceSeries {
+            account_id: 42,
+            data_points: vec![
+                MonthlyMinBalance {
+                    year: 2025,
+                    month: 10,
+                    min_balance: Decimal::new(150000, 2),
+                },
+                MonthlyMinBalance {
+                    year: 2025,
+                    month: 11,
+                    min_balance: Decimal::new(145000, 2),
+                },
+                MonthlyMinBalance {
+                    year: 2025,
+                    month: 12,
+                    min_balance: Decimal::new(160000, 2),
+                },
+            ],
+        };
+
+        let json = serde_json::to_string(&series).expect("serialization failed");
+        let deserialized: MonthlyMinBalanceSeries =
+            serde_json::from_str(&json).expect("deserialization failed");
+        assert_eq!(series, deserialized);
+        assert_eq!(deserialized.data_points.len(), 3);
+        assert_eq!(deserialized.data_points[0].month, 10);
     }
 }

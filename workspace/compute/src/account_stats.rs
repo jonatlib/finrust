@@ -239,6 +239,55 @@ pub async fn end_of_month_state(
     compute_end_of_period_state_from_dataframe(df, end_date)
 }
 
+/// Computes the minimum account balance for each month in the given range.
+///
+/// For each calendar month between `start_date` and `end_date` (inclusive),
+/// the function calculates the account state over that month and extracts
+/// the minimum balance.  The result is returned chronologically (oldest first).
+#[instrument(skip(calculator, db, account))]
+pub async fn min_balance_per_month(
+    calculator: &dyn AccountStateCalculator,
+    db: &DatabaseConnection,
+    account: &account::Model,
+    start_date: NaiveDate,
+    end_date: NaiveDate,
+) -> Result<Vec<(i32, NaiveDate, rust_decimal::Decimal)>> {
+    let accounts = vec![account.clone()];
+    let mut results: Vec<(i32, NaiveDate, rust_decimal::Decimal)> = Vec::new();
+
+    let mut cur_year = start_date.year();
+    let mut cur_month = start_date.month();
+
+    loop {
+        let month_start = NaiveDate::from_ymd_opt(cur_year, cur_month, 1).unwrap();
+        let month_end = get_last_day_of_month(cur_year, cur_month);
+
+        if month_start > end_date {
+            break;
+        }
+
+        let df = calculator
+            .compute_account_state(db, &accounts, month_start, month_end)
+            .await?;
+
+        let stats = compute_min_state_from_dataframe(df)?;
+        if let Some(stat) = stats.into_iter().find(|s| s.account_id == account.id) {
+            if let Some(min_val) = stat.min_state {
+                results.push((cur_year, month_start, min_val));
+            }
+        }
+
+        if cur_month == 12 {
+            cur_month = 1;
+            cur_year += 1;
+        } else {
+            cur_month += 1;
+        }
+    }
+
+    Ok(results)
+}
+
 /// Computes account state at a specific date.
 #[instrument(skip(calculator, db, accounts))]
 pub async fn state_at_date(

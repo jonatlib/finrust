@@ -3817,4 +3817,169 @@ mod integration_tests {
         let body: ApiResponse<Vec<serde_json::Value>> = response.json();
         assert!(body.success);
     }
+
+    #[tokio::test]
+    async fn test_monthly_min_balance_returns_ok_for_existing_account() {
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        let user_request = CreateUserRequest {
+            username: "monthly_min_user".to_string(),
+        };
+        let user_resp = server.post("/api/v1/users").json(&user_request).await;
+        user_resp.assert_status(StatusCode::CREATED);
+        let user_body: ApiResponse<serde_json::Value> = user_resp.json();
+        let user_id = user_body.data["id"].as_i64().unwrap() as i32;
+
+        let account_request = CreateAccountRequest {
+            name: "Monthly Min Test Account".to_string(),
+            description: None,
+            currency_code: "USD".to_string(),
+            owner_id: user_id,
+            include_in_statistics: Some(true),
+            ledger_name: None,
+            account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
+            target_amount: None,
+        };
+        let account_resp = server.post("/api/v1/accounts").json(&account_request).await;
+        account_resp.assert_status(StatusCode::CREATED);
+        let account_body: ApiResponse<serde_json::Value> = account_resp.json();
+        let account_id = account_body.data["id"].as_i64().unwrap();
+
+        let response = server
+            .get(&format!(
+                "/api/v1/accounts/{}/monthly-min-balance?months=3",
+                account_id
+            ))
+            .await;
+
+        response.assert_status(StatusCode::OK);
+        let body: ApiResponse<serde_json::Value> = response.json();
+        assert!(body.success);
+        assert_eq!(body.data["account_id"], account_id);
+        assert!(body.data["data_points"].is_array());
+    }
+
+    #[tokio::test]
+    async fn test_monthly_min_balance_returns_not_found_for_missing_account() {
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        let response = server
+            .get("/api/v1/accounts/99999/monthly-min-balance")
+            .await;
+
+        response.assert_status(StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_monthly_min_balance_default_months() {
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        let user_request = CreateUserRequest {
+            username: "monthly_min_default_user".to_string(),
+        };
+        let user_resp = server.post("/api/v1/users").json(&user_request).await;
+        user_resp.assert_status(StatusCode::CREATED);
+        let user_body: ApiResponse<serde_json::Value> = user_resp.json();
+        let user_id = user_body.data["id"].as_i64().unwrap() as i32;
+
+        let account_request = CreateAccountRequest {
+            name: "Monthly Min Default Account".to_string(),
+            description: None,
+            currency_code: "USD".to_string(),
+            owner_id: user_id,
+            include_in_statistics: Some(true),
+            ledger_name: None,
+            account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
+            target_amount: None,
+        };
+        let account_resp = server.post("/api/v1/accounts").json(&account_request).await;
+        account_resp.assert_status(StatusCode::CREATED);
+        let account_body: ApiResponse<serde_json::Value> = account_resp.json();
+        let account_id = account_body.data["id"].as_i64().unwrap();
+
+        let response = server
+            .get(&format!(
+                "/api/v1/accounts/{}/monthly-min-balance",
+                account_id
+            ))
+            .await;
+
+        response.assert_status(StatusCode::OK);
+        let body: ApiResponse<serde_json::Value> = response.json();
+        assert!(body.success);
+        assert_eq!(
+            body.message,
+            "Monthly minimum balance retrieved successfully"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_monthly_min_balance_with_transactions() {
+        let app = setup_test_app().await;
+        let server = TestServer::new(app).unwrap();
+
+        let user_request = CreateUserRequest {
+            username: "monthly_min_txn_user".to_string(),
+        };
+        let user_resp = server.post("/api/v1/users").json(&user_request).await;
+        user_resp.assert_status(StatusCode::CREATED);
+        let user_body: ApiResponse<serde_json::Value> = user_resp.json();
+        let user_id = user_body.data["id"].as_i64().unwrap() as i32;
+
+        let account_request = CreateAccountRequest {
+            name: "Monthly Min Txn Account".to_string(),
+            description: None,
+            currency_code: "USD".to_string(),
+            owner_id: user_id,
+            include_in_statistics: Some(true),
+            ledger_name: None,
+            account_kind: Some(crate::handlers::accounts::AccountKind::RealAccount),
+            target_amount: None,
+        };
+        let account_resp = server.post("/api/v1/accounts").json(&account_request).await;
+        account_resp.assert_status(StatusCode::CREATED);
+        let account_body: ApiResponse<serde_json::Value> = account_resp.json();
+        let account_id = account_body.data["id"].as_i64().unwrap() as i32;
+
+        let txn = CreateTransactionRequest {
+            name: "Initial deposit".to_string(),
+            description: None,
+            amount: Decimal::new(500000, 2),
+            date: NaiveDate::from_ymd_opt(2025, 6, 1).unwrap(),
+            include_in_statistics: Some(true),
+            target_account_id: account_id,
+            source_account_id: None,
+            ledger_name: None,
+            linked_import_id: None,
+            category_id: None,
+        };
+        let txn_resp = server.post("/api/v1/transactions").json(&txn).await;
+        txn_resp.assert_status(StatusCode::CREATED);
+
+        let response = server
+            .get(&format!(
+                "/api/v1/accounts/{}/monthly-min-balance?months=24",
+                account_id
+            ))
+            .await;
+
+        response.assert_status(StatusCode::OK);
+        let body: ApiResponse<serde_json::Value> = response.json();
+        assert!(body.success);
+
+        let data_points = body.data["data_points"].as_array().unwrap();
+        assert!(
+            !data_points.is_empty(),
+            "Should have at least one month data point"
+        );
+
+        for point in data_points {
+            assert!(point["year"].is_number());
+            assert!(point["month"].is_number());
+            assert!(point["min_balance"].is_string() || point["min_balance"].is_number());
+        }
+    }
 }

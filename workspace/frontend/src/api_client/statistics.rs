@@ -52,6 +52,38 @@ pub async fn get_account_statistics_with_ignored(account_id: i32, include_ignore
     result
 }
 
+/// Monthly minimum balance data point
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MonthlyMinBalance {
+    pub year: i32,
+    pub month: u32,
+    pub min_balance: rust_decimal::Decimal,
+}
+
+/// Time series of monthly minimum balances for a single account
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MonthlyMinBalanceSeries {
+    pub account_id: i32,
+    pub data_points: Vec<MonthlyMinBalance>,
+}
+
+/// Fetch the monthly minimum balance series for an account.
+///
+/// `months` controls how many past months to include.
+pub async fn get_monthly_min_balance(account_id: i32, months: u32) -> Result<MonthlyMinBalanceSeries, String> {
+    log::trace!("Fetching monthly min balance for account ID: {} (months={})", account_id, months);
+    let url = format!("/accounts/{}/monthly-min-balance?months={}", account_id, months);
+    let result = api_client::get::<MonthlyMinBalanceSeries>(&url).await;
+
+    if let Err(ref e) = result {
+        log::error!("Failed to fetch monthly min balance: {}", e);
+    } else {
+        log::info!("Successfully fetched monthly min balance for account ID: {}", account_id);
+    }
+
+    result
+}
+
 pub async fn get_all_accounts_statistics() -> Result<Vec<AccountStatisticsCollection>, String> {
     log::trace!("Fetching statistics for all accounts");
     let result = api_client::get::<Vec<AccountStatisticsCollection>>("/accounts/statistics").await;
