@@ -79,8 +79,9 @@ pub fn generate_occurrences(
             }
             recurring_transaction::RecurrencePeriod::Quarterly => {
                 // Add three months
-                let year = current_date.year() + (current_date.month() / 12) as i32;
-                let month = ((current_date.month() - 1 + 3) % 12) + 1;
+                let total_months = current_date.month() - 1 + 3;
+                let year = current_date.year() + (total_months / 12) as i32;
+                let month = (total_months % 12) + 1;
                 let day = std::cmp::min(current_date.day(), days_in_month(year, month));
                 trace!(
                     "Quarterly: calculating next date with year={}, month={}, day={}",
@@ -91,8 +92,9 @@ pub fn generate_occurrences(
             }
             recurring_transaction::RecurrencePeriod::HalfYearly => {
                 // Add six months
-                let year = current_date.year() + (current_date.month() / 12) as i32;
-                let month = ((current_date.month() - 1 + 6) % 12) + 1;
+                let total_months = current_date.month() - 1 + 6;
+                let year = current_date.year() + (total_months / 12) as i32;
+                let month = (total_months % 12) + 1;
                 let day = std::cmp::min(current_date.day(), days_in_month(year, month));
                 trace!(
                     "HalfYearly: calculating next date with year={}, month={}, day={}",
