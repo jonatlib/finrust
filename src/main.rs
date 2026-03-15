@@ -2,23 +2,7 @@ use anyhow::Result;
 use clap::Parser;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-mod cli;
-mod config;
-mod handlers;
-mod helpers;
-mod router;
-mod schemas;
-
-#[cfg(test)]
-mod test_utils;
-
-#[cfg(test)]
-mod tests;
-
-#[cfg(test)]
-mod openapi_tests;
-
-use cli::Cli;
+use finrust::cli::Cli;
 
 /// Main entry point for the FinRust application.
 #[tokio::main]
