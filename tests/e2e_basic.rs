@@ -45,6 +45,7 @@ async fn test_e2e_basic_scenario() {
             ledger_name: None,
             account_kind: Some(AccountKind::RealAccount),
             target_amount: None,
+            color: None,
         })
         .await;
     resp.assert_status(StatusCode::CREATED);
@@ -63,6 +64,7 @@ async fn test_e2e_basic_scenario() {
             ledger_name: None,
             account_kind: Some(AccountKind::Savings),
             target_amount: None,
+            color: None,
         })
         .await;
     resp.assert_status(StatusCode::CREATED);

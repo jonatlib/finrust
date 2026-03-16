@@ -152,7 +152,8 @@ mod tests {
     #[tokio::test]
     async fn test_scenario_balance() {
         let scenario = ScenarioBalance::new();
-        let computer = balance::BalanceCalculator::new(MergeMethod::FirstWins);
+        let today = NaiveDate::from_ymd_opt(2023, 3, 15).unwrap();
+        let computer = balance::BalanceCalculator::new_with_today(MergeMethod::FirstWins, today);
 
         run_and_assert_scenario(&scenario, &computer, true)
             .await
@@ -162,7 +163,8 @@ mod tests {
     #[tokio::test]
     async fn test_scenario_balance_outside_range() {
         let scenario = ScenarioBalance::new();
-        let computer = balance::BalanceCalculator::new(MergeMethod::FirstWins);
+        let today = NaiveDate::from_ymd_opt(2023, 3, 15).unwrap();
+        let computer = balance::BalanceCalculator::new_with_today(MergeMethod::FirstWins, today);
 
         run_and_assert_scenario(&scenario, &computer, false)
             .await
@@ -214,8 +216,9 @@ mod tests {
     #[tokio::test]
     async fn test_scenario_balance_merge_simple() {
         let scenario = ScenarioBalance::new();
-        let computer1 = Box::new(balance::BalanceCalculator::new(MergeMethod::FirstWins));
-        let computer2 = Box::new(forecast::ForecastCalculator::new(MergeMethod::FirstWins));
+        let today = NaiveDate::from_ymd_opt(2023, 3, 15).unwrap();
+        let computer1 = Box::new(balance::BalanceCalculator::new_with_today(MergeMethod::FirstWins, today));
+        let computer2 = Box::new(forecast::ForecastCalculator::new_with_today(MergeMethod::FirstWins, today));
 
         let computer =
             merge::MergeCalculator::new(vec![computer1, computer2], MergeMethod::FirstWins);
@@ -228,8 +231,9 @@ mod tests {
     #[tokio::test]
     async fn test_scenario_balance_merge_simple_outside_range() {
         let scenario = ScenarioBalance::new();
-        let computer1 = Box::new(balance::BalanceCalculator::new(MergeMethod::FirstWins));
-        let computer2 = Box::new(balance::BalanceCalculator::new(MergeMethod::FirstWins));
+        let today = NaiveDate::from_ymd_opt(2023, 3, 15).unwrap();
+        let computer1 = Box::new(balance::BalanceCalculator::new_with_today(MergeMethod::FirstWins, today));
+        let computer2 = Box::new(balance::BalanceCalculator::new_with_today(MergeMethod::FirstWins, today));
 
         let computer =
             merge::MergeCalculator::new(vec![computer1, computer2], MergeMethod::FirstWins);
@@ -242,7 +246,8 @@ mod tests {
     #[tokio::test]
     async fn test_scenario_multiple_accounts() {
         let scenario = ScenarioMultipleAccounts::new();
-        let computer = balance::BalanceCalculator::new(MergeMethod::FirstWins);
+        let today = NaiveDate::from_ymd_opt(2023, 3, 15).unwrap();
+        let computer = balance::BalanceCalculator::new_with_today(MergeMethod::FirstWins, today);
 
         run_and_assert_scenario(&scenario, &computer, true)
             .await
@@ -252,7 +257,8 @@ mod tests {
     #[tokio::test]
     async fn test_scenario_multiple_accounts_outside_range() {
         let scenario = ScenarioMultipleAccounts::new();
-        let computer = balance::BalanceCalculator::new(MergeMethod::FirstWins);
+        let today = NaiveDate::from_ymd_opt(2023, 3, 15).unwrap();
+        let computer = balance::BalanceCalculator::new_with_today(MergeMethod::FirstWins, today);
 
         run_and_assert_scenario(&scenario, &computer, false)
             .await
@@ -262,8 +268,9 @@ mod tests {
     #[tokio::test]
     async fn test_scenario_multiple_accounts_merge_simple() {
         let scenario = ScenarioMultipleAccounts::new();
-        let computer1 = Box::new(balance::BalanceCalculator::new(MergeMethod::FirstWins));
-        let computer2 = Box::new(forecast::ForecastCalculator::new(MergeMethod::FirstWins));
+        let today = NaiveDate::from_ymd_opt(2023, 3, 15).unwrap();
+        let computer1 = Box::new(balance::BalanceCalculator::new_with_today(MergeMethod::FirstWins, today));
+        let computer2 = Box::new(forecast::ForecastCalculator::new_with_today(MergeMethod::FirstWins, today));
 
         let computer =
             merge::MergeCalculator::new(vec![computer1, computer2], MergeMethod::FirstWins);

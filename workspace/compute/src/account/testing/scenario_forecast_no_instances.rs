@@ -97,11 +97,11 @@ impl TestScenarioBuilder for ScenarioForecastNoInstances {
         // For forecast, we start with 0 balance and accumulate transactions
         //
         // March 15 (today): 0 balance
-        // March 16: Past recurring transactions without instances are moved to today + future_offset
-        //           So the rent payment (-$500) from Jan, Feb, and March (3 * -$500 = -$1500) should be here
-        // April 1: -$1500.00 (for UnpaidRecurringCalculator)
-        // April 15: -$1500.00 (for UnpaidRecurringCalculator)
-        // May 1: -$1500.00 (for UnpaidRecurringCalculator)
+        // March 16: Only the most recent unpaid occurrence is included (to avoid lumping
+        //           all past-due on one date), so just the March rent (-$500) appears here
+        // April 1: -$500.00 (for UnpaidRecurringCalculator)
+        // April 15: -$500.00 (for UnpaidRecurringCalculator)
+        // May 1: -$500.00 (for UnpaidRecurringCalculator)
         let assert_results: AssertResult = vec![
             (
                 account.id,
@@ -111,22 +111,22 @@ impl TestScenarioBuilder for ScenarioForecastNoInstances {
             (
                 account.id,
                 NaiveDate::from_ymd_opt(2023, 3, 16).unwrap(),
-                Decimal::new(-150000, 2), // -$1500.00 (3 months of rent moved to today + 1 day)
+                Decimal::new(-50000, 2), // -$500.00 (most recent unpaid occurrence moved to today + 1 day)
             ),
             (
                 account.id,
                 NaiveDate::from_ymd_opt(2023, 4, 1).unwrap(),
-                Decimal::new(-150000, 2), // -$1500.00 (for UnpaidRecurringCalculator)
+                Decimal::new(-50000, 2), // -$500.00 (for UnpaidRecurringCalculator)
             ),
             (
                 account.id,
                 NaiveDate::from_ymd_opt(2023, 4, 15).unwrap(),
-                Decimal::new(-150000, 2), // -$1500.00 (for UnpaidRecurringCalculator)
+                Decimal::new(-50000, 2), // -$500.00 (for UnpaidRecurringCalculator)
             ),
             (
                 account.id,
                 NaiveDate::from_ymd_opt(2023, 5, 1).unwrap(),
-                Decimal::new(-150000, 2), // -$1500.00 (for UnpaidRecurringCalculator)
+                Decimal::new(-50000, 2), // -$500.00 (for UnpaidRecurringCalculator)
             ),
         ];
 

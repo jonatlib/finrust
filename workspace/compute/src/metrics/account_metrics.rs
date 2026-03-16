@@ -650,10 +650,11 @@ mod tests {
     fn test_extract_net_flow_normal() {
         let d1 = NaiveDate::from_ymd_opt(2026, 1, 1).unwrap();
         let d2 = NaiveDate::from_ymd_opt(2026, 1, 31).unwrap();
+        let epoch = NaiveDate::from_ymd_opt(1970, 1, 1).unwrap();
 
         let df = df! {
             "account_id" => &[1i32, 1],
-            "date" => &[d1.num_days_from_ce() as i64, d2.num_days_from_ce() as i64],
+            "date" => &[d1.signed_duration_since(epoch).num_days(), d2.signed_duration_since(epoch).num_days()],
             "balance" => &["10000", "12500"],
         }
             .unwrap();

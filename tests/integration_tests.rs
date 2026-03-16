@@ -288,6 +288,7 @@ async fn test_create_account() {
         ledger_name: Some("test_ledger".to_string()),
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
+        color: None,
     };
 
     // Send POST request to create account
@@ -333,6 +334,7 @@ async fn test_get_accounts() {
         ledger_name: None,
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
+        color: None,
     };
 
     let create_response = server
@@ -341,8 +343,8 @@ async fn test_get_accounts() {
         .await;
     create_response.assert_status(StatusCode::CREATED);
 
-    // Get all accounts
-    let response = server.get("/api/v1/accounts").await;
+    // Get all accounts (include_ignored=true since the test account has include_in_statistics=false)
+    let response = server.get("/api/v1/accounts?include_ignored=true").await;
 
     // Verify response
     response.assert_status(StatusCode::OK);
@@ -374,6 +376,7 @@ async fn test_create_account_with_invalid_owner_id() {
         ledger_name: Some("main_account".to_string()),
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
+        color: None,
     };
 
     // Send POST request to create account
@@ -452,6 +455,7 @@ async fn test_create_transaction_with_invalid_source_account_id() {
         ledger_name: Some("target_account".to_string()),
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
+        color: None,
     };
 
     let account_response = server
@@ -556,6 +560,7 @@ async fn test_get_account_by_id() {
         ledger_name: Some("specific_ledger".to_string()),
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
+        color: None,
     };
 
     let create_response = server
@@ -603,6 +608,7 @@ async fn test_update_account() {
         ledger_name: None,
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
+        color: None,
     };
 
     let create_response = server
@@ -623,6 +629,7 @@ async fn test_update_account() {
         ledger_name: Some("updated_ledger".to_string()),
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
+        color: None,
     };
 
     let response = server
@@ -646,8 +653,9 @@ async fn test_update_account() {
     assert_eq!(account["ledger_name"], "updated_ledger");
 
     // Verify the update persisted by getting the account again
+    // include_ignored=true since we set include_in_statistics to false
     let get_response = server
-        .get(&format!("/api/v1/accounts/{}", account_id))
+        .get(&format!("/api/v1/accounts/{}?include_ignored=true", account_id))
         .await;
     get_response.assert_status(StatusCode::OK);
 
@@ -674,6 +682,7 @@ async fn test_delete_account() {
         ledger_name: None,
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
+        color: None,
     };
 
     let create_response = server
@@ -732,6 +741,7 @@ async fn test_update_nonexistent_account() {
         ledger_name: None,
         account_kind: None,
         target_amount: None,
+        color: None,
     };
 
     let response = server
@@ -776,6 +786,7 @@ async fn test_complex_timeseries_api_scenario() {
         ledger_name: Some("test_ledger_1".to_string()),
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
+        color: None,
     };
 
     let account2_request = CreateAccountRequest {
@@ -787,6 +798,7 @@ async fn test_complex_timeseries_api_scenario() {
         ledger_name: Some("test_ledger_2".to_string()),
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
+        color: None,
     };
 
     // Create accounts
@@ -1005,28 +1017,25 @@ async fn test_complex_timeseries_api_scenario() {
         scenario_id: None,
     };
 
-    // Test individual account timeseries first
-    let account1_timeseries_response = server
-        .get(&format!("/api/v1/accounts/{}/timeseries", account1_id))
+    // Test all-accounts timeseries to verify both accounts
+    let all_timeseries_response = server
+        .get("/api/v1/accounts/timeseries")
         .add_query_params(&timeseries_query)
         .await;
 
-    if account1_timeseries_response.status_code() != StatusCode::OK {
-        let error_body = account1_timeseries_response.text();
-        println!("Account 1 timeseries API error response: {}", error_body);
+    if all_timeseries_response.status_code() != StatusCode::OK {
+        let error_body = all_timeseries_response.text();
+        println!("All accounts timeseries API error response: {}", error_body);
         println!("Skipping timeseries test due to error");
-        return; // Skip the rest of the timeseries test
+        return;
     }
 
-    let account1_timeseries_body: ApiResponse<AccountStateTimeseries> = account1_timeseries_response.json();
-    assert!(account1_timeseries_body.success);
-    let timeseries_data = &account1_timeseries_body.data;
+    let all_timeseries_body: ApiResponse<AccountStateTimeseries> = all_timeseries_response.json();
+    assert!(all_timeseries_body.success);
+    let timeseries_data = &all_timeseries_body.data;
 
-    // Verify that we have data for both accounts
+    // Verify that we have data
     assert!(!timeseries_data.data_points.is_empty(), "Timeseries data should not be empty");
-
-    // Find data points for specific dates and verify balances
-    // This replicates some of the key assertions from ScenarioMergeReal
 
     // Check initial balance on 2025-01-01 for both accounts (should be 100,000)
     let jan_1_data: Vec<_> = timeseries_data.data_points.iter()
@@ -1120,7 +1129,7 @@ async fn test_complex_timeseries_api_scenario() {
 async fn test_create_recurring_transaction_instance() {
     use finrust::handlers::transactions::{CreateRecurringInstanceRequest, RecurringInstanceResponse};
     use crate::common::setup_test_app_state;
-    use finrust::router::create_router;
+    use finrust::router::create_test_router;
     use chrono::NaiveDate;
     use rust_decimal::Decimal;
     use sea_orm::{ActiveModelTrait, Set};
@@ -1128,7 +1137,7 @@ async fn test_create_recurring_transaction_instance() {
 
     // Setup test server and get database connection
     let app_state = setup_test_app_state().await;
-    let app = create_router(app_state.clone());
+    let app = create_test_router(app_state.clone());
     let server = TestServer::new(app).unwrap();
 
     // Create an account directly in the database for testing
@@ -1260,7 +1269,7 @@ async fn test_get_missing_instances() {
 
     // Setup test server and state
     let app_state = setup_test_app_state().await;
-    let app = finrust::router::create_router(app_state.clone());
+    let app = finrust::router::create_test_router(app_state.clone());
     let server = TestServer::new(app).unwrap();
 
     // Create test account
@@ -1365,7 +1374,7 @@ async fn test_bulk_create_instances_new() {
 
     // Setup test server and state
     let app_state = setup_test_app_state().await;
-    let app = finrust::router::create_router(app_state.clone());
+    let app = finrust::router::create_test_router(app_state.clone());
     let server = TestServer::new(app).unwrap();
 
     // Create test account
@@ -1450,7 +1459,7 @@ async fn test_bulk_create_instances_update_pending_to_paid() {
 
     // Setup test server and state
     let app_state = setup_test_app_state().await;
-    let app = finrust::router::create_router(app_state.clone());
+    let app = finrust::router::create_test_router(app_state.clone());
     let server = TestServer::new(app).unwrap();
 
     // Create test account
@@ -1542,7 +1551,7 @@ async fn test_bulk_create_instances_skip_pending() {
 
     // Setup test server and state
     let app_state = setup_test_app_state().await;
-    let app = finrust::router::create_router(app_state.clone());
+    let app = finrust::router::create_test_router(app_state.clone());
     let server = TestServer::new(app).unwrap();
 
     // Create test account
@@ -1633,7 +1642,7 @@ async fn test_bulk_create_instances_mixed_operations() {
 
     // Setup test server and state
     let app_state = setup_test_app_state().await;
-    let app = finrust::router::create_router(app_state.clone());
+    let app = finrust::router::create_test_router(app_state.clone());
     let server = TestServer::new(app).unwrap();
 
     // Create test account
@@ -1769,6 +1778,7 @@ async fn test_create_manual_account_state() {
         ledger_name: Some("test_manual_state".to_string()),
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
+        color: None,
     };
 
     let account_response = server
@@ -1854,6 +1864,7 @@ async fn test_get_manual_account_states() {
         ledger_name: Some("test_manual_states".to_string()),
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
+        color: None,
     };
 
     let account_response = server
@@ -1925,6 +1936,7 @@ async fn test_get_manual_account_state_by_id() {
         ledger_name: Some("test_manual_state".to_string()),
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
+        color: None,
     };
 
     let account_response = server
@@ -1984,6 +1996,7 @@ async fn test_get_manual_account_state_not_found() {
         ledger_name: Some("test_manual_state".to_string()),
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
+        color: None,
     };
 
     let account_response = server
@@ -2026,6 +2039,7 @@ async fn test_update_manual_account_state() {
         ledger_name: Some("test_manual_state".to_string()),
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
+        color: None,
     };
 
     let account_response = server
@@ -2095,6 +2109,7 @@ async fn test_update_manual_account_state_not_found() {
         ledger_name: Some("test_manual_state".to_string()),
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
+        color: None,
     };
 
     let account_response = server
@@ -2143,6 +2158,7 @@ async fn test_delete_manual_account_state() {
         ledger_name: Some("test_manual_state".to_string()),
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
+        color: None,
     };
 
     let account_response = server
@@ -2202,6 +2218,7 @@ async fn test_delete_manual_account_state_not_found() {
         ledger_name: Some("test_manual_state".to_string()),
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
+        color: None,
     };
 
     let account_response = server
@@ -2246,6 +2263,7 @@ async fn test_create_imported_transaction() {
         ledger_name: Some("test_imported".to_string()),
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
+        color: None,
     };
 
     let account_response = server
@@ -2320,6 +2338,7 @@ async fn test_create_imported_transaction_duplicate_hash() {
         ledger_name: Some("test_imported".to_string()),
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
+        color: None,
     };
 
     let account_response = server
@@ -2381,6 +2400,7 @@ async fn test_get_imported_transactions() {
         ledger_name: Some("test_imported".to_string()),
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
+        color: None,
     };
 
     let account_response = server
@@ -2440,6 +2460,7 @@ async fn test_get_imported_transactions_with_filters() {
         ledger_name: Some("test_imported".to_string()),
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
+        color: None,
     };
 
     let account_response = server
@@ -2509,6 +2530,7 @@ async fn test_get_account_imported_transactions() {
         ledger_name: Some("test_imported".to_string()),
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
+        color: None,
     };
 
     let account_response = server
@@ -2571,6 +2593,7 @@ async fn test_get_imported_transaction() {
         ledger_name: Some("test_imported".to_string()),
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
+        color: None,
     };
 
     let account_response = server
@@ -2661,6 +2684,7 @@ async fn test_update_imported_transaction() {
         ledger_name: Some("test_imported".to_string()),
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
+        color: None,
     };
 
     let account_response = server
@@ -2776,6 +2800,7 @@ async fn test_delete_imported_transaction() {
         ledger_name: Some("test_imported".to_string()),
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
+        color: None,
     };
 
     let account_response = server
@@ -2858,6 +2883,7 @@ async fn test_reconcile_imported_transaction() {
         ledger_name: Some("test_reconcile".to_string()),
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
+        color: None,
     };
 
     let account_response = server
@@ -2972,6 +2998,7 @@ async fn test_reconcile_imported_transaction_invalid_type() {
         ledger_name: Some("test_reconcile".to_string()),
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
+        color: None,
     };
 
     let account_response = server
@@ -3037,6 +3064,7 @@ async fn test_clear_imported_transaction_reconciliation() {
         ledger_name: Some("test_reconcile".to_string()),
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
+        color: None,
     };
 
     let account_response = server
@@ -3176,6 +3204,7 @@ async fn test_imported_transaction_filtering_by_reconciliation_status() {
         ledger_name: Some("test_filter".to_string()),
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
+        color: None,
     };
 
     let account_response = server
@@ -3840,6 +3869,7 @@ async fn test_monthly_min_balance_returns_ok_for_existing_account() {
         ledger_name: None,
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
+        color: None,
     };
     let account_resp = server.post("/api/v1/accounts").json(&account_request).await;
     account_resp.assert_status(StatusCode::CREATED);
@@ -3894,6 +3924,7 @@ async fn test_monthly_min_balance_default_months() {
         ledger_name: None,
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
+        color: None,
     };
     let account_resp = server.post("/api/v1/accounts").json(&account_request).await;
     account_resp.assert_status(StatusCode::CREATED);
@@ -3938,6 +3969,7 @@ async fn test_monthly_min_balance_with_transactions() {
         ledger_name: None,
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
+        color: None,
     };
     let account_resp = server.post("/api/v1/accounts").json(&account_request).await;
     account_resp.assert_status(StatusCode::CREATED);

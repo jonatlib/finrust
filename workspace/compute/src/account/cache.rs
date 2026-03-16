@@ -251,6 +251,7 @@ mod tests {
             ledger_name: None,
             account_kind: AccountKind::RealAccount,
             target_amount: None,
+            color: None,
         };
         let account2 = account::Model {
             id: 2,
@@ -262,6 +263,7 @@ mod tests {
             ledger_name: None,
             account_kind: AccountKind::RealAccount,
             target_amount: None,
+            color: None,
         };
 
         let date1 = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap();
@@ -281,7 +283,8 @@ mod tests {
         let scenario = ScenarioBalance::new();
 
         // Create a balance calculator wrapped with cache
-        let balance_calc = BalanceCalculator::new(MergeMethod::FirstWins);
+        let today = NaiveDate::from_ymd_opt(2023, 3, 15).unwrap();
+        let balance_calc = BalanceCalculator::new_with_today(MergeMethod::FirstWins, today);
         let cache_calc = AccountStateCacheCalculator::with_defaults(balance_calc);
 
         // Test that the cached calculator works with the scenario
@@ -312,7 +315,8 @@ mod tests {
         let scenario = ScenarioBalance::new();
 
         // Create a balance calculator
-        let balance_calc = BalanceCalculator::new(MergeMethod::FirstWins);
+        let today = NaiveDate::from_ymd_opt(2023, 3, 15).unwrap();
+        let balance_calc = BalanceCalculator::new_with_today(MergeMethod::FirstWins, today);
 
         // Create a custom cache store (SizedCache without TTL)
         let custom_cache = SizedCache::with_size(50);

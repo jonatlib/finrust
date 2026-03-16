@@ -43,7 +43,6 @@ use axum::{
     routing::{delete, get, post, put},
     Router,
 };
-#[cfg(not(test))]
 use axum_prometheus::PrometheusMetricLayer;
 use std::time::Duration;
 use tower::ServiceBuilder;
@@ -53,24 +52,53 @@ use tower_http::{
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
-/// Create application router with all routes and middleware
+/// Create application router with all routes and middleware.
+///
+/// When `enable_metrics` is true, a Prometheus metrics layer and `/metrics` endpoint
+/// are added. Pass `false` in test environments to avoid global recorder conflicts.
 pub fn create_router(state: AppState) -> Router {
-    // Create Prometheus metrics layer only in non-test environments
-    #[cfg(not(test))]
-    let (prometheus_layer, metric_handle) = PrometheusMetricLayer::pair();
+    create_router_inner(state, true)
+}
 
+/// Create application router without the Prometheus metrics layer.
+/// Useful for integration tests where multiple routers are created.
+pub fn create_test_router(state: AppState) -> Router {
+    create_router_inner(state, false)
+}
+
+fn create_router_inner(state: AppState, enable_metrics: bool) -> Router {
     let mut router = Router::new()
-        // Health check
         .route("/health", get(health_check));
 
-    // Only add Prometheus metrics endpoint in non-test environments
-    #[cfg(not(test))]
-    {
+    if enable_metrics {
+        let (prometheus_layer, metric_handle) = PrometheusMetricLayer::pair();
         router = router
-            // Prometheus metrics endpoint
             .route("/metrics", get(move || async move { metric_handle.render() }));
+
+        return build_routes(router)
+            .layer(
+                ServiceBuilder::new()
+                    .layer(TraceLayer::new_for_http())
+                    .layer(prometheus_layer)
+                    .layer(CompressionLayer::new())
+                    .layer(TimeoutLayer::new(Duration::from_secs(30)))
+                    .layer(CorsLayer::permissive()),
+            )
+            .with_state(state);
     }
 
+    build_routes(router)
+        .layer(
+            ServiceBuilder::new()
+                .layer(TraceLayer::new_for_http())
+                .layer(CompressionLayer::new())
+                .layer(TimeoutLayer::new(Duration::from_secs(30)))
+                .layer(CorsLayer::permissive()),
+        )
+        .with_state(state)
+}
+
+fn build_routes(router: Router<AppState>) -> Router<AppState> {
     router
         // Account CRUD routes
         .route("/api/v1/accounts", post(create_account))
@@ -179,25 +207,4 @@ pub fn create_router(state: AppState) -> Router {
         )
         // Swagger UI
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
-        // Add middleware
-        .layer({
-            #[cfg(not(test))]
-            {
-                ServiceBuilder::new()
-                    .layer(TraceLayer::new_for_http())
-                    .layer(prometheus_layer)
-                    .layer(CompressionLayer::new())
-                    .layer(TimeoutLayer::new(Duration::from_secs(30)))
-                    .layer(CorsLayer::permissive())
-            }
-            #[cfg(test)]
-            {
-                ServiceBuilder::new()
-                    .layer(TraceLayer::new_for_http())
-                    .layer(CompressionLayer::new())
-                    .layer(TimeoutLayer::new(Duration::from_secs(30)))
-                    .layer(CorsLayer::permissive())
-            }
-        })
-        .with_state(state)
 }

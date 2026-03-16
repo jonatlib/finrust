@@ -189,6 +189,10 @@ async fn test_ghost_isolation() -> Result<()> {
         .await?;
 
     // Standard calculator should see only the real transaction: $1000 - $100 = $900
+    let mut standard_result = standard_result;
+    standard_result
+        .sort_in_place(vec!["date"], polars::prelude::SortMultipleOptions::new())
+        .unwrap();
     let standard_balance = standard_result
         .column("balance")?
         .str()?
@@ -209,6 +213,10 @@ async fn test_ghost_isolation() -> Result<()> {
         .await?;
 
     // Scenario A calculator should see real + scenario A: $1000 - $100 - $500 = $400
+    let mut scenario_a_result = scenario_a_result;
+    scenario_a_result
+        .sort_in_place(vec!["date"], polars::prelude::SortMultipleOptions::new())
+        .unwrap();
     let scenario_a_balance = scenario_a_result
         .column("balance")?
         .str()?
@@ -232,6 +240,10 @@ async fn test_ghost_isolation() -> Result<()> {
         .await?;
 
     // Scenario B calculator should see real + scenario B: $1000 - $100 - $200 = $700
+    let mut scenario_b_result = scenario_b_result;
+    scenario_b_result
+        .sort_in_place(vec!["date"], polars::prelude::SortMultipleOptions::new())
+        .unwrap();
     let scenario_b_balance = scenario_b_result
         .column("balance")?
         .str()?
@@ -302,6 +314,10 @@ async fn test_scenario_application() -> Result<()> {
         .compute_account_state(&db, &[account.clone()], start_date, end_date)
         .await?;
 
+    let mut initial_result = initial_result;
+    initial_result
+        .sort_in_place(vec!["date"], polars::prelude::SortMultipleOptions::new())
+        .unwrap();
     let initial_balance = initial_result
         .column("balance")?
         .str()?
@@ -325,6 +341,10 @@ async fn test_scenario_application() -> Result<()> {
         .compute_account_state(&db, &[account.clone()], start_date, end_date)
         .await?;
 
+    let mut final_result = final_result;
+    final_result
+        .sort_in_place(vec!["date"], polars::prelude::SortMultipleOptions::new())
+        .unwrap();
     let final_balance = final_result
         .column("balance")?
         .str()?

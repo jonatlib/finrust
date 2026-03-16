@@ -1,4 +1,4 @@
-use finrust::router::create_router;
+use finrust::router::create_test_router;
 use finrust::schemas::AppState;
 use axum::Router;
 use migration::{Migrator, MigratorTrait};
@@ -73,6 +73,5 @@ pub async fn setup_test_app() -> Router {
     let _ = init_test_tracing();
 
     let state = setup_test_app_state().await;
-    let router = create_router(state);
-    router
+    create_test_router(state)
 }
