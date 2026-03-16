@@ -35,8 +35,16 @@
 
 
 - multiple acconut types
-    - some preparation done
-    - debt, savings, equity, net worth including house etc...
+    - money accounts: general account, allowance, shared, emergency fund, savings
+    - debt - i want to be able to have negative account to show i'm owing money and transfer just moving money up, this
+      is also true for morgage
+    - networth: equity, house (just updating value of it - using last state), investment
+        - be able to specify if the investment is liquid per account like stocks or not like house
+    - taxes
+      support in frontend, migrations
+      when showing money status and computing networth
+    - split networth to liquid (cach and some investment) and non liquid
+    - compute both net worth liquid and non liquid and total
 
 
 - osvc fortecast income
