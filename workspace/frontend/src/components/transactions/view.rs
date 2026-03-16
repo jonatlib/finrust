@@ -1,8 +1,7 @@
 use yew::prelude::*;
 use yew_router::prelude::*;
 use std::collections::HashMap;
-use chrono::Datelike;
-use crate::api_client::transaction::{get_transactions, TransactionResponse};
+use crate::api_client::transaction::{get_transactions, TransactionFilters, TransactionResponse};
 use crate::api_client::account::get_accounts;
 use crate::api_client::category::get_categories;
 use crate::api_client::scenario::get_scenarios;
@@ -33,50 +32,6 @@ pub fn transactions() -> Html {
     let items_per_page = 50u64;
     let fetch_state = use_state(|| FetchState::Loading);
 
-    // Fetch data when page changes
-    {
-        let fetch_state = fetch_state.clone();
-        let page = *current_page;
-        use_effect_with(page, move |_| {
-            let fetch_state = fetch_state.clone();
-            fetch_state.set(FetchState::Loading);
-
-            wasm_bindgen_futures::spawn_local(async move {
-                match get_transactions(Some(page), Some(items_per_page)).await {
-                    Ok(data) => {
-                        fetch_state.set(FetchState::Success(data));
-                    }
-                    Err(err) => {
-                        fetch_state.set(FetchState::Error(err));
-                    }
-                }
-            });
-            || ()
-        });
-    }
-
-    // Create a refetch callback for manual refresh (e.g., after creating a transaction)
-    let refetch = {
-        let fetch_state = fetch_state.clone();
-        let current_page = current_page.clone();
-        Callback::from(move |_| {
-            let fetch_state = fetch_state.clone();
-            let page = *current_page;
-            fetch_state.set(FetchState::Loading);
-
-            wasm_bindgen_futures::spawn_local(async move {
-                match get_transactions(Some(page), Some(items_per_page)).await {
-                    Ok(data) => {
-                        fetch_state.set(FetchState::Success(data));
-                    }
-                    Err(err) => {
-                        fetch_state.set(FetchState::Error(err));
-                    }
-                }
-            });
-        })
-    };
-
     let (accounts_state, _) = use_fetch_with_refetch(get_accounts);
     let (categories_state, _) = use_fetch_with_refetch(get_categories);
     let (scenarios_state, _) = use_fetch_with_refetch(get_scenarios);
@@ -87,6 +42,67 @@ pub fn transactions() -> Html {
     let selected_category = use_state(|| None::<i32>);
     let selected_source_account = use_state(|| None::<i32>);
     let selected_target_account = use_state(|| None::<i32>);
+
+    let filters = {
+        let month_val = *selected_month;
+        TransactionFilters {
+            category_id: *selected_category,
+            target_account_id: *selected_target_account,
+            source_account_id: *selected_source_account,
+            year: month_val.map(|(y, _)| y),
+            month: month_val.map(|(_, m)| m),
+        }
+    };
+
+    // Fetch data when page or filters change
+    {
+        let fetch_state = fetch_state.clone();
+        let page = *current_page;
+        let filters = filters.clone();
+        use_effect_with(
+            (page, filters.category_id, filters.target_account_id, filters.source_account_id, filters.year, filters.month),
+            move |_| {
+                let fetch_state = fetch_state.clone();
+                fetch_state.set(FetchState::Loading);
+
+                wasm_bindgen_futures::spawn_local(async move {
+                    match get_transactions(Some(page), Some(items_per_page), &filters).await {
+                        Ok(data) => {
+                            fetch_state.set(FetchState::Success(data));
+                        }
+                        Err(err) => {
+                            fetch_state.set(FetchState::Error(err));
+                        }
+                    }
+                });
+                || ()
+            },
+        );
+    }
+
+    // Create a refetch callback for manual refresh (e.g., after creating a transaction)
+    let refetch = {
+        let fetch_state = fetch_state.clone();
+        let current_page = current_page.clone();
+        let filters = filters.clone();
+        Callback::from(move |_| {
+            let fetch_state = fetch_state.clone();
+            let page = *current_page;
+            let filters = filters.clone();
+            fetch_state.set(FetchState::Loading);
+
+            wasm_bindgen_futures::spawn_local(async move {
+                match get_transactions(Some(page), Some(items_per_page), &filters).await {
+                    Ok(data) => {
+                        fetch_state.set(FetchState::Success(data));
+                    }
+                    Err(err) => {
+                        fetch_state.set(FetchState::Error(err));
+                    }
+                }
+            });
+        })
+    };
 
     let on_page_change = {
         let current_page = current_page.clone();
@@ -172,13 +188,14 @@ pub fn transactions() -> Html {
 
     let on_month_change = {
         let selected_month = selected_month.clone();
+        let current_page = current_page.clone();
         Callback::from(move |e: Event| {
             if let Some(target) = e.target_dyn_into::<web_sys::HtmlInputElement>() {
                 let value = target.value();
+                current_page.set(1);
                 if value.is_empty() {
                     selected_month.set(None);
                 } else {
-                    // Parse "YYYY-MM" format
                     let parts: Vec<&str> = value.split('-').collect();
                     if parts.len() == 2 {
                         if let (Ok(year), Ok(month)) = (parts[0].parse::<i32>(), parts[1].parse::<u32>()) {
@@ -192,9 +209,11 @@ pub fn transactions() -> Html {
 
     let on_category_change = {
         let selected_category = selected_category.clone();
+        let current_page = current_page.clone();
         Callback::from(move |e: Event| {
             if let Some(target) = e.target_dyn_into::<web_sys::HtmlSelectElement>() {
                 let value = target.value();
+                current_page.set(1);
                 if value.is_empty() {
                     selected_category.set(None);
                 } else if let Ok(cat_id) = value.parse::<i32>() {
@@ -206,9 +225,11 @@ pub fn transactions() -> Html {
 
     let on_source_account_change = {
         let selected_source_account = selected_source_account.clone();
+        let current_page = current_page.clone();
         Callback::from(move |e: Event| {
             if let Some(target) = e.target_dyn_into::<web_sys::HtmlSelectElement>() {
                 let value = target.value();
+                current_page.set(1);
                 if value.is_empty() {
                     selected_source_account.set(None);
                 } else if let Ok(acc_id) = value.parse::<i32>() {
@@ -220,9 +241,11 @@ pub fn transactions() -> Html {
 
     let on_target_account_change = {
         let selected_target_account = selected_target_account.clone();
+        let current_page = current_page.clone();
         Callback::from(move |e: Event| {
             if let Some(target) = e.target_dyn_into::<web_sys::HtmlSelectElement>() {
                 let value = target.value();
+                current_page.set(1);
                 if value.is_empty() {
                     selected_target_account.set(None);
                 } else if let Ok(acc_id) = value.parse::<i32>() {
@@ -230,18 +253,6 @@ pub fn transactions() -> Html {
                 }
             }
         })
-    };
-
-    // Get unique months from transactions
-    let available_months = match &*fetch_state {
-        FetchState::Success(transactions) => {
-            let mut months = std::collections::BTreeSet::new();
-            for t in transactions {
-                months.insert((t.date.year(), t.date.month()));
-            }
-            months.into_iter().collect::<Vec<_>>()
-        },
-        _ => vec![],
     };
 
     // Get categories list
@@ -349,48 +360,14 @@ pub fn transactions() -> Html {
                         </div>
                     },
                     FetchState::Success(transactions) => {
-                        // Filter transactions
-                        let filtered_transactions: Vec<_> = transactions.iter()
-                            .filter(|t| {
-                                // Filter by month
-                                if let Some((year, month)) = *selected_month {
-                                    let tx_date = t.date;
-                                    if tx_date.year() != year || tx_date.month() != month {
-                                        return false;
-                                    }
-                                }
-                                // Filter by category
-                                if let Some(cat_id) = *selected_category {
-                                    if t.category_id != Some(cat_id) {
-                                        return false;
-                                    }
-                                }
-                                // Filter by source account
-                                if let Some(src_acc_id) = *selected_source_account {
-                                    if t.source_account_id != Some(src_acc_id) {
-                                        return false;
-                                    }
-                                }
-                                // Filter by target account
-                                if let Some(tgt_acc_id) = *selected_target_account {
-                                    if t.target_account_id != tgt_acc_id {
-                                        return false;
-                                    }
-                                }
-                                true
-                            })
-                            .cloned()
-                            .collect();
-
-                        if filtered_transactions.is_empty() {
+                        if transactions.is_empty() {
                             html! {
                                 <div class="text-center py-8">
                                     <p class="text-gray-500">{"No transactions found."}</p>
                                 </div>
                             }
                         } else {
-                            // Sort transactions
-                            let mut sorted_transactions = filtered_transactions.clone();
+                            let mut sorted_transactions = transactions.clone();
                             sorted_transactions.sort_by(|a, b| {
                                 let cmp = match *sort_column {
                                     SortColumn::Date => a.date.cmp(&b.date),

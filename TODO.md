@@ -1,7 +1,4 @@
 - Bugs:
-    - Fix tests
-    - Transactions page (recurring and extra)
-        - When using filters the pagination don't take them into account leading to broken pagination
     - Broken categories page
         - Stats not correct - it should be sum of all transactions per year.
         - Then would be nice to show also average per year

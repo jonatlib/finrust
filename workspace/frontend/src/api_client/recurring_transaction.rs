@@ -181,6 +181,7 @@ pub async fn get_recurring_transactions(
     limit: Option<u64>,
     target_account_id: Option<i32>,
     source_account_id: Option<i32>,
+    category_id: Option<i32>,
 ) -> Result<Vec<RecurringTransactionResponse>, String> {
     log::trace!("Fetching recurring transactions");
 
@@ -196,6 +197,9 @@ pub async fn get_recurring_transactions(
     }
     if let Some(source_id) = source_account_id {
         query_params.push(format!("source_account_id={}", source_id));
+    }
+    if let Some(cat_id) = category_id {
+        query_params.push(format!("category_id={}", cat_id));
     }
 
     let query_string = if query_params.is_empty() {

@@ -7,7 +7,7 @@ use crate::components::scenarios::ScenarioModal;
 use crate::router::Route;
 use crate::api_client::scenario::{get_scenario, delete_scenario, apply_scenario};
 use crate::api_client::account::{get_accounts_with_ignored, AccountResponse};
-use crate::api_client::transaction::{get_transactions, TransactionResponse};
+use crate::api_client::transaction::{get_transactions, TransactionFilters, TransactionResponse};
 use crate::api_client::recurring_transaction::{get_recurring_transactions, RecurringTransactionResponse};
 use crate::api_client::timeseries::get_all_accounts_timeseries_with_scenario;
 use crate::common::fetch_hook::use_fetch_with_refetch;
@@ -40,8 +40,8 @@ pub fn scenario_detail_page(props: &ScenarioDetailPageProps) -> Html {
 
     let (scenario_state, scenario_refetch) = use_fetch_with_refetch(move || get_scenario(id));
     let (accounts_state, _) = use_fetch_with_refetch(|| get_accounts_with_ignored(true));
-    let (transactions_state, transactions_refetch) = use_fetch_with_refetch(|| get_transactions(None, None));
-    let (recurring_state, recurring_refetch) = use_fetch_with_refetch(|| get_recurring_transactions(None, Some(1000), None, None));
+    let (transactions_state, transactions_refetch) = use_fetch_with_refetch(|| get_transactions(None, None, &TransactionFilters::default()));
+    let (recurring_state, recurring_refetch) = use_fetch_with_refetch(|| get_recurring_transactions(None, Some(1000), None, None, None));
 
     let show_edit_modal = use_state(|| false);
     let show_apply_modal = use_state(|| false);

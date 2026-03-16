@@ -166,6 +166,8 @@ pub struct RecurringTransactionQuery {
     pub target_account_id: Option<i32>,
     /// Filter by source account ID
     pub source_account_id: Option<i32>,
+    /// Filter by category ID
+    pub category_id: Option<i32>,
 }
 
 /// Request body for creating a recurring transaction instance
@@ -488,6 +490,10 @@ pub async fn get_recurring_transactions(
 
     if let Some(source_account_id) = query.source_account_id {
         query_builder = query_builder.filter(recurring_transaction::Column::SourceAccountId.eq(source_account_id));
+    }
+
+    if let Some(category_id) = query.category_id {
+        query_builder = query_builder.filter(recurring_transaction::Column::CategoryId.eq(category_id));
     }
 
     match query_builder

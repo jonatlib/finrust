@@ -8,7 +8,7 @@ use chrono::NaiveDate;
 use model::entities::{account, one_off_transaction};
 use model::transaction::{Tag, Transaction, TransactionGenerator};
 use rust_decimal::Decimal;
-use sea_orm::{ActiveModelTrait, DbErr, EntityTrait, PaginatorTrait, QueryOrder, Set};
+use sea_orm::{ActiveModelTrait, ColumnTrait, DbErr, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, Set};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error, info, instrument, trace, warn};
 use utoipa::{IntoParams, ToSchema};
@@ -302,6 +302,16 @@ pub struct TransactionQuery {
     pub page: Option<u64>,
     /// Items per page (default: 50)
     pub limit: Option<u64>,
+    /// Filter by category ID
+    pub category_id: Option<i32>,
+    /// Filter by target account ID
+    pub target_account_id: Option<i32>,
+    /// Filter by source account ID
+    pub source_account_id: Option<i32>,
+    /// Filter by year
+    pub year: Option<i32>,
+    /// Filter by month (1-12)
+    pub month: Option<u32>,
 }
 
 /// Get all transactions
@@ -327,7 +337,30 @@ pub async fn get_transactions(
 
     debug!("Fetching transactions - page: {}, limit: {}", page, limit);
 
-    match one_off_transaction::Entity::find()
+    let mut query_builder = one_off_transaction::Entity::find();
+
+    if let Some(category_id) = query.category_id {
+        query_builder = query_builder.filter(one_off_transaction::Column::CategoryId.eq(category_id));
+    }
+    if let Some(target_account_id) = query.target_account_id {
+        query_builder = query_builder.filter(one_off_transaction::Column::TargetAccountId.eq(target_account_id));
+    }
+    if let Some(source_account_id) = query.source_account_id {
+        query_builder = query_builder.filter(one_off_transaction::Column::SourceAccountId.eq(source_account_id));
+    }
+    if let (Some(year), Some(month)) = (query.year, query.month) {
+        let start = NaiveDate::from_ymd_opt(year, month, 1).unwrap();
+        let end = if month == 12 {
+            NaiveDate::from_ymd_opt(year + 1, 1, 1).unwrap()
+        } else {
+            NaiveDate::from_ymd_opt(year, month + 1, 1).unwrap()
+        };
+        query_builder = query_builder
+            .filter(one_off_transaction::Column::Date.gte(start))
+            .filter(one_off_transaction::Column::Date.lt(end));
+    }
+
+    match query_builder
         .order_by_desc(one_off_transaction::Column::Date)
         .paginate(&state.db, limit)
         .fetch_page(page - 1)

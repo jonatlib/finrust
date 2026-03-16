@@ -64,8 +64,22 @@ pub struct UpdateTransactionRequest {
     pub is_simulated: Option<bool>,
 }
 
-/// Get all transactions with optional pagination
-pub async fn get_transactions(page: Option<u64>, limit: Option<u64>) -> Result<Vec<TransactionResponse>, String> {
+/// Filter parameters for fetching transactions
+#[derive(Debug, Clone, Default)]
+pub struct TransactionFilters {
+    pub category_id: Option<i32>,
+    pub target_account_id: Option<i32>,
+    pub source_account_id: Option<i32>,
+    pub year: Option<i32>,
+    pub month: Option<u32>,
+}
+
+/// Get all transactions with optional pagination and filters
+pub async fn get_transactions(
+    page: Option<u64>,
+    limit: Option<u64>,
+    filters: &TransactionFilters,
+) -> Result<Vec<TransactionResponse>, String> {
     let mut url = "/transactions".to_string();
     let mut params = vec![];
 
@@ -74,6 +88,21 @@ pub async fn get_transactions(page: Option<u64>, limit: Option<u64>) -> Result<V
     }
     if let Some(l) = limit {
         params.push(format!("limit={}", l));
+    }
+    if let Some(id) = filters.category_id {
+        params.push(format!("categoryId={}", id));
+    }
+    if let Some(id) = filters.target_account_id {
+        params.push(format!("targetAccountId={}", id));
+    }
+    if let Some(id) = filters.source_account_id {
+        params.push(format!("sourceAccountId={}", id));
+    }
+    if let Some(y) = filters.year {
+        params.push(format!("year={}", y));
+    }
+    if let Some(m) = filters.month {
+        params.push(format!("month={}", m));
     }
 
     if !params.is_empty() {

@@ -1,14 +1,14 @@
 use yew::prelude::*;
 use rust_decimal::prelude::*;
 use chrono::Local;
-use crate::api_client::transaction::get_transactions;
+use crate::api_client::transaction::{get_transactions, TransactionFilters};
 use crate::common::fetch_hook::use_fetch_with_refetch;
 use crate::formatting::use_currency;
 use crate::hooks::FetchState;
 
 #[function_component(RecentActivity)]
 pub fn recent_activity() -> Html {
-    let (transactions_state, _) = use_fetch_with_refetch(|| get_transactions(None, None));
+    let (transactions_state, _) = use_fetch_with_refetch(|| get_transactions(None, None, &TransactionFilters::default()));
     let currency = use_currency();
 
     let format_currency = {

@@ -45,28 +45,6 @@ pub fn recurring_list(props: &RecurringListProps) -> Html {
 
     let account_id = props.account_id;
 
-    // Fetch data when page changes
-    {
-        let fetch_state = fetch_state.clone();
-        let page = *current_page;
-        use_effect_with(page, move |_| {
-            let fetch_state = fetch_state.clone();
-            fetch_state.set(FetchState::Loading);
-
-            wasm_bindgen_futures::spawn_local(async move {
-                match get_recurring_transactions(Some(page), Some(items_per_page), account_id, None).await {
-                    Ok(data) => {
-                        fetch_state.set(FetchState::Success(data));
-                    }
-                    Err(err) => {
-                        fetch_state.set(FetchState::Error(err));
-                    }
-                }
-            });
-            || ()
-        });
-    }
-
     let (categories_state, _) = use_fetch_with_refetch(get_categories);
     let (accounts_state, _) = use_fetch_with_refetch(get_accounts);
 
@@ -74,6 +52,33 @@ pub fn recurring_list(props: &RecurringListProps) -> Html {
     let sort_direction = use_state(|| SortDirection::Descending);
     let selected_category = use_state(|| None::<i32>);
     let selected_target_account = use_state(|| None::<i32>);
+
+    // Fetch data when page or filters change
+    {
+        let fetch_state = fetch_state.clone();
+        let page = *current_page;
+        let category_id = *selected_category;
+        let target_account_id = (*selected_target_account).or(account_id);
+        use_effect_with(
+            (page, category_id, target_account_id),
+            move |_| {
+                let fetch_state = fetch_state.clone();
+                fetch_state.set(FetchState::Loading);
+
+                wasm_bindgen_futures::spawn_local(async move {
+                    match get_recurring_transactions(Some(page), Some(items_per_page), target_account_id, None, category_id).await {
+                        Ok(data) => {
+                            fetch_state.set(FetchState::Success(data));
+                        }
+                        Err(err) => {
+                            fetch_state.set(FetchState::Error(err));
+                        }
+                    }
+                });
+                || ()
+            },
+        );
+    }
 
     let on_page_change = {
         let current_page = current_page.clone();
@@ -140,9 +145,11 @@ pub fn recurring_list(props: &RecurringListProps) -> Html {
 
     let on_category_change = {
         let selected_category = selected_category.clone();
+        let current_page = current_page.clone();
         Callback::from(move |e: Event| {
             if let Some(target) = e.target_dyn_into::<web_sys::HtmlSelectElement>() {
                 let value = target.value();
+                current_page.set(1);
                 if value.is_empty() {
                     selected_category.set(None);
                 } else if let Ok(cat_id) = value.parse::<i32>() {
@@ -154,9 +161,11 @@ pub fn recurring_list(props: &RecurringListProps) -> Html {
 
     let on_target_account_change = {
         let selected_target_account = selected_target_account.clone();
+        let current_page = current_page.clone();
         Callback::from(move |e: Event| {
             if let Some(target) = e.target_dyn_into::<web_sys::HtmlSelectElement>() {
                 let value = target.value();
+                current_page.set(1);
                 if value.is_empty() {
                     selected_target_account.set(None);
                 } else if let Ok(acc_id) = value.parse::<i32>() {
@@ -169,36 +178,7 @@ pub fn recurring_list(props: &RecurringListProps) -> Html {
     let render_content = || -> Html {
         match &*fetch_state {
             FetchState::Success(transactions) if !transactions.is_empty() => {
-                // Filter transactions
-                let filtered_transactions: Vec<_> = transactions.iter()
-                    .filter(|t| {
-                        // Filter by category
-                        if let Some(cat_id) = *selected_category {
-                            if t.category_id != Some(cat_id) {
-                                return false;
-                            }
-                        }
-                        // Filter by target account
-                        if let Some(tgt_acc_id) = *selected_target_account {
-                            if t.target_account_id != tgt_acc_id {
-                                return false;
-                            }
-                        }
-                        true
-                    })
-                    .cloned()
-                    .collect();
-
-                if filtered_transactions.is_empty() {
-                    return html! {
-                        <div class="text-center py-8">
-                            <p class="text-gray-500">{"No recurring transactions found."}</p>
-                        </div>
-                    };
-                }
-
-                // Sort transactions
-                let mut sorted_transactions = filtered_transactions.clone();
+                let mut sorted_transactions = transactions.clone();
                 sorted_transactions.sort_by(|a, b| {
                     let cmp = match *sort_column {
                         SortColumn::Name => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
