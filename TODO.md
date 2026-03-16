@@ -5,7 +5,7 @@
         - And also percentage of that category
             - Beware the categories are tree so it sums up in the tree
     - New categories per account
-    - The stats on the account detail page don't match with data in balance - i believe the balance chart.
+
 
 - import - add extra yaml file, which will map account types etc and help with actual improt being always the same
 
