@@ -1,5 +1,6 @@
 use yew::prelude::*;
 use rust_decimal::prelude::*;
+use chrono::Local;
 use crate::api_client::transaction::get_transactions;
 use crate::common::fetch_hook::use_fetch_with_refetch;
 use crate::formatting::use_currency;
@@ -33,8 +34,11 @@ pub fn recent_activity() -> Html {
             </div>
         },
         FetchState::Success(transactions) => {
-            // Sort transactions by date (most recent first) and take the last 10
-            let mut sorted_transactions = transactions.clone();
+            let today = Local::now().date_naive();
+            let mut sorted_transactions: Vec<_> = transactions.iter()
+                .filter(|t| !t.is_simulated && t.scenario_id.is_none() && t.date <= today)
+                .cloned()
+                .collect();
             sorted_transactions.sort_by(|a, b| b.date.cmp(&a.date));
             let recent_transactions: Vec<_> = sorted_transactions.iter().take(10).collect();
 
