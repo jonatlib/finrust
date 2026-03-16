@@ -9,6 +9,7 @@ mod m20251212_000001_add_categories;
 mod m20251215_000001_add_scenarios;
 mod m20251216_000001_add_goal_fields;
 mod m20260315_000001_add_account_color;
+mod m20260316_000001_add_account_types;
 
 pub struct Migrator;
 
@@ -24,6 +25,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20251215_000001_add_scenarios::Migration),
             Box::new(m20251216_000001_add_goal_fields::Migration),
             Box::new(m20260315_000001_add_account_color::Migration),
+            Box::new(m20260316_000001_add_account_types::Migration),
         ]
     }
 }

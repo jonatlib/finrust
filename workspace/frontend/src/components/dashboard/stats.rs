@@ -26,16 +26,19 @@ pub fn stats() -> Html {
         }
     };
 
-    // Calculate net worth from latest timeseries data
-    let net_worth = match (&*accounts_state, &*timeseries_state) {
+    // Calculate net worth from latest timeseries data, split by liquidity
+    let (net_worth, liquid_net_worth, non_liquid_net_worth) = match (&*accounts_state, &*timeseries_state) {
         (FetchState::Success(accounts), FetchState::Success(timeseries)) => {
-            let included_account_ids: Vec<i32> = accounts
+            let included_accounts: Vec<_> = accounts
                 .iter()
                 .filter(|a| a.include_in_statistics)
+                .collect();
+            let included_account_ids: Vec<i32> = included_accounts.iter().map(|a| a.id).collect();
+            let liquid_ids: std::collections::HashSet<i32> = included_accounts.iter()
+                .filter(|a| a.is_liquid)
                 .map(|a| a.id)
                 .collect();
 
-            // Group data points by account_id and get the latest balance for each
             let mut latest_balances: std::collections::HashMap<i32, (chrono::NaiveDate, Decimal)> = std::collections::HashMap::new();
             for point in &timeseries.data_points {
                 if included_account_ids.contains(&point.account_id) {
@@ -50,9 +53,15 @@ pub fn stats() -> Html {
                 }
             }
 
-            latest_balances.values().map(|(_, balance)| *balance).sum::<Decimal>()
+            let total: Decimal = latest_balances.values().map(|(_, b)| *b).sum();
+            let liquid: Decimal = latest_balances.iter()
+                .filter(|(id, _)| liquid_ids.contains(id))
+                .map(|(_, (_, b))| *b)
+                .sum();
+            let non_liquid = total - liquid;
+            (total, liquid, non_liquid)
         },
-        _ => Decimal::ZERO,
+        _ => (Decimal::ZERO, Decimal::ZERO, Decimal::ZERO),
     };
 
     // Calculate income and expenses from statistics
@@ -76,6 +85,7 @@ pub fn stats() -> Html {
     };
 
     let net_worth_class = if net_worth >= Decimal::ZERO { "text-primary" } else { "text-error" };
+    let liquid_class = if liquid_net_worth >= Decimal::ZERO { "text-success" } else { "text-error" };
 
     let is_loading = matches!(*accounts_state, FetchState::Loading)
         || matches!(*timeseries_state, FetchState::Loading)
@@ -83,36 +93,42 @@ pub fn stats() -> Html {
 
     if is_loading {
         return html! {
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div class="stats shadow bg-base-100">
-                    <div class="stat">
-                        <div class="stat-title">{"Net Worth"}</div>
-                        <div class="stat-value"><span class="loading loading-spinner loading-sm"></span></div>
-                    </div>
-                </div>
-                <div class="stats shadow bg-base-100">
-                    <div class="stat">
-                        <div class="stat-title">{"Avg. Monthly Income"}</div>
-                        <div class="stat-value"><span class="loading loading-spinner loading-sm"></span></div>
-                    </div>
-                </div>
-                <div class="stats shadow bg-base-100">
-                    <div class="stat">
-                        <div class="stat-title">{"Avg. Monthly Expenses"}</div>
-                        <div class="stat-value"><span class="loading loading-spinner loading-sm"></span></div>
-                    </div>
-                </div>
+            <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+                {for ["Net Worth", "Liquid", "Non-Liquid", "Avg. Monthly Income", "Avg. Monthly Expenses"].iter().map(|title| {
+                    html! {
+                        <div class="stats shadow bg-base-100">
+                            <div class="stat">
+                                <div class="stat-title">{title}</div>
+                                <div class="stat-value"><span class="loading loading-spinner loading-sm"></span></div>
+                            </div>
+                        </div>
+                    }
+                })}
             </div>
         };
     }
 
     html! {
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
             <div class="stats shadow bg-base-100">
                 <div class="stat">
                     <div class="stat-title">{"Net Worth"}</div>
                     <div class={classes!("stat-value", net_worth_class)}>{format_currency(net_worth)}</div>
-                    <div class="stat-desc">{"Included accounts only"}</div>
+                    <div class="stat-desc">{"All accounts"}</div>
+                </div>
+            </div>
+            <div class="stats shadow bg-base-100">
+                <div class="stat">
+                    <div class="stat-title">{"Liquid"}</div>
+                    <div class={classes!("stat-value", liquid_class)}>{format_currency(liquid_net_worth)}</div>
+                    <div class="stat-desc">{"Cash & liquid assets"}</div>
+                </div>
+            </div>
+            <div class="stats shadow bg-base-100">
+                <div class="stat">
+                    <div class="stat-title">{"Non-Liquid"}</div>
+                    <div class="stat-value text-secondary">{format_currency(non_liquid_net_worth)}</div>
+                    <div class="stat-desc">{"House, equity, etc."}</div>
                 </div>
             </div>
             <div class="stats shadow bg-base-100">

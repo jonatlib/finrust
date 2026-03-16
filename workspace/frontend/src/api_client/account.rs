@@ -11,6 +11,12 @@ pub enum AccountKind {
     Debt,
     Other,
     Goal,
+    Allowance,
+    Shared,
+    EmergencyFund,
+    Equity,
+    House,
+    Tax,
 }
 
 impl AccountKind {
@@ -18,11 +24,17 @@ impl AccountKind {
     pub fn order(&self) -> usize {
         match self {
             AccountKind::RealAccount => 0,
-            AccountKind::Savings => 1,
-            AccountKind::Investment => 2,
-            AccountKind::Debt => 3,
-            AccountKind::Other => 4,
+            AccountKind::Allowance => 1,
+            AccountKind::Shared => 2,
+            AccountKind::EmergencyFund => 3,
+            AccountKind::Savings => 4,
             AccountKind::Goal => 5,
+            AccountKind::Investment => 6,
+            AccountKind::Equity => 7,
+            AccountKind::House => 8,
+            AccountKind::Debt => 9,
+            AccountKind::Tax => 10,
+            AccountKind::Other => 11,
         }
     }
 
@@ -35,7 +47,36 @@ impl AccountKind {
             AccountKind::Debt => "Debt",
             AccountKind::Other => "Other",
             AccountKind::Goal => "Goal",
+            AccountKind::Allowance => "Allowance",
+            AccountKind::Shared => "Shared",
+            AccountKind::EmergencyFund => "Emergency Fund",
+            AccountKind::Equity => "Equity",
+            AccountKind::House => "House",
+            AccountKind::Tax => "Tax",
         }
+    }
+
+    /// Returns the default liquidity for this kind.
+    pub fn default_is_liquid(&self) -> bool {
+        !matches!(self, AccountKind::Equity | AccountKind::House)
+    }
+
+    /// All variants in display order.
+    pub fn all_ordered() -> &'static [AccountKind] {
+        &[
+            AccountKind::RealAccount,
+            AccountKind::Allowance,
+            AccountKind::Shared,
+            AccountKind::EmergencyFund,
+            AccountKind::Savings,
+            AccountKind::Goal,
+            AccountKind::Investment,
+            AccountKind::Equity,
+            AccountKind::House,
+            AccountKind::Debt,
+            AccountKind::Tax,
+            AccountKind::Other,
+        ]
     }
 }
 
@@ -52,6 +93,7 @@ pub struct AccountResponse {
     pub account_kind: AccountKind,
     pub target_amount: Option<String>,
     pub color: Option<String>,
+    pub is_liquid: bool,
 }
 
 /// Account statistics response
@@ -96,6 +138,7 @@ pub struct CreateAccountRequest {
     pub account_kind: Option<AccountKind>,
     pub target_amount: Option<String>,
     pub color: Option<String>,
+    pub is_liquid: Option<bool>,
 }
 
 /// Request body for updating an account
@@ -109,6 +152,7 @@ pub struct UpdateAccountRequest {
     pub account_kind: Option<AccountKind>,
     pub target_amount: Option<String>,
     pub color: Option<String>,
+    pub is_liquid: Option<bool>,
 }
 
 /// Get all accounts

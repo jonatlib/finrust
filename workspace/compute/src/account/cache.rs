@@ -252,6 +252,7 @@ mod tests {
             account_kind: AccountKind::RealAccount,
             target_amount: None,
             color: None,
+            is_liquid: true,
         };
         let account2 = account::Model {
             id: 2,
@@ -264,6 +265,7 @@ mod tests {
             account_kind: AccountKind::RealAccount,
             target_amount: None,
             color: None,
+            is_liquid: true,
         };
 
         let date1 = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap();

@@ -93,8 +93,10 @@ pub struct DebtMetricsDto {
 pub struct DashboardMetricsDto {
     /// Total net worth: all assets minus all debts
     pub total_net_worth: Decimal,
-    /// Liquid net worth: RealAccount + Savings balances minus short-term debts
+    /// Liquid net worth: accounts marked as liquid
     pub liquid_net_worth: Decimal,
+    /// Non-liquid net worth: accounts marked as non-liquid (e.g. house, equity)
+    pub non_liquid_net_worth: Decimal,
     /// Monthly cost of truly essential expenses
     pub essential_burn_rate: Decimal,
     /// Total monthly expenses across all accounts
@@ -148,6 +150,7 @@ mod tests {
         let dashboard = DashboardMetricsDto {
             total_net_worth: Decimal::new(1_500_000, 0),
             liquid_net_worth: Decimal::new(800_000, 0),
+            non_liquid_net_worth: Decimal::new(700_000, 0),
             essential_burn_rate: Decimal::new(85_000, 0),
             full_burn_rate: Decimal::new(120_000, 0),
             free_cashflow: Decimal::new(30_000, 0),

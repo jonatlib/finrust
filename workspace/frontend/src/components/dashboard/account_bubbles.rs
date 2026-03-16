@@ -170,6 +170,21 @@ fn kind_style(kind: &AccountKind) -> KindStyle {
             legend_badge_class: "text-blue-700",
             legend_dot_class: "bg-blue-500",
         },
+        AccountKind::Allowance => KindStyle {
+            card_class: "bg-sky-50 border-sky-200",
+            legend_badge_class: "text-sky-700",
+            legend_dot_class: "bg-sky-500",
+        },
+        AccountKind::Shared => KindStyle {
+            card_class: "bg-indigo-50 border-indigo-200",
+            legend_badge_class: "text-indigo-700",
+            legend_dot_class: "bg-indigo-500",
+        },
+        AccountKind::EmergencyFund => KindStyle {
+            card_class: "bg-teal-50 border-teal-200",
+            legend_badge_class: "text-teal-700",
+            legend_dot_class: "bg-teal-500",
+        },
         AccountKind::Savings => KindStyle {
             card_class: "bg-green-50 border-green-200",
             legend_badge_class: "text-green-700",
@@ -180,10 +195,25 @@ fn kind_style(kind: &AccountKind) -> KindStyle {
             legend_badge_class: "text-purple-700",
             legend_dot_class: "bg-purple-500",
         },
+        AccountKind::Equity => KindStyle {
+            card_class: "bg-violet-50 border-violet-200",
+            legend_badge_class: "text-violet-700",
+            legend_dot_class: "bg-violet-500",
+        },
+        AccountKind::House => KindStyle {
+            card_class: "bg-orange-50 border-orange-200",
+            legend_badge_class: "text-orange-700",
+            legend_dot_class: "bg-orange-500",
+        },
         AccountKind::Debt => KindStyle {
             card_class: "bg-red-50 border-red-200",
             legend_badge_class: "text-red-700",
             legend_dot_class: "bg-red-500",
+        },
+        AccountKind::Tax => KindStyle {
+            card_class: "bg-yellow-50 border-yellow-200",
+            legend_badge_class: "text-yellow-700",
+            legend_dot_class: "bg-yellow-500",
         },
         AccountKind::Other => KindStyle {
             card_class: "bg-gray-50 border-gray-200",

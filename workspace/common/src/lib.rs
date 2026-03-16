@@ -43,6 +43,7 @@ pub struct CreateAccountRequest {
     pub owner_id: i32,
     pub include_in_statistics: Option<bool>,
     pub ledger_name: Option<String>,
+    pub is_liquid: Option<bool>,
 }
 
 /// Request body for updating an account (mirrors backend).
@@ -53,6 +54,7 @@ pub struct UpdateAccountRequest {
     pub currency_code: Option<String>,
     pub include_in_statistics: Option<bool>,
     pub ledger_name: Option<String>,
+    pub is_liquid: Option<bool>,
 }
 
 /// Account response model (mirrors backend AccountResponse).
@@ -65,6 +67,7 @@ pub struct AccountDto {
     pub owner_id: i32,
     pub include_in_statistics: bool,
     pub ledger_name: Option<String>,
+    pub is_liquid: bool,
 }
 
 // ===================== Categories =====================

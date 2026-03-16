@@ -43,6 +43,7 @@ async fn test_e2e_intermediate_scenario() {
             account_kind: Some(kind.clone()),
             target_amount: None,
             color: None,
+            is_liquid: None,
         };
         let resp = server.post("/api/v1/accounts").json(&req).await;
         resp.assert_status(StatusCode::CREATED);

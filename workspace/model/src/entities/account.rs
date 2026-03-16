@@ -17,6 +17,25 @@ pub enum AccountKind {
     Other,
     #[sea_orm(string_value = "Goal")]
     Goal,
+    #[sea_orm(string_value = "Allowance")]
+    Allowance,
+    #[sea_orm(string_value = "Shared")]
+    Shared,
+    #[sea_orm(string_value = "EmergencyFund")]
+    EmergencyFund,
+    #[sea_orm(string_value = "Equity")]
+    Equity,
+    #[sea_orm(string_value = "House")]
+    House,
+    #[sea_orm(string_value = "Tax")]
+    Tax,
+}
+
+impl AccountKind {
+    /// Returns the default liquidity for this account kind.
+    pub fn default_is_liquid(&self) -> bool {
+        !matches!(self, AccountKind::Equity | AccountKind::House)
+    }
 }
 
 /// Represents a financial account, like a bank account, credit card, or cash wallet.
@@ -45,6 +64,9 @@ pub struct Model {
     pub target_amount: Option<Decimal>,
     /// Hex color for consistent display across charts and dashboards (e.g. "#3b82f6")
     pub color: Option<String>,
+    /// Whether this account is considered liquid (cash-like, quickly convertible)
+    #[sea_orm(default_value = "true")]
+    pub is_liquid: bool,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

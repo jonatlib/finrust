@@ -35,6 +35,7 @@ async fn test_e2e_advanced_scenario() {
             account_kind: Some(AccountKind::RealAccount),
             target_amount: None,
             color: None,
+            is_liquid: None,
         })
         .await;
     resp.assert_status(StatusCode::CREATED);
@@ -54,6 +55,7 @@ async fn test_e2e_advanced_scenario() {
             account_kind: Some(AccountKind::Savings),
             target_amount: None,
             color: None,
+            is_liquid: None,
         })
         .await;
     resp.assert_status(StatusCode::CREATED);
@@ -73,6 +75,7 @@ async fn test_e2e_advanced_scenario() {
             account_kind: Some(AccountKind::Investment),
             target_amount: None,
             color: None,
+            is_liquid: None,
         })
         .await;
     resp.assert_status(StatusCode::CREATED);
@@ -92,6 +95,7 @@ async fn test_e2e_advanced_scenario() {
             account_kind: Some(AccountKind::Debt),
             target_amount: None,
             color: None,
+            is_liquid: None,
         })
         .await;
     resp.assert_status(StatusCode::CREATED);
@@ -111,6 +115,7 @@ async fn test_e2e_advanced_scenario() {
             account_kind: Some(AccountKind::Goal),
             target_amount: Some(Decimal::new(50000, 0)),
             color: None,
+            is_liquid: None,
         })
         .await;
     resp.assert_status(StatusCode::CREATED);

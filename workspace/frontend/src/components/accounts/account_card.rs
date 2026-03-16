@@ -77,19 +77,26 @@ pub fn account_card(props: &Props) -> Html {
                             html! {}
                         }}
                     </div>
-                    {if account.include_in_statistics {
-                        html! { <div class="badge badge-primary badge-outline badge-sm" title="Included in Statistics"><i class="fas fa-chart-line"></i></div> }
-                    } else {
-                        html! { <div class="badge badge-ghost badge-sm" title="Excluded from Statistics"><i class="fas fa-eye-slash"></i></div> }
-                    }}
+                    <div class="flex gap-1">
+                        {if account.is_liquid {
+                            html! { <div class="badge badge-secondary badge-outline badge-xs" title="Liquid">{"L"}</div> }
+                        } else {
+                            html! { <div class="badge badge-ghost badge-xs" title="Non-liquid">{"NL"}</div> }
+                        }}
+                        {if account.include_in_statistics {
+                            html! { <div class="badge badge-primary badge-outline badge-sm" title="Included in Statistics"><i class="fas fa-chart-line"></i></div> }
+                        } else {
+                            html! { <div class="badge badge-ghost badge-sm" title="Excluded from Statistics"><i class="fas fa-eye-slash"></i></div> }
+                        }}
+                    </div>
                 </div>
                 <div class="mt-4">
                     <div class="text-xs text-gray-500 mb-2">{"Currency"}</div>
                     <div class="badge badge-secondary badge-outline badge-sm">{&account.currency_code}</div>
                 </div>
 
-                // Display stats section - different view for Goal accounts
-                {if account.account_kind == AccountKind::Goal {
+                // Display stats section - progress bar view for accounts with targets
+                {if matches!(account.account_kind, AccountKind::Goal | AccountKind::EmergencyFund) {
                     // Goal account view with progress bar
                     html! {
                         <div class="mt-4 space-y-2 bg-base-200 p-3 rounded-lg">

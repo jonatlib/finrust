@@ -289,6 +289,7 @@ async fn test_create_account() {
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
         color: None,
+        is_liquid: None,
     };
 
     // Send POST request to create account
@@ -335,6 +336,7 @@ async fn test_get_accounts() {
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
         color: None,
+        is_liquid: None,
     };
 
     let create_response = server
@@ -377,6 +379,7 @@ async fn test_create_account_with_invalid_owner_id() {
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
         color: None,
+        is_liquid: None,
     };
 
     // Send POST request to create account
@@ -456,6 +459,7 @@ async fn test_create_transaction_with_invalid_source_account_id() {
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
         color: None,
+        is_liquid: None,
     };
 
     let account_response = server
@@ -561,6 +565,7 @@ async fn test_get_account_by_id() {
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
         color: None,
+        is_liquid: None,
     };
 
     let create_response = server
@@ -609,6 +614,7 @@ async fn test_update_account() {
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
         color: None,
+        is_liquid: None,
     };
 
     let create_response = server
@@ -630,6 +636,7 @@ async fn test_update_account() {
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
         color: None,
+        is_liquid: None,
     };
 
     let response = server
@@ -683,6 +690,7 @@ async fn test_delete_account() {
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
         color: None,
+        is_liquid: None,
     };
 
     let create_response = server
@@ -742,6 +750,7 @@ async fn test_update_nonexistent_account() {
         account_kind: None,
         target_amount: None,
         color: None,
+        is_liquid: None,
     };
 
     let response = server
@@ -787,6 +796,7 @@ async fn test_complex_timeseries_api_scenario() {
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
         color: None,
+        is_liquid: None,
     };
 
     let account2_request = CreateAccountRequest {
@@ -799,6 +809,7 @@ async fn test_complex_timeseries_api_scenario() {
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
         color: None,
+        is_liquid: None,
     };
 
     // Create accounts
@@ -1779,6 +1790,7 @@ async fn test_create_manual_account_state() {
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
         color: None,
+        is_liquid: None,
     };
 
     let account_response = server
@@ -1865,6 +1877,7 @@ async fn test_get_manual_account_states() {
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
         color: None,
+        is_liquid: None,
     };
 
     let account_response = server
@@ -1937,6 +1950,7 @@ async fn test_get_manual_account_state_by_id() {
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
         color: None,
+        is_liquid: None,
     };
 
     let account_response = server
@@ -1997,6 +2011,7 @@ async fn test_get_manual_account_state_not_found() {
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
         color: None,
+        is_liquid: None,
     };
 
     let account_response = server
@@ -2040,6 +2055,7 @@ async fn test_update_manual_account_state() {
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
         color: None,
+        is_liquid: None,
     };
 
     let account_response = server
@@ -2110,6 +2126,7 @@ async fn test_update_manual_account_state_not_found() {
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
         color: None,
+        is_liquid: None,
     };
 
     let account_response = server
@@ -2159,6 +2176,7 @@ async fn test_delete_manual_account_state() {
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
         color: None,
+        is_liquid: None,
     };
 
     let account_response = server
@@ -2219,6 +2237,7 @@ async fn test_delete_manual_account_state_not_found() {
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
         color: None,
+        is_liquid: None,
     };
 
     let account_response = server
@@ -2264,6 +2283,7 @@ async fn test_create_imported_transaction() {
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
         color: None,
+        is_liquid: None,
     };
 
     let account_response = server
@@ -2339,6 +2359,7 @@ async fn test_create_imported_transaction_duplicate_hash() {
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
         color: None,
+        is_liquid: None,
     };
 
     let account_response = server
@@ -2401,6 +2422,7 @@ async fn test_get_imported_transactions() {
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
         color: None,
+        is_liquid: None,
     };
 
     let account_response = server
@@ -2461,6 +2483,7 @@ async fn test_get_imported_transactions_with_filters() {
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
         color: None,
+        is_liquid: None,
     };
 
     let account_response = server
@@ -2531,6 +2554,7 @@ async fn test_get_account_imported_transactions() {
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
         color: None,
+        is_liquid: None,
     };
 
     let account_response = server
@@ -2594,6 +2618,7 @@ async fn test_get_imported_transaction() {
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
         color: None,
+        is_liquid: None,
     };
 
     let account_response = server
@@ -2685,6 +2710,7 @@ async fn test_update_imported_transaction() {
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
         color: None,
+        is_liquid: None,
     };
 
     let account_response = server
@@ -2801,6 +2827,7 @@ async fn test_delete_imported_transaction() {
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
         color: None,
+        is_liquid: None,
     };
 
     let account_response = server
@@ -2884,6 +2911,7 @@ async fn test_reconcile_imported_transaction() {
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
         color: None,
+        is_liquid: None,
     };
 
     let account_response = server
@@ -2999,6 +3027,7 @@ async fn test_reconcile_imported_transaction_invalid_type() {
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
         color: None,
+        is_liquid: None,
     };
 
     let account_response = server
@@ -3065,6 +3094,7 @@ async fn test_clear_imported_transaction_reconciliation() {
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
         color: None,
+        is_liquid: None,
     };
 
     let account_response = server
@@ -3205,6 +3235,7 @@ async fn test_imported_transaction_filtering_by_reconciliation_status() {
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
         color: None,
+        is_liquid: None,
     };
 
     let account_response = server
@@ -3870,6 +3901,7 @@ async fn test_monthly_min_balance_returns_ok_for_existing_account() {
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
         color: None,
+        is_liquid: None,
     };
     let account_resp = server.post("/api/v1/accounts").json(&account_request).await;
     account_resp.assert_status(StatusCode::CREATED);
@@ -3925,6 +3957,7 @@ async fn test_monthly_min_balance_default_months() {
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
         color: None,
+        is_liquid: None,
     };
     let account_resp = server.post("/api/v1/accounts").json(&account_request).await;
     account_resp.assert_status(StatusCode::CREATED);
@@ -3970,6 +4003,7 @@ async fn test_monthly_min_balance_with_transactions() {
         account_kind: Some(finrust::handlers::accounts::AccountKind::RealAccount),
         target_amount: None,
         color: None,
+        is_liquid: None,
     };
     let account_resp = server.post("/api/v1/accounts").json(&account_request).await;
     account_resp.assert_status(StatusCode::CREATED);

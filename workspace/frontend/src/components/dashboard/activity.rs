@@ -8,7 +8,10 @@ use crate::hooks::FetchState;
 
 #[function_component(RecentActivity)]
 pub fn recent_activity() -> Html {
-    let (transactions_state, _) = use_fetch_with_refetch(|| get_transactions(None, None, &TransactionFilters::default()));
+    let (transactions_state, _) = use_fetch_with_refetch(|| {
+        let filters = TransactionFilters::default();
+        async move { get_transactions(None, None, &filters).await }
+    });
     let currency = use_currency();
 
     let format_currency = {

@@ -244,8 +244,8 @@ pub fn account_edit(props: &Props) -> Html {
                                     </div>
                                 </div>
 
-                                // Goal-specific section for Goal accounts
-                                {if account.account_kind == AccountKind::Goal {
+                                // Goal/target progress section
+                                {if matches!(account.account_kind, AccountKind::Goal | AccountKind::EmergencyFund | AccountKind::Savings) {
                                     html! {
                                         <GoalProgress account={account.clone()} stats_state={(*stats_state).clone()} />
                                     }

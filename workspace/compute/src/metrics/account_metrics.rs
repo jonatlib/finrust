@@ -89,6 +89,12 @@ pub async fn compute_account_metrics(
         AccountKind::Debt => "Debt",
         AccountKind::Other => "Other",
         AccountKind::Goal => "Goal",
+        AccountKind::Allowance => "Allowance",
+        AccountKind::Shared => "Shared",
+        AccountKind::EmergencyFund => "EmergencyFund",
+        AccountKind::Equity => "Equity",
+        AccountKind::House => "House",
+        AccountKind::Tax => "Tax",
     };
 
     Ok(AccountMetricsDto {
@@ -268,18 +274,18 @@ async fn compute_kind_metrics(
     current_balance: Decimal,
 ) -> Result<Option<AccountKindMetricsDto>> {
     match account.account_kind {
-        AccountKind::RealAccount => {
+        AccountKind::RealAccount | AccountKind::Allowance | AccountKind::Shared => {
             let m = compute_operating_metrics(calculator, db, account, accounts, current_balance, today).await?;
             Ok(Some(AccountKindMetricsDto::Operating(m)))
         }
-        AccountKind::Savings | AccountKind::Goal => {
+        AccountKind::Savings | AccountKind::Goal | AccountKind::EmergencyFund => {
             let m = compute_reserve_metrics(
                 calculator, db, account, accounts, today, current_balance,
             )
                 .await?;
             Ok(Some(AccountKindMetricsDto::Reserve(m)))
         }
-        AccountKind::Investment => {
+        AccountKind::Investment | AccountKind::Equity | AccountKind::House => {
             let m = compute_investment_metrics(calculator, db, accounts, today, current_balance)
                 .await?;
             Ok(Some(AccountKindMetricsDto::Investment(m)))
@@ -289,7 +295,7 @@ async fn compute_kind_metrics(
                 .await?;
             Ok(Some(AccountKindMetricsDto::Debt(m)))
         }
-        AccountKind::Other => Ok(None),
+        AccountKind::Tax | AccountKind::Other => Ok(None),
     }
 }
 

@@ -99,11 +99,11 @@ fn render_dashboard(d: &DashboardMetricsDto) -> Html {
             }
         });
 
-    // Find EF coverage (Savings/Goal accounts with reserve metrics that have essential coverage)
+    // Find EF coverage (reserve accounts with essential coverage)
     let ef_coverage = d
         .account_metrics
         .iter()
-        .filter(|m| m.account_kind == "Savings" || m.account_kind == "Goal")
+        .filter(|m| m.account_kind == "Savings" || m.account_kind == "Goal" || m.account_kind == "EmergencyFund")
         .find_map(|m| {
             if let Some(AccountKindMetricsDto::Reserve(res)) = &m.kind_metrics {
                 res.months_of_essential_coverage
@@ -140,7 +140,7 @@ fn render_dashboard(d: &DashboardMetricsDto) -> Html {
                 <p class="text-sm text-gray-500 mb-4">{"Key financial metrics across all accounts"}</p>
 
                 // Top row: Net worth metrics
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3">
                     // 1. Household Net Worth
                     <div class="stat bg-base-200 rounded-lg p-3">
                         <div class="stat-title text-xs">{"Net Worth"}</div>
@@ -156,10 +156,19 @@ fn render_dashboard(d: &DashboardMetricsDto) -> Html {
                         <div class={classes!("stat-value", "text-lg", liquid_class)}>
                             {fmt_currency(d.liquid_net_worth)}
                         </div>
-                        <div class="stat-desc text-xs">{"Liquid accounts only"}</div>
+                        <div class="stat-desc text-xs">{"Cash & liquid assets"}</div>
                     </div>
 
-                    // 3. Essential Burn Rate
+                    // 3. Non-Liquid Net Worth
+                    <div class="stat bg-base-200 rounded-lg p-3">
+                        <div class="stat-title text-xs">{"Non-Liquid"}</div>
+                        <div class="stat-value text-lg text-secondary">
+                            {fmt_currency(d.non_liquid_net_worth)}
+                        </div>
+                        <div class="stat-desc text-xs">{"House, equity, etc."}</div>
+                    </div>
+
+                    // 4. Essential Burn Rate
                     <div class="stat bg-base-200 rounded-lg p-3">
                         <div class="stat-title text-xs">{"Essential Burn"}</div>
                         <div class="stat-value text-lg text-warning">
@@ -168,7 +177,7 @@ fn render_dashboard(d: &DashboardMetricsDto) -> Html {
                         <div class="stat-desc text-xs">{"Monthly essentials"}</div>
                     </div>
 
-                    // 4. Free Cashflow
+                    // 5. Free Cashflow
                     <div class="stat bg-base-200 rounded-lg p-3">
                         <div class="stat-title text-xs">{"Free Cashflow"}</div>
                         <div class={classes!("stat-value", "text-lg", free_cf_class)}>
@@ -177,7 +186,7 @@ fn render_dashboard(d: &DashboardMetricsDto) -> Html {
                         <div class="stat-desc text-xs">{"Income minus expenses"}</div>
                     </div>
 
-                    // 5. EF Coverage
+                    // 6. EF Coverage
                     <div class="stat bg-base-200 rounded-lg p-3">
                         <div class="stat-title text-xs">{"EF Coverage"}</div>
                         <div class="stat-value text-lg text-info">

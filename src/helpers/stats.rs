@@ -107,7 +107,7 @@ pub async fn compute_account_statistics(
                 .await
                 .unwrap_or_else(|_| vec![]);
 
-            let goal_reached_date = if account.account_kind == account::AccountKind::Goal {
+            let goal_reached_date = if matches!(account.account_kind, account::AccountKind::Goal | account::AccountKind::EmergencyFund | account::AccountKind::Savings) {
                 if let Some(target_amount) = account.target_amount {
                     let start_date = NaiveDate::from_ymd_opt(*year, 1, 1).unwrap();
                     let end_date = NaiveDate::from_ymd_opt(*year + 5, 12, 31).unwrap();
@@ -196,7 +196,7 @@ pub async fn compute_account_statistics(
                 .await
                 .unwrap_or_else(|_| vec![]);
 
-            let goal_reached_date = if account.account_kind == account::AccountKind::Goal {
+            let goal_reached_date = if matches!(account.account_kind, account::AccountKind::Goal | account::AccountKind::EmergencyFund | account::AccountKind::Savings) {
                 if let Some(target_amount) = account.target_amount {
                     let start_date = NaiveDate::from_ymd_opt(*year, *month, 1).unwrap();
                     let end_date = NaiveDate::from_ymd_opt(*year + 5, 12, 31).unwrap();
@@ -280,7 +280,7 @@ pub async fn compute_account_statistics(
                 .await
                 .unwrap_or_else(|_| vec![]);
 
-            let goal_reached_date = if account.account_kind == account::AccountKind::Goal {
+            let goal_reached_date = if matches!(account.account_kind, account::AccountKind::Goal | account::AccountKind::EmergencyFund | account::AccountKind::Savings) {
                 if let Some(target_amount) = account.target_amount {
                     let start_date = *start;
                     let end_date = NaiveDate::from_ymd_opt(start.year() + 5, 12, 31).unwrap();

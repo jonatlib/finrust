@@ -56,8 +56,15 @@ pub fn account_modal(props: &AccountModalProps) -> Html {
                     "Debt" => AccountKind::Debt,
                     "Other" => AccountKind::Other,
                     "Goal" => AccountKind::Goal,
+                    "Allowance" => AccountKind::Allowance,
+                    "Shared" => AccountKind::Shared,
+                    "EmergencyFund" => AccountKind::EmergencyFund,
+                    "Equity" => AccountKind::Equity,
+                    "House" => AccountKind::House,
+                    "Tax" => AccountKind::Tax,
                     _ => AccountKind::RealAccount,
                 };
+                let is_liquid = form_data.get("is_liquid").as_string().map(|v| v == "on").unwrap_or(account_kind.default_is_liquid());
 
                 let is_submitting = is_submitting.clone();
                 let error_message = error_message.clone();
@@ -80,6 +87,7 @@ pub fn account_modal(props: &AccountModalProps) -> Html {
                         account_kind: Some(account_kind),
                         target_amount: target_amount.clone(),
                         color: color.clone(),
+                        is_liquid: Some(is_liquid),
                     };
 
                     wasm_bindgen_futures::spawn_local(async move {
@@ -110,6 +118,7 @@ pub fn account_modal(props: &AccountModalProps) -> Html {
                         account_kind: Some(account_kind),
                         target_amount,
                         color: color.clone(),
+                        is_liquid: Some(is_liquid),
                     };
 
                     wasm_bindgen_futures::spawn_local(async move {
@@ -154,14 +163,16 @@ pub fn account_modal(props: &AccountModalProps) -> Html {
     let default_color = props.account.as_ref()
         .and_then(|a| a.color.clone())
         .unwrap_or_else(|| colors::ACCOUNT_COLORS[0].to_string());
+    let default_is_liquid = props.account.as_ref().map(|a| a.is_liquid).unwrap_or_else(|| default_kind.default_is_liquid());
 
     // Track selected account kind for conditional rendering
     let selected_kind = use_state(|| default_kind);
+    let is_liquid_state = use_state(|| default_is_liquid);
 
     let (show_target, target_label) = match *selected_kind {
         AccountKind::Goal => (true, "Target Amount"),
         AccountKind::RealAccount => (true, "Buffer Target"),
-        AccountKind::Savings => (true, "Target Amount"),
+        AccountKind::Savings | AccountKind::EmergencyFund => (true, "Target Amount"),
         _ => (false, ""),
     };
 
@@ -245,6 +256,7 @@ pub fn account_modal(props: &AccountModalProps) -> Html {
                                 disabled={*is_submitting}
                                 onchange={{
                                     let selected_kind = selected_kind.clone();
+                                    let is_liquid_state = is_liquid_state.clone();
                                     Callback::from(move |e: Event| {
                                         if let Some(select) = e.target_dyn_into::<web_sys::HtmlSelectElement>() {
                                             let value = select.value();
@@ -255,19 +267,26 @@ pub fn account_modal(props: &AccountModalProps) -> Html {
                                                 "Debt" => AccountKind::Debt,
                                                 "Other" => AccountKind::Other,
                                                 "Goal" => AccountKind::Goal,
+                                                "Allowance" => AccountKind::Allowance,
+                                                "Shared" => AccountKind::Shared,
+                                                "EmergencyFund" => AccountKind::EmergencyFund,
+                                                "Equity" => AccountKind::Equity,
+                                                "House" => AccountKind::House,
+                                                "Tax" => AccountKind::Tax,
                                                 _ => AccountKind::RealAccount,
                                             };
+                                            is_liquid_state.set(kind.default_is_liquid());
                                             selected_kind.set(kind);
                                         }
                                     })
                                 }}
                             >
-                                <option value="RealAccount" selected={default_kind == AccountKind::RealAccount}>{"Real Account"}</option>
-                                <option value="Savings" selected={default_kind == AccountKind::Savings}>{"Savings"}</option>
-                                <option value="Investment" selected={default_kind == AccountKind::Investment}>{"Investment"}</option>
-                                <option value="Debt" selected={default_kind == AccountKind::Debt}>{"Debt"}</option>
-                                <option value="Other" selected={default_kind == AccountKind::Other}>{"Other"}</option>
-                                <option value="Goal" selected={default_kind == AccountKind::Goal}>{"Goal"}</option>
+                                {for AccountKind::all_ordered().iter().map(|kind| {
+                                    let value = format!("{:?}", kind);
+                                    html! {
+                                        <option value={value} selected={default_kind == *kind}>{kind.display_name()}</option>
+                                    }
+                                })}
                             </select>
                         </div>
                     </div>
@@ -298,17 +317,39 @@ pub fn account_modal(props: &AccountModalProps) -> Html {
                         </div>
                     </div>
 
-                    <div class="form-control">
-                        <label class="label cursor-pointer justify-start gap-2">
-                            <input
-                                type="checkbox"
-                                name="include_in_statistics"
-                                class="checkbox checkbox-primary"
-                                checked={default_include_stats}
-                                disabled={*is_submitting}
-                            />
-                            <span class="label-text">{"Include in Statistics"}</span>
-                        </label>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="form-control">
+                            <label class="label cursor-pointer justify-start gap-2">
+                                <input
+                                    type="checkbox"
+                                    name="include_in_statistics"
+                                    class="checkbox checkbox-primary"
+                                    checked={default_include_stats}
+                                    disabled={*is_submitting}
+                                />
+                                <span class="label-text">{"Include in Statistics"}</span>
+                            </label>
+                        </div>
+                        <div class="form-control">
+                            <label class="label cursor-pointer justify-start gap-2">
+                                <input
+                                    type="checkbox"
+                                    name="is_liquid"
+                                    class="checkbox checkbox-secondary"
+                                    checked={*is_liquid_state}
+                                    disabled={*is_submitting}
+                                    onchange={{
+                                        let is_liquid_state = is_liquid_state.clone();
+                                        Callback::from(move |e: Event| {
+                                            if let Some(input) = e.target_dyn_into::<web_sys::HtmlInputElement>() {
+                                                is_liquid_state.set(input.checked());
+                                            }
+                                        })
+                                    }}
+                                />
+                                <span class="label-text">{"Liquid Asset"}</span>
+                            </label>
+                        </div>
                     </div>
 
                     <div class="modal-action">

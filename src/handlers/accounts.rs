@@ -21,6 +21,12 @@ pub enum AccountKind {
     Debt,
     Other,
     Goal,
+    Allowance,
+    Shared,
+    EmergencyFund,
+    Equity,
+    House,
+    Tax,
 }
 
 impl From<account::AccountKind> for AccountKind {
@@ -32,6 +38,12 @@ impl From<account::AccountKind> for AccountKind {
             account::AccountKind::Debt => AccountKind::Debt,
             account::AccountKind::Other => AccountKind::Other,
             account::AccountKind::Goal => AccountKind::Goal,
+            account::AccountKind::Allowance => AccountKind::Allowance,
+            account::AccountKind::Shared => AccountKind::Shared,
+            account::AccountKind::EmergencyFund => AccountKind::EmergencyFund,
+            account::AccountKind::Equity => AccountKind::Equity,
+            account::AccountKind::House => AccountKind::House,
+            account::AccountKind::Tax => AccountKind::Tax,
         }
     }
 }
@@ -45,6 +57,12 @@ impl From<AccountKind> for account::AccountKind {
             AccountKind::Debt => account::AccountKind::Debt,
             AccountKind::Other => account::AccountKind::Other,
             AccountKind::Goal => account::AccountKind::Goal,
+            AccountKind::Allowance => account::AccountKind::Allowance,
+            AccountKind::Shared => account::AccountKind::Shared,
+            AccountKind::EmergencyFund => account::AccountKind::EmergencyFund,
+            AccountKind::Equity => account::AccountKind::Equity,
+            AccountKind::House => account::AccountKind::House,
+            AccountKind::Tax => account::AccountKind::Tax,
         }
     }
 }
@@ -70,6 +88,8 @@ pub struct CreateAccountRequest {
     pub target_amount: Option<rust_decimal::Decimal>,
     /// Hex color for charts (e.g. "#3b82f6"). Auto-assigned if omitted.
     pub color: Option<String>,
+    /// Whether the account is liquid (default based on account kind)
+    pub is_liquid: Option<bool>,
 }
 
 /// Request body for updating an account
@@ -91,6 +111,8 @@ pub struct UpdateAccountRequest {
     pub target_amount: Option<rust_decimal::Decimal>,
     /// Hex color for charts (e.g. "#3b82f6")
     pub color: Option<String>,
+    /// Whether the account is liquid
+    pub is_liquid: Option<bool>,
 }
 
 /// Account response model
@@ -106,6 +128,7 @@ pub struct AccountResponse {
     pub account_kind: AccountKind,
     pub target_amount: Option<rust_decimal::Decimal>,
     pub color: Option<String>,
+    pub is_liquid: bool,
 }
 
 impl From<account::Model> for AccountResponse {
@@ -121,6 +144,7 @@ impl From<account::Model> for AccountResponse {
             account_kind: model.account_kind.into(),
             target_amount: model.target_amount,
             color: model.color,
+            is_liquid: model.is_liquid,
         }
     }
 }
@@ -183,6 +207,9 @@ pub async fn create_account(
         }
     };
 
+    let account_kind: account::AccountKind = request.account_kind.unwrap_or(AccountKind::RealAccount).into();
+    let is_liquid = request.is_liquid.unwrap_or_else(|| account_kind.default_is_liquid());
+
     let new_account = account::ActiveModel {
         name: Set(request.name.clone()),
         description: Set(request.description.clone()),
@@ -190,9 +217,10 @@ pub async fn create_account(
         owner_id: Set(request.owner_id),
         include_in_statistics: Set(request.include_in_statistics.unwrap_or(true)),
         ledger_name: Set(request.ledger_name.clone()),
-        account_kind: Set(request.account_kind.unwrap_or(AccountKind::RealAccount).into()),
+        account_kind: Set(account_kind),
         target_amount: Set(request.target_amount),
         color: Set(assigned_color),
+        is_liquid: Set(is_liquid),
         ..Default::default()
     };
 
@@ -445,6 +473,11 @@ pub async fn update_account(
         debug!("Updating account color to: {}", color);
         account_active.color = Set(Some(color.clone()));
         updated_fields.push(format!("color: {}", color));
+    }
+    if let Some(is_liquid) = request.is_liquid {
+        debug!("Updating account is_liquid to: {}", is_liquid);
+        account_active.is_liquid = Set(is_liquid);
+        updated_fields.push(format!("is_liquid: {}", is_liquid));
     }
 
     if updated_fields.is_empty() {

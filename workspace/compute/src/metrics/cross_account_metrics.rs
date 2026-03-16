@@ -66,15 +66,23 @@ pub async fn compute_dashboard_metrics(
         .map(|m| m.current_balance)
         .sum();
 
-    // Liquid net worth: RealAccount + Savings + Goal, minus debts
+    // Build a lookup from account_id to is_liquid
+    let liquid_lookup: std::collections::HashMap<i32, bool> = all_accounts
+        .iter()
+        .map(|a| (a.id, a.is_liquid))
+        .collect();
+
+    // Liquid net worth: accounts marked as liquid
     let liquid_net_worth: Decimal = account_metrics_list
         .iter()
-        .filter(|m| {
-            matches!(
-                m.account_kind.as_str(),
-                "RealAccount" | "Savings" | "Goal" | "Debt"
-            )
-        })
+        .filter(|m| *liquid_lookup.get(&m.account_id).unwrap_or(&true))
+        .map(|m| m.current_balance)
+        .sum();
+
+    // Non-liquid net worth: accounts marked as non-liquid
+    let non_liquid_net_worth: Decimal = account_metrics_list
+        .iter()
+        .filter(|m| !*liquid_lookup.get(&m.account_id).unwrap_or(&true))
         .map(|m| m.current_balance)
         .sum();
 
@@ -94,11 +102,13 @@ pub async fn compute_dashboard_metrics(
         .map(|r| monthly_equivalent(r.amount.abs(), &r.period))
         .sum();
 
-    // Essential burn rate: recurring expenses on RealAccount targets only
-    // (these represent core operating expenses)
+    // Essential burn rate: recurring expenses on operating account targets
     let real_account_ids: Vec<i32> = all_accounts
         .iter()
-        .filter(|a| a.account_kind == AccountKind::RealAccount)
+        .filter(|a| matches!(
+            a.account_kind,
+            AccountKind::RealAccount | AccountKind::Allowance | AccountKind::Shared
+        ))
         .map(|a| a.id)
         .collect();
 
@@ -138,13 +148,14 @@ pub async fn compute_dashboard_metrics(
         None
     };
 
-    // Goal engine: monthly contributions to Savings + Investment + Goal accounts
+    // Goal engine: monthly contributions to wealth-building accounts
     let wealth_account_ids: Vec<i32> = all_accounts
         .iter()
         .filter(|a| {
             matches!(
                 a.account_kind,
                 AccountKind::Savings | AccountKind::Investment | AccountKind::Goal
+                    | AccountKind::EmergencyFund | AccountKind::Equity | AccountKind::House
             )
         })
         .map(|a| a.id)
@@ -170,7 +181,10 @@ pub async fn compute_dashboard_metrics(
     // Liquidity ratio: liquid assets / monthly essential burn (in months)
     let liquid_assets: Decimal = account_metrics_list
         .iter()
-        .filter(|m| matches!(m.account_kind.as_str(), "RealAccount" | "Savings" | "Goal"))
+        .filter(|m| {
+            *liquid_lookup.get(&m.account_id).unwrap_or(&true)
+                && m.account_kind != "Debt"
+        })
         .map(|m| m.current_balance)
         .sum();
 
@@ -223,6 +237,7 @@ pub async fn compute_dashboard_metrics(
     Ok(DashboardMetricsDto {
         total_net_worth,
         liquid_net_worth,
+        non_liquid_net_worth,
         essential_burn_rate,
         full_burn_rate,
         free_cashflow,
