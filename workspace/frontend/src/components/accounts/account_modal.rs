@@ -20,6 +20,12 @@ pub fn account_modal(props: &AccountModalProps) -> Html {
     let is_edit_mode = props.account.is_some();
     let title = if is_edit_mode { "Edit Account" } else { "Add Account" };
 
+    // Default values and tracked state (must be before on_submit closure)
+    let default_kind = props.account.as_ref().map(|a| a.account_kind).unwrap_or(AccountKind::RealAccount);
+    let default_is_liquid = props.account.as_ref().map(|a| a.is_liquid).unwrap_or_else(|| default_kind.default_is_liquid());
+    let selected_kind = use_state(|| default_kind);
+    let is_liquid_state = use_state(|| default_is_liquid);
+
     let on_submit = {
         let on_close = props.on_close.clone();
         let on_success = props.on_success.clone();
@@ -28,6 +34,7 @@ pub fn account_modal(props: &AccountModalProps) -> Html {
         let error_message = error_message.clone();
         let account = props.account.clone();
         let is_edit = account.is_some();
+        let is_liquid_state = is_liquid_state.clone();
 
         Callback::from(move |e: SubmitEvent| {
             e.prevent_default();
@@ -44,7 +51,7 @@ pub fn account_modal(props: &AccountModalProps) -> Html {
                 let currency_code = form_data.get("currency_code").as_string().unwrap_or("CZK".to_string());
                 let ledger_name = form_data.get("ledger_name").as_string();
                 let account_kind_str = form_data.get("account_kind").as_string().unwrap_or("RealAccount".to_string());
-                let include_in_statistics = form_data.get("include_in_statistics").as_string().map(|v| v == "on").unwrap_or(true);
+                let include_in_statistics = form_data.get("include_in_statistics").as_string().map(|v| v == "on").unwrap_or(false);
                 let target_amount = form_data.get("target_amount").as_string().filter(|s| !s.is_empty());
                 let color = form_data.get("color").as_string().filter(|s| !s.is_empty());
 
@@ -64,7 +71,7 @@ pub fn account_modal(props: &AccountModalProps) -> Html {
                     "Tax" => AccountKind::Tax,
                     _ => AccountKind::RealAccount,
                 };
-                let is_liquid = form_data.get("is_liquid").as_string().map(|v| v == "on").unwrap_or(account_kind.default_is_liquid());
+                let is_liquid = *is_liquid_state;
 
                 let is_submitting = is_submitting.clone();
                 let error_message = error_message.clone();
@@ -158,17 +165,10 @@ pub fn account_modal(props: &AccountModalProps) -> Html {
     let default_currency = props.account.as_ref().map(|a| a.currency_code.clone()).unwrap_or_else(|| "CZK".to_string());
     let default_ledger = props.account.as_ref().and_then(|a| a.ledger_name.clone()).unwrap_or_default();
     let default_include_stats = props.account.as_ref().map(|a| a.include_in_statistics).unwrap_or(true);
-    let default_kind = props.account.as_ref().map(|a| a.account_kind).unwrap_or(AccountKind::RealAccount);
     let default_target_amount = props.account.as_ref().and_then(|a| a.target_amount.clone()).unwrap_or_default();
     let default_color = props.account.as_ref()
         .and_then(|a| a.color.clone())
         .unwrap_or_else(|| colors::ACCOUNT_COLORS[0].to_string());
-    let default_is_liquid = props.account.as_ref().map(|a| a.is_liquid).unwrap_or_else(|| default_kind.default_is_liquid());
-
-    // Track selected account kind for conditional rendering
-    let selected_kind = use_state(|| default_kind);
-    let is_liquid_state = use_state(|| default_is_liquid);
-
     let (show_target, target_label) = match *selected_kind {
         AccountKind::Goal => (true, "Target Amount"),
         AccountKind::RealAccount => (true, "Buffer Target"),

@@ -230,6 +230,14 @@ pub fn account_edit(props: &Props) -> Html {
                                                     html! { <div class="badge badge-ghost"><i class="fas fa-times"></i>{" Excluded"}</div> }
                                                 }}
                                             </div>
+                                            <div>
+                                                <div class="text-sm text-gray-500">{"Liquidity"}</div>
+                                                {if account.is_liquid {
+                                                    html! { <div class="badge badge-secondary badge-outline">{"Liquid"}</div> }
+                                                } else {
+                                                    html! { <div class="badge badge-ghost">{"Non-Liquid"}</div> }
+                                                }}
+                                            </div>
                                             {if let Some(ledger) = &account.ledger_name {
                                                 html! {
                                                     <div>
