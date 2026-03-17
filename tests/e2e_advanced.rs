@@ -771,7 +771,7 @@ async fn test_include_ignored_accounts_in_dashboard() {
 
     eprintln!("=== Phase 2: Create transactions ===");
 
-    let tx_date = NaiveDate::from_ymd_opt(2025, 3, 1).unwrap();
+    let tx_date = NaiveDate::from_ymd_opt(2026, 1, 15).unwrap();
 
     // Salary into checking: +100000
     let resp = server
@@ -911,8 +911,8 @@ async fn test_include_ignored_accounts_in_dashboard() {
     eprintln!("=== Phase 6: Verify timeseries with include_ignored ===");
 
     let ts_query_excluded = TimeseriesQuery {
-        start_date: NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
-        end_date: NaiveDate::from_ymd_opt(2025, 6, 1).unwrap(),
+        start_date: NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(),
+        end_date: NaiveDate::from_ymd_opt(2026, 6, 1).unwrap(),
         include_ignored: false,
         scenario_id: None,
     };
@@ -941,8 +941,8 @@ async fn test_include_ignored_accounts_in_dashboard() {
     );
 
     let ts_query_all = TimeseriesQuery {
-        start_date: NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
-        end_date: NaiveDate::from_ymd_opt(2025, 6, 1).unwrap(),
+        start_date: NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(),
+        end_date: NaiveDate::from_ymd_opt(2026, 6, 1).unwrap(),
         include_ignored: true,
         scenario_id: None,
     };
