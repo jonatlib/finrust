@@ -99,14 +99,6 @@ pub async fn get_account_metrics(
         }
     };
 
-    if !account_model.include_in_statistics {
-        warn!(
-            "Account with ID {} is not included in statistics",
-            account_id
-        );
-        return Err(StatusCode::NOT_FOUND);
-    }
-
     let today = chrono::Utc::now().date_naive();
     let compute = default_compute(None);
 

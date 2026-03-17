@@ -1,4 +1,4 @@
-use crate::api_client::account::{get_accounts, AccountKind, AccountResponse};
+use crate::api_client::account::{get_accounts_with_ignored, AccountKind, AccountResponse};
 use crate::api_client::metrics::get_dashboard_metrics;
 use crate::api_client::statistics::{get_all_accounts_statistics, AccountStatisticsCollection};
 use crate::common::fetch_hook::use_fetch_with_refetch;
@@ -13,7 +13,7 @@ use yew_router::prelude::Link;
 /// Compact per-account dashboard bubbles grouped by account type.
 #[function_component(AccountTypeBubbles)]
 pub fn account_type_bubbles() -> Html {
-    let (accounts_state, _) = use_fetch_with_refetch(get_accounts);
+    let (accounts_state, _) = use_fetch_with_refetch(|| get_accounts_with_ignored(true));
     let (statistics_state, _) = use_fetch_with_refetch(get_all_accounts_statistics);
     let (metrics_state, _) = use_fetch_with_refetch(get_dashboard_metrics);
 
@@ -64,9 +64,30 @@ pub fn account_type_bubbles() -> Html {
 
                     <div class="space-y-4">
                         {for grouped_accounts.iter().map(|(kind, grouped)| {
+                            let section_stats = compute_section_stats(grouped, &stats_by_account, &avg_flows);
                             html! {
                                 <div>
-                                    <h3 class="text-sm font-semibold mb-2">{kind.display_name()}</h3>
+                                    <div class="flex items-baseline flex-wrap gap-x-4 gap-y-1 mb-2">
+                                        <h3 class="text-sm font-semibold">{kind.display_name()}</h3>
+                                        <span class="text-xs opacity-70">{format!("{} accounts", section_stats.count)}</span>
+                                        <span class="text-xs font-medium">
+                                            {"Total: "}{format_decimal_option(section_stats.total_balance)}
+                                        </span>
+                                        {if let Some(avg) = section_stats.avg_cash_flow {
+                                            let (arrow, color) = if avg >= Decimal::ZERO {
+                                                ("↑", "text-success")
+                                            } else {
+                                                ("↓", "text-error")
+                                            };
+                                            html! {
+                                                <span class={classes!("text-xs", "font-medium", color)}>
+                                                    {format!("Avg flow: {} {:.0}/mo", arrow, avg)}
+                                                </span>
+                                            }
+                                        } else {
+                                            html! {}
+                                        }}
+                                    </div>
                                     <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
                                         {for grouped.iter().enumerate().map(|(idx, account)| {
                                             let (current_state, month_end_state) = stats_by_account
@@ -274,6 +295,48 @@ fn build_avg_flow_map(dashboard: &DashboardMetricsDto) -> HashMap<i32, Option<De
         .iter()
         .map(|m| (m.account_id, m.three_month_avg_net_flow))
         .collect()
+}
+
+struct SectionStats {
+    count: usize,
+    total_balance: Option<Decimal>,
+    avg_cash_flow: Option<Decimal>,
+}
+
+fn compute_section_stats(
+    accounts: &[&AccountResponse],
+    stats_by_account: &HashMap<i32, (Option<Decimal>, Option<Decimal>)>,
+    avg_flows: &HashMap<i32, Option<Decimal>>,
+) -> SectionStats {
+    let count = accounts.len();
+
+    let mut total = Decimal::ZERO;
+    let mut has_balance = false;
+    for a in accounts {
+        if let Some((Some(current), _)) = stats_by_account.get(&a.id) {
+            total += current;
+            has_balance = true;
+        }
+    }
+
+    let mut flow_sum = Decimal::ZERO;
+    let mut flow_count = 0u32;
+    for a in accounts {
+        if let Some(Some(flow)) = avg_flows.get(&a.id) {
+            flow_sum += flow;
+            flow_count += 1;
+        }
+    }
+
+    SectionStats {
+        count,
+        total_balance: if has_balance { Some(total) } else { None },
+        avg_cash_flow: if flow_count > 0 {
+            Some(flow_sum / Decimal::from(flow_count))
+        } else {
+            None
+        },
+    }
 }
 
 /// Formats optional monetary values for bubble labels.

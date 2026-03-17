@@ -77,7 +77,15 @@ pub async fn get_all_accounts_timeseries(
     start_date: NaiveDate,
     end_date: NaiveDate,
 ) -> Result<AccountStateTimeseries, String> {
-    get_all_accounts_timeseries_with_scenario(start_date, end_date, None).await
+    get_all_accounts_timeseries_full(start_date, end_date, false, None).await
+}
+
+pub async fn get_all_accounts_timeseries_with_ignored(
+    start_date: NaiveDate,
+    end_date: NaiveDate,
+    include_ignored: bool,
+) -> Result<AccountStateTimeseries, String> {
+    get_all_accounts_timeseries_full(start_date, end_date, include_ignored, None).await
 }
 
 pub async fn get_all_accounts_timeseries_with_scenario(
@@ -85,13 +93,26 @@ pub async fn get_all_accounts_timeseries_with_scenario(
     end_date: NaiveDate,
     scenario_id: Option<i32>,
 ) -> Result<AccountStateTimeseries, String> {
-    log::trace!("Fetching timeseries for all accounts from {} to {} (scenario_id={:?})",
-        start_date, end_date, scenario_id);
+    get_all_accounts_timeseries_full(start_date, end_date, false, scenario_id).await
+}
+
+pub async fn get_all_accounts_timeseries_full(
+    start_date: NaiveDate,
+    end_date: NaiveDate,
+    include_ignored: bool,
+    scenario_id: Option<i32>,
+) -> Result<AccountStateTimeseries, String> {
+    log::trace!("Fetching timeseries for all accounts from {} to {} (include_ignored={}, scenario_id={:?})",
+        start_date, end_date, include_ignored, scenario_id);
 
     let mut url = format!(
         "/accounts/timeseries?start_date={}&end_date={}",
         start_date, end_date
     );
+
+    if include_ignored {
+        url.push_str("&include_ignored=true");
+    }
 
     if let Some(sid) = scenario_id {
         url.push_str(&format!("&scenario_id={}", sid));

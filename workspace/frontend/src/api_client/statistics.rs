@@ -86,7 +86,7 @@ pub async fn get_monthly_min_balance(account_id: i32, months: u32) -> Result<Mon
 
 pub async fn get_all_accounts_statistics() -> Result<Vec<AccountStatisticsCollection>, String> {
     log::trace!("Fetching statistics for all accounts");
-    let result = api_client::get::<Vec<AccountStatisticsCollection>>("/accounts/statistics").await;
+    let result = api_client::get::<Vec<AccountStatisticsCollection>>("/accounts/statistics?include_ignored=true").await;
 
     if let Err(ref e) = result {
         log::error!("Failed to fetch all accounts statistics: {}", e);

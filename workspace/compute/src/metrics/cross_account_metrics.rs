@@ -31,13 +31,10 @@ pub async fn compute_dashboard_metrics(
 ) -> Result<DashboardMetricsDto> {
     debug!("Computing dashboard metrics");
 
-    // Fetch all accounts included in statistics
+    // Fetch all accounts (dashboard metrics always include every account)
     let all_accounts: Vec<account::Model> = account::Entity::find()
         .all(db)
-        .await?
-        .into_iter()
-        .filter(|a| a.include_in_statistics)
-        .collect();
+        .await?;
 
     trace!(account_count = all_accounts.len(), "Fetched accounts for dashboard");
 

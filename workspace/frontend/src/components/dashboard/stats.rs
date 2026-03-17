@@ -1,20 +1,20 @@
 use yew::prelude::*;
 use chrono::{Local, Duration};
 use rust_decimal::prelude::*;
-use crate::api_client::account::get_accounts;
+use crate::api_client::account::get_accounts_with_ignored;
 use crate::api_client::statistics::get_all_accounts_statistics;
-use crate::api_client::timeseries::get_all_accounts_timeseries;
+use crate::api_client::timeseries::get_all_accounts_timeseries_with_ignored;
 use crate::common::fetch_hook::use_fetch_with_refetch;
 use crate::formatting::use_currency;
 use crate::hooks::FetchState;
 
 #[function_component(Stats)]
 pub fn stats() -> Html {
-    let (accounts_state, _) = use_fetch_with_refetch(get_accounts);
+    let (accounts_state, _) = use_fetch_with_refetch(|| get_accounts_with_ignored(true));
     let (timeseries_state, _) = use_fetch_with_refetch(|| async {
         let end_date = Local::now().date_naive();
         let start_date = end_date - Duration::days(60);
-        get_all_accounts_timeseries(start_date, end_date).await
+        get_all_accounts_timeseries_with_ignored(start_date, end_date, true).await
     });
     let (statistics_state, _) = use_fetch_with_refetch(get_all_accounts_statistics);
     let currency = use_currency();
@@ -29,19 +29,15 @@ pub fn stats() -> Html {
     // Calculate net worth from latest timeseries data, split by liquidity
     let (net_worth, liquid_net_worth, non_liquid_net_worth) = match (&*accounts_state, &*timeseries_state) {
         (FetchState::Success(accounts), FetchState::Success(timeseries)) => {
-            let included_accounts: Vec<_> = accounts
-                .iter()
-                .filter(|a| a.include_in_statistics)
-                .collect();
-            let included_account_ids: Vec<i32> = included_accounts.iter().map(|a| a.id).collect();
-            let liquid_ids: std::collections::HashSet<i32> = included_accounts.iter()
+            let all_account_ids: Vec<i32> = accounts.iter().map(|a| a.id).collect();
+            let liquid_ids: std::collections::HashSet<i32> = accounts.iter()
                 .filter(|a| a.is_liquid)
                 .map(|a| a.id)
                 .collect();
 
             let mut latest_balances: std::collections::HashMap<i32, (chrono::NaiveDate, Decimal)> = std::collections::HashMap::new();
             for point in &timeseries.data_points {
-                if included_account_ids.contains(&point.account_id) {
+                if all_account_ids.contains(&point.account_id) {
                     latest_balances.entry(point.account_id)
                         .and_modify(|(date, balance)| {
                             if point.date > *date {

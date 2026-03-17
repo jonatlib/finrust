@@ -1,7 +1,7 @@
 use super::account_bubbles::AccountTypeBubbles;
 use super::activity::RecentActivity;
 use super::category_stats::CategoryStats;
-use super::chart::{BalanceBreakdownChart, NetWorthChart};
+use super::chart::{BalanceBreakdownChart, LiquidBreakdownChart, NonLiquidBreakdownChart, AllAccountsBreakdownChart, NetWorthChart};
 use super::metrics::DashboardMetrics;
 use super::stats::Stats;
 use yew::prelude::*;
@@ -35,10 +35,34 @@ pub fn dashboard() -> Html {
                     </div>
                 </div>
             </div>
-            <div class="card bg-base-100 shadow mt-6">
-                <div class="card-body">
-                    <h2 class="card-title">{"Account Balances (Breakdown)"}</h2>
-                    <BalanceBreakdownChart />
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+                <div class="card bg-base-100 shadow">
+                    <div class="card-body">
+                        <h2 class="card-title">{"All Accounts (Breakdown)"}</h2>
+                        <p class="text-sm text-gray-500">{"Includes all accounts in statistics"}</p>
+                        <BalanceBreakdownChart />
+                    </div>
+                </div>
+                <div class="card bg-base-100 shadow">
+                    <div class="card-body">
+                        <h2 class="card-title">{"Liquid Assets (Breakdown)"}</h2>
+                        <p class="text-sm text-gray-500">{"Only liquid accounts included in statistics"}</p>
+                        <LiquidBreakdownChart />
+                    </div>
+                </div>
+                <div class="card bg-base-100 shadow">
+                    <div class="card-body">
+                        <h2 class="card-title">{"Non-Liquid Assets (Breakdown)"}</h2>
+                        <p class="text-sm text-gray-500">{"Only non-liquid accounts included in statistics"}</p>
+                        <NonLiquidBreakdownChart />
+                    </div>
+                </div>
+                <div class="card bg-base-100 shadow">
+                    <div class="card-body">
+                        <h2 class="card-title">{"All Accounts (Including Hidden)"}</h2>
+                        <p class="text-sm text-gray-500">{"All accounts regardless of statistics setting"}</p>
+                        <AllAccountsBreakdownChart />
+                    </div>
                 </div>
             </div>
             <CategoryStats />

@@ -699,3 +699,278 @@ async fn test_e2e_advanced_scenario() {
     let status = resp.status_code().as_u16();
     assert!(status == 200 || status == 204);
 }
+
+/// Verifies that accounts with `include_in_statistics=false` are still included
+/// in dashboard metrics, and appear in statistics/timeseries with `include_ignored=true`.
+#[tokio::test]
+async fn test_include_ignored_accounts_in_dashboard() {
+    let app = setup_test_app().await;
+    let server = TestServer::new(app).unwrap();
+
+    eprintln!("=== Phase 1: Create accounts (visible + hidden) ===");
+
+    // Visible account (include_in_statistics=true, liquid)
+    let resp = server
+        .post("/api/v1/accounts")
+        .json(&CreateAccountRequest {
+            name: "Checking".to_string(),
+            description: None,
+            currency_code: "CZK".to_string(),
+            owner_id: 1,
+            include_in_statistics: Some(true),
+            ledger_name: None,
+            account_kind: Some(AccountKind::RealAccount),
+            target_amount: None,
+            color: None,
+            is_liquid: Some(true),
+        })
+        .await;
+    resp.assert_status(StatusCode::CREATED);
+    let body: ApiResponse<serde_json::Value> = resp.json();
+    let checking_id = body.data["id"].as_i64().unwrap() as i32;
+
+    // Hidden investment account (include_in_statistics=false, non-liquid)
+    let resp = server
+        .post("/api/v1/accounts")
+        .json(&CreateAccountRequest {
+            name: "Retirement".to_string(),
+            description: None,
+            currency_code: "CZK".to_string(),
+            owner_id: 1,
+            include_in_statistics: Some(false),
+            ledger_name: None,
+            account_kind: Some(AccountKind::Investment),
+            target_amount: None,
+            color: None,
+            is_liquid: Some(false),
+        })
+        .await;
+    resp.assert_status(StatusCode::CREATED);
+    let body: ApiResponse<serde_json::Value> = resp.json();
+    let retirement_id = body.data["id"].as_i64().unwrap() as i32;
+
+    // Hidden debt account (include_in_statistics=false, non-liquid)
+    let resp = server
+        .post("/api/v1/accounts")
+        .json(&CreateAccountRequest {
+            name: "Mortgage".to_string(),
+            description: None,
+            currency_code: "CZK".to_string(),
+            owner_id: 1,
+            include_in_statistics: Some(false),
+            ledger_name: None,
+            account_kind: Some(AccountKind::Debt),
+            target_amount: None,
+            color: None,
+            is_liquid: Some(false),
+        })
+        .await;
+    resp.assert_status(StatusCode::CREATED);
+    let body: ApiResponse<serde_json::Value> = resp.json();
+    let mortgage_id = body.data["id"].as_i64().unwrap() as i32;
+
+    eprintln!("=== Phase 2: Create transactions ===");
+
+    let tx_date = NaiveDate::from_ymd_opt(2025, 3, 1).unwrap();
+
+    // Salary into checking: +100000
+    let resp = server
+        .post("/api/v1/transactions")
+        .json(&CreateTransactionRequest {
+            name: "Salary".to_string(),
+            description: None,
+            amount: Decimal::new(100000, 0),
+            date: tx_date,
+            include_in_statistics: None,
+            target_account_id: checking_id,
+            source_account_id: None,
+            ledger_name: None,
+            linked_import_id: None,
+            category_id: None,
+            scenario_id: None,
+            is_simulated: None,
+        })
+        .await;
+    resp.assert_status(StatusCode::CREATED);
+
+    // Investment deposit: +50000 into retirement
+    let resp = server
+        .post("/api/v1/transactions")
+        .json(&CreateTransactionRequest {
+            name: "Retirement deposit".to_string(),
+            description: None,
+            amount: Decimal::new(50000, 0),
+            date: tx_date,
+            include_in_statistics: None,
+            target_account_id: retirement_id,
+            source_account_id: None,
+            ledger_name: None,
+            linked_import_id: None,
+            category_id: None,
+            scenario_id: None,
+            is_simulated: None,
+        })
+        .await;
+    resp.assert_status(StatusCode::CREATED);
+
+    // Mortgage balance: -200000
+    let resp = server
+        .post("/api/v1/transactions")
+        .json(&CreateTransactionRequest {
+            name: "Mortgage balance".to_string(),
+            description: None,
+            amount: Decimal::new(-200000, 0),
+            date: tx_date,
+            include_in_statistics: None,
+            target_account_id: mortgage_id,
+            source_account_id: None,
+            ledger_name: None,
+            linked_import_id: None,
+            category_id: None,
+            scenario_id: None,
+            is_simulated: None,
+        })
+        .await;
+    resp.assert_status(StatusCode::CREATED);
+
+    eprintln!("=== Phase 3: Verify dashboard metrics include ALL accounts ===");
+
+    let resp = server.get("/api/v1/metrics/dashboard").await;
+    resp.assert_status(StatusCode::OK);
+    let body: ApiResponse<serde_json::Value> = resp.json();
+    assert!(body.success);
+
+    // total_net_worth = 100000 (checking) + 50000 (retirement) - 200000 (mortgage) = -50000
+    assert_eq!(
+        body.data["total_net_worth"], "-50000",
+        "Dashboard total_net_worth should include hidden accounts"
+    );
+
+    // liquid_net_worth = 100000 (checking is liquid)
+    assert_eq!(
+        body.data["liquid_net_worth"], "100000",
+        "liquid_net_worth should only include liquid accounts"
+    );
+
+    // non_liquid_net_worth = 50000 (retirement) - 200000 (mortgage) = -150000
+    assert_eq!(
+        body.data["non_liquid_net_worth"], "-150000",
+        "non_liquid_net_worth should include non-liquid hidden accounts"
+    );
+
+    // All 3 accounts should have per-account metrics
+    let account_metrics = body.data["account_metrics"].as_array().unwrap();
+    assert_eq!(
+        account_metrics.len(), 3,
+        "Dashboard should have metrics for all 3 accounts regardless of include_in_statistics"
+    );
+
+    eprintln!("=== Phase 4: Verify account metrics for hidden account ===");
+
+    // Hidden account should still return metrics (no 404)
+    let resp = server
+        .get(&format!("/api/v1/accounts/{retirement_id}/metrics"))
+        .await;
+    resp.assert_status(StatusCode::OK);
+    let body: ApiResponse<serde_json::Value> = resp.json();
+    assert!(body.success);
+    assert_eq!(body.data["current_balance"], "50000");
+
+    let resp = server
+        .get(&format!("/api/v1/accounts/{mortgage_id}/metrics"))
+        .await;
+    resp.assert_status(StatusCode::OK);
+    let body: ApiResponse<serde_json::Value> = resp.json();
+    assert!(body.success);
+    assert_eq!(body.data["current_balance"], "-200000");
+
+    eprintln!("=== Phase 5: Verify statistics with include_ignored ===");
+
+    // Without include_ignored: only checking account
+    let resp = server.get("/api/v1/accounts/statistics").await;
+    resp.assert_status(StatusCode::OK);
+    let body: ApiResponse<Vec<serde_json::Value>> = resp.json();
+    assert!(body.success);
+    assert_eq!(
+        body.data.len(), 1,
+        "Without include_ignored, statistics should only return 1 account"
+    );
+
+    // With include_ignored=true: all 3 accounts
+    let resp = server
+        .get("/api/v1/accounts/statistics?include_ignored=true")
+        .await;
+    resp.assert_status(StatusCode::OK);
+    let body: ApiResponse<Vec<serde_json::Value>> = resp.json();
+    assert!(body.success);
+    assert_eq!(
+        body.data.len(), 3,
+        "With include_ignored=true, statistics should return all 3 accounts"
+    );
+
+    eprintln!("=== Phase 6: Verify timeseries with include_ignored ===");
+
+    let ts_query_excluded = TimeseriesQuery {
+        start_date: NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
+        end_date: NaiveDate::from_ymd_opt(2025, 6, 1).unwrap(),
+        include_ignored: false,
+        scenario_id: None,
+    };
+
+    // Without include_ignored: only checking account data points
+    let resp = server
+        .get("/api/v1/accounts/timeseries")
+        .add_query_params(&ts_query_excluded)
+        .await;
+    resp.assert_status(StatusCode::OK);
+    let body: ApiResponse<::common::AccountStateTimeseries> = resp.json();
+    assert!(body.success);
+    let account_ids_in_ts: std::collections::HashSet<i32> = body
+        .data
+        .data_points
+        .iter()
+        .map(|p| p.account_id)
+        .collect();
+    assert!(
+        account_ids_in_ts.contains(&checking_id),
+        "Timeseries should contain checking account"
+    );
+    assert!(
+        !account_ids_in_ts.contains(&retirement_id),
+        "Timeseries without include_ignored should NOT contain retirement"
+    );
+
+    let ts_query_all = TimeseriesQuery {
+        start_date: NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
+        end_date: NaiveDate::from_ymd_opt(2025, 6, 1).unwrap(),
+        include_ignored: true,
+        scenario_id: None,
+    };
+
+    // With include_ignored=true: all accounts
+    let resp = server
+        .get("/api/v1/accounts/timeseries")
+        .add_query_params(&ts_query_all)
+        .await;
+    resp.assert_status(StatusCode::OK);
+    let body: ApiResponse<::common::AccountStateTimeseries> = resp.json();
+    assert!(body.success);
+    let account_ids_in_ts: std::collections::HashSet<i32> = body
+        .data
+        .data_points
+        .iter()
+        .map(|p| p.account_id)
+        .collect();
+    assert!(
+        account_ids_in_ts.contains(&checking_id),
+        "Timeseries with include_ignored should contain checking"
+    );
+    assert!(
+        account_ids_in_ts.contains(&retirement_id),
+        "Timeseries with include_ignored should contain retirement"
+    );
+    assert!(
+        account_ids_in_ts.contains(&mortgage_id),
+        "Timeseries with include_ignored should contain mortgage"
+    );
+}

@@ -151,10 +151,10 @@ pub async fn get_all_accounts_timeseries(
             let all_count = accounts.len();
             let filtered_accounts: Vec<_> = accounts
                 .into_iter()
-                .filter(|a| a.include_in_statistics)
+                .filter(|a| query.include_ignored || a.include_in_statistics)
                 .collect();
             let filtered_count = filtered_accounts.len();
-            debug!("Retrieved {} total accounts, {} included in statistics", all_count, filtered_count);
+            debug!("Retrieved {} total accounts, {} after filtering (include_ignored={})", all_count, filtered_count, query.include_ignored);
             filtered_accounts
         }
         Err(db_error) => {
