@@ -6,7 +6,7 @@
 use chrono::{Datelike, Months, NaiveDate};
 use polars::prelude::*;
 use rust_decimal::Decimal;
-use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
+use sea_orm::{ColumnTrait, Condition, DatabaseConnection, EntityTrait, QueryFilter};
 use std::str::FromStr;
 use tracing::{debug, instrument, trace, warn};
 
@@ -533,15 +533,22 @@ async fn compute_debt_metrics(
 
     // Required monthly payment from recurring transactions (active only)
     let all_recurring = recurring_transaction::Entity::find()
-        .filter(recurring_transaction::Column::TargetAccountId.eq(account.id))
+        .filter(
+            Condition::any()
+                .add(recurring_transaction::Column::TargetAccountId.eq(account.id))
+                .add(recurring_transaction::Column::SourceAccountId.eq(account.id)),
+        )
         .all(db)
         .await?;
     let recurring = filter_active_recurring(&all_recurring, today);
 
     let required_monthly_payment: Decimal = recurring
         .iter()
-        .filter(|r| r.amount.is_sign_positive())
-        .map(|r| monthly_equivalent(r.amount, &r.period))
+        .filter(|r| {
+            (r.target_account_id == account.id && r.amount.is_sign_positive())
+                || (r.source_account_id == Some(account.id) && r.amount.is_sign_negative())
+        })
+        .map(|r| monthly_equivalent(r.amount.abs(), &r.period))
         .sum();
 
     let required_monthly_payment = if required_monthly_payment.is_zero() {
@@ -667,5 +674,75 @@ mod tests {
 
         let result = extract_net_flow_from_df(&df, d1, d2).unwrap();
         assert_eq!(result, Decimal::from(2500));
+    }
+
+    fn make_recurring(
+        id: i32,
+        amount: Decimal,
+        target_account_id: i32,
+        source_account_id: Option<i32>,
+    ) -> recurring_transaction::Model {
+        recurring_transaction::Model {
+            id,
+            name: format!("tx_{id}"),
+            description: None,
+            amount,
+            start_date: NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+            end_date: None,
+            period: recurring_transaction::RecurrencePeriod::Monthly,
+            include_in_statistics: true,
+            target_account_id,
+            source_account_id,
+            category_id: None,
+            ledger_name: None,
+            scenario_id: None,
+            is_simulated: false,
+        }
+    }
+
+    #[test]
+    fn test_debt_payment_filter_positive_target() {
+        let debt_account_id = 10;
+        let checking_id = 1;
+        let tx = make_recurring(1, Decimal::from(1000), debt_account_id, Some(checking_id));
+
+        let is_payment = (tx.target_account_id == debt_account_id && tx.amount.is_sign_positive())
+            || (tx.source_account_id == Some(debt_account_id) && tx.amount.is_sign_negative());
+        assert!(is_payment);
+
+        let payment_amount = monthly_equivalent(tx.amount.abs(), &tx.period);
+        assert_eq!(payment_amount, Decimal::from(1000));
+    }
+
+    #[test]
+    fn test_debt_payment_filter_negative_source() {
+        let debt_account_id = 10;
+        let checking_id = 1;
+        let tx = make_recurring(2, Decimal::from(-1000), checking_id, Some(debt_account_id));
+
+        let is_payment = (tx.target_account_id == debt_account_id && tx.amount.is_sign_positive())
+            || (tx.source_account_id == Some(debt_account_id) && tx.amount.is_sign_negative());
+        assert!(is_payment);
+
+        let payment_amount = monthly_equivalent(tx.amount.abs(), &tx.period);
+        assert_eq!(payment_amount, Decimal::from(1000));
+    }
+
+    #[test]
+    fn test_debt_payment_filter_rejects_unrelated() {
+        let debt_account_id = 10;
+        let checking_id = 1;
+
+        // Expense from checking (not linked to debt)
+        let tx = make_recurring(3, Decimal::from(-500), checking_id, None);
+        let is_payment = (tx.target_account_id == debt_account_id && tx.amount.is_sign_positive())
+            || (tx.source_account_id == Some(debt_account_id) && tx.amount.is_sign_negative());
+        assert!(!is_payment);
+
+        // Interest charge increasing debt (negative amount on debt target)
+        let tx = make_recurring(4, Decimal::from(-100), debt_account_id, None);
+        let is_payment = (tx.target_account_id == debt_account_id && tx.amount.is_sign_positive())
+            || (tx.source_account_id == Some(debt_account_id) && tx.amount.is_sign_negative());
+        assert!(!is_payment);
     }
 }

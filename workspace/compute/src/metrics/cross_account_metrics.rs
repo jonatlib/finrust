@@ -13,7 +13,7 @@
 use chrono::{Datelike, Months, NaiveDate};
 use polars::prelude::*;
 use rust_decimal::Decimal;
-use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
+use sea_orm::{ColumnTrait, Condition, DatabaseConnection, EntityTrait, QueryFilter};
 use std::collections::HashMap;
 use std::str::FromStr;
 use tracing::{debug, instrument, trace, warn};
@@ -277,15 +277,22 @@ async fn compute_debt_metrics_batch(
     let outstanding_principal = Some(current_balance.abs());
 
     let all_recurring = recurring_transaction::Entity::find()
-        .filter(recurring_transaction::Column::TargetAccountId.eq(account.id))
+        .filter(
+            Condition::any()
+                .add(recurring_transaction::Column::TargetAccountId.eq(account.id))
+                .add(recurring_transaction::Column::SourceAccountId.eq(account.id)),
+        )
         .all(db)
         .await?;
     let recurring = filter_active_recurring(&all_recurring, today);
 
     let required_monthly_payment: Decimal = recurring
         .iter()
-        .filter(|r| r.amount.is_sign_positive())
-        .map(|r| monthly_equivalent(r.amount, &r.period))
+        .filter(|r| {
+            (r.target_account_id == account.id && r.amount.is_sign_positive())
+                || (r.source_account_id == Some(account.id) && r.amount.is_sign_negative())
+        })
+        .map(|r| monthly_equivalent(r.amount.abs(), &r.period))
         .sum();
     let required_monthly_payment = if required_monthly_payment.is_zero() {
         None
@@ -660,11 +667,14 @@ pub async fn compute_dashboard_metrics(
     let monthly_debt_payments: Decimal = all_recurring
         .iter()
         .filter(|r| {
-            r.amount.is_sign_positive()
-                && r.include_in_statistics
-                && debt_account_ids.contains(&r.target_account_id)
+            r.include_in_statistics
+                && ((r.amount.is_sign_positive()
+                    && debt_account_ids.contains(&r.target_account_id))
+                    || (r.amount.is_sign_negative()
+                        && r.source_account_id
+                            .map_or(false, |sid| debt_account_ids.contains(&sid))))
         })
-        .map(|r| monthly_equivalent(r.amount, &r.period))
+        .map(|r| monthly_equivalent(r.amount.abs(), &r.period))
         .sum();
 
     let total_debt_burden = if !monthly_income.is_zero() {

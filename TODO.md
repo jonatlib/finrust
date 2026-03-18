@@ -1,5 +1,4 @@
 - Bugs:
-    - Debt burden indicator is showing zero while there are debt accounts
     - Broken categories page
         - Stats not correct - it should be sum of all transactions per year.
         - Then would be nice to show also average per year
