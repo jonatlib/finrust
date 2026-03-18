@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use chrono::NaiveDate;
 use model::entities::{recurring_transaction, recurring_transaction_instance};
 use sea_orm::{ColumnTrait, Condition, DatabaseConnection, EntityTrait, QueryFilter};
@@ -34,7 +36,6 @@ pub async fn get_recurring_transactions(
         account_id, start_date, end_date, today, scenario_context
     );
 
-    // Fetch recurring transaction definitions
     let transactions = fetch_recurring_transactions(db, account_id, start_date, end_date, scenario_context).await?;
 
     debug!(
@@ -43,21 +44,26 @@ pub async fn get_recurring_transactions(
         account_id
     );
 
+    if transactions.is_empty() {
+        return Ok(vec![]);
+    }
+
+    // Batch-fetch all instances in one query instead of N+1
+    let tx_ids: Vec<i32> = transactions.iter().map(|tx| tx.id).collect();
+    let instances_map = fetch_transaction_instances_batch(db, &tx_ids).await?;
+
     let mut result = Vec::new();
 
-    // Process each transaction
     for tx in &transactions {
         debug!(
             "Processing recurring transaction: id={}, name={}, description={:?}, amount={}, period={:?}, start_date={}",
             tx.id, tx.name, tx.description, tx.amount, tx.period, tx.start_date
         );
 
-        // Get instances and process occurrences
-        let instances = fetch_transaction_instances(db, tx.id).await?;
+        let instances = instances_map.get(&tx.id).map(|v| v.as_slice()).unwrap_or(&[]);
         let valid_dates =
-            process_transaction_occurrences(tx, &instances, start_date, end_date, today);
+            process_transaction_occurrences(tx, instances, start_date, end_date, today);
 
-        // Add valid occurrences to result
         for date in valid_dates {
             result.push((date, tx.clone()));
         }
@@ -117,25 +123,32 @@ async fn fetch_recurring_transactions(
     Ok(transactions)
 }
 
-/// Fetches instances for a recurring transaction
-/// Only fetches Paid instances - Pending and Skipped instances are not counted in balance
-async fn fetch_transaction_instances(
+/// Batch-fetches paid instances for multiple recurring transactions in one query.
+async fn fetch_transaction_instances_batch(
     db: &DatabaseConnection,
-    transaction_id: i32,
-) -> Result<Vec<recurring_transaction_instance::Model>> {
+    transaction_ids: &[i32],
+) -> Result<HashMap<i32, Vec<recurring_transaction_instance::Model>>> {
+    if transaction_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+
     let instances = recurring_transaction_instance::Entity::find()
-        .filter(recurring_transaction_instance::Column::RecurringTransactionId.eq(transaction_id))
+        .filter(recurring_transaction_instance::Column::RecurringTransactionId.is_in(transaction_ids.to_vec()))
         .filter(recurring_transaction_instance::Column::Status.eq(recurring_transaction_instance::InstanceStatus::Paid))
         .all(db)
         .await?;
 
     debug!(
-        "Found {} paid instances for recurring transaction id={}",
+        "Batch-fetched {} paid instances for {} recurring transactions",
         instances.len(),
-        transaction_id
+        transaction_ids.len()
     );
 
-    Ok(instances)
+    let mut map: HashMap<i32, Vec<recurring_transaction_instance::Model>> = HashMap::new();
+    for inst in instances {
+        map.entry(inst.recurring_transaction_id).or_default().push(inst);
+    }
+    Ok(map)
 }
 
 /// Processes occurrences for a recurring transaction

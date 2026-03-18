@@ -1,4 +1,4 @@
-use crate::schemas::{ApiResponse, AppState, ErrorResponse};
+use crate::schemas::{ApiResponse, AppState, CachedData, ErrorResponse};
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -27,6 +27,17 @@ pub async fn get_dashboard_metrics(
     State(state): State<AppState>,
 ) -> Result<Json<ApiResponse<DashboardMetricsDto>>, StatusCode> {
     trace!("Entering get_dashboard_metrics");
+
+    let cache_key = "dashboard_metrics".to_string();
+    if let Some(CachedData::Dashboard(dashboard)) = state.cache.get(&cache_key).await {
+        info!("Dashboard metrics retrieved from cache");
+        return Ok(Json(ApiResponse {
+            data: dashboard,
+            message: "Dashboard metrics retrieved from cache".to_string(),
+            success: true,
+        }));
+    }
+
     let today = chrono::Utc::now().date_naive();
     let compute = default_compute(None);
 
@@ -44,6 +55,7 @@ pub async fn get_dashboard_metrics(
                 account_count = dashboard.account_metrics.len(),
                 "Dashboard metrics computed successfully"
             );
+            state.cache.insert(cache_key, CachedData::Dashboard(dashboard.clone())).await;
             Ok(Json(ApiResponse {
                 data: dashboard,
                 message: "Dashboard metrics retrieved successfully".to_string(),

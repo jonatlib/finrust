@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use chrono::NaiveDate;
 use model::entities::{recurring_income, recurring_transaction_instance};
 use sea_orm::{ColumnTrait, Condition, DatabaseConnection, EntityTrait, QueryFilter};
@@ -34,7 +36,6 @@ pub async fn get_recurring_income(
         account_id, start_date, end_date, today, scenario_context
     );
 
-    // Fetch recurring income definitions
     let incomes = fetch_recurring_income(db, account_id, start_date, end_date, scenario_context).await?;
 
     debug!(
@@ -43,21 +44,26 @@ pub async fn get_recurring_income(
         account_id
     );
 
+    if incomes.is_empty() {
+        return Ok(vec![]);
+    }
+
+    // Batch-fetch all instances in one query instead of N+1
+    let income_ids: Vec<i32> = incomes.iter().map(|i| i.id).collect();
+    let instances_map = fetch_income_instances_batch(db, &income_ids).await?;
+
     let mut result = Vec::new();
 
-    // Process each income
     for income in &incomes {
         trace!(
             "Processing recurring income: id={}, description={:?}, amount={}, period={:?}",
             income.id, income.description, income.amount, income.period
         );
 
-        // Get instances and process occurrences
-        let instances = fetch_income_instances(db, income.id).await?;
+        let instances = instances_map.get(&income.id).map(|v| v.as_slice()).unwrap_or(&[]);
         let valid_dates =
-            process_income_occurrences(income, &instances, start_date, end_date, today);
+            process_income_occurrences(income, instances, start_date, end_date, today);
 
-        // Add valid occurrences to result
         for date in valid_dates {
             result.push((date, income.clone()));
         }
@@ -113,25 +119,32 @@ async fn fetch_recurring_income(
     Ok(incomes)
 }
 
-/// Fetches instances for a recurring income
-/// Only fetches Paid instances - Pending and Skipped instances are not counted in balance
-async fn fetch_income_instances(
+/// Batch-fetches paid instances for multiple recurring income items in one query.
+async fn fetch_income_instances_batch(
     db: &DatabaseConnection,
-    income_id: i32,
-) -> Result<Vec<recurring_transaction_instance::Model>> {
+    income_ids: &[i32],
+) -> Result<HashMap<i32, Vec<recurring_transaction_instance::Model>>> {
+    if income_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+
     let instances = recurring_transaction_instance::Entity::find()
-        .filter(recurring_transaction_instance::Column::RecurringTransactionId.eq(income_id))
+        .filter(recurring_transaction_instance::Column::RecurringTransactionId.is_in(income_ids.to_vec()))
         .filter(recurring_transaction_instance::Column::Status.eq(recurring_transaction_instance::InstanceStatus::Paid))
         .all(db)
         .await?;
 
     debug!(
-        "Found {} paid instances for recurring income id={}",
+        "Batch-fetched {} paid instances for {} recurring incomes",
         instances.len(),
-        income_id
+        income_ids.len()
     );
 
-    Ok(instances)
+    let mut map: HashMap<i32, Vec<recurring_transaction_instance::Model>> = HashMap::new();
+    for inst in instances {
+        map.entry(inst.recurring_transaction_id).or_default().push(inst);
+    }
+    Ok(map)
 }
 
 /// Processes occurrences for a recurring income

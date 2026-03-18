@@ -25,6 +25,7 @@ pub struct AppState {
 pub enum CachedData {
     Statistics(AccountStatisticsCollection),
     Timeseries(AccountStateTimeseries),
+    Dashboard(DashboardMetricsDto),
 }
 
 /// Query parameters for statistics endpoints

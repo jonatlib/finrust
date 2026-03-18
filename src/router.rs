@@ -1,5 +1,6 @@
 use crate::handlers::{
     accounts::{create_account, delete_account, get_account, get_accounts, update_account},
+    cache::flush_cache,
     categories::{
         create_category, delete_category, get_categories, get_category, get_category_children,
         get_category_stats, update_category,
@@ -38,8 +39,10 @@ use crate::handlers::{
     },
     users::{create_user, delete_user, get_user, get_users, update_user},
 };
+use crate::middleware::invalidate_cache_on_mutation;
 use crate::schemas::{ApiDoc, AppState};
 use axum::{
+    middleware as axum_middleware,
     routing::{delete, get, post, put},
     Router,
 };
@@ -76,6 +79,10 @@ fn create_router_inner(state: AppState, enable_metrics: bool) -> Router {
             .route("/metrics", get(move || async move { metric_handle.render() }));
 
         return build_routes(router)
+            .layer(axum_middleware::from_fn_with_state(
+                state.clone(),
+                invalidate_cache_on_mutation,
+            ))
             .layer(
                 ServiceBuilder::new()
                     .layer(TraceLayer::new_for_http())
@@ -88,6 +95,10 @@ fn create_router_inner(state: AppState, enable_metrics: bool) -> Router {
     }
 
     build_routes(router)
+        .layer(axum_middleware::from_fn_with_state(
+            state.clone(),
+            invalidate_cache_on_mutation,
+        ))
         .layer(
             ServiceBuilder::new()
                 .layer(TraceLayer::new_for_http())
@@ -100,6 +111,8 @@ fn create_router_inner(state: AppState, enable_metrics: bool) -> Router {
 
 fn build_routes(router: Router<AppState>) -> Router<AppState> {
     router
+        // Cache management
+        .route("/api/v1/cache/flush", post(flush_cache))
         // Account CRUD routes
         .route("/api/v1/accounts", post(create_account))
         .route("/api/v1/accounts", get(get_accounts))

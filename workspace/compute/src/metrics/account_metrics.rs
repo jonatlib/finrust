@@ -227,7 +227,7 @@ fn extract_net_flow_from_df(
 }
 
 /// Computes the population standard deviation of a slice of Decimals.
-fn compute_stddev(values: &[Decimal]) -> Option<Decimal> {
+pub fn compute_stddev(values: &[Decimal]) -> Option<Decimal> {
     if values.len() < 2 {
         return None;
     }

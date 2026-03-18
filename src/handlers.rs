@@ -1,4 +1,5 @@
 pub mod accounts;
+pub mod cache;
 pub mod categories;
 pub mod health;
 pub mod manual_account_states;

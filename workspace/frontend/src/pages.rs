@@ -1,4 +1,5 @@
 pub mod accounts;
+pub mod dashboard;
 pub mod transactions;
 pub mod transaction_edit;
 pub mod manual_states;

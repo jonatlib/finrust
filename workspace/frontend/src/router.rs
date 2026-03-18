@@ -3,12 +3,12 @@ use yew_router::prelude::*;
 
 use crate::components::accounts::AccountEdit;
 use crate::components::budgets::Budgets;
-use crate::components::dashboard::Dashboard;
 use crate::components::forecast::Forecast;
 use crate::components::layout::layout::Layout;
 use crate::components::reports::Reports;
 use crate::components::settings::Settings;
 use crate::pages::accounts::AccountsPage;
+use crate::pages::dashboard::DashboardPage;
 use crate::pages::transactions::TransactionsPage;
 use crate::pages::transaction_edit::TransactionEditPage;
 use crate::pages::manual_states::ManualStatesPage;
@@ -67,7 +67,7 @@ pub fn switch(routes: Route) -> Html {
     match routes {
         Route::Home | Route::Dashboard => {
             log::trace!("Rendering Dashboard page");
-            html! { <Layout title="Dashboard"><Dashboard /></Layout> }
+            html! { <DashboardPage /> }
         }
         Route::Accounts => {
             log::trace!("Rendering Accounts page");

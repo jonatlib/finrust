@@ -1,9 +1,4 @@
 - Bugs:
-    - Add cache flush button to frontend
-        - Also cach is sometimes too agressive even when i changes manual account state it didnt update the cache
-        - On the other hands some things don't take benefit of caching, like when hitting the page without any change in
-          the same day, it could be cached.
-            - But then any change shuold flush the cache.
     - Debt burden indicator is showing zero while there are debt accounts
     - Broken categories page
         - Stats not correct - it should be sum of all transactions per year.

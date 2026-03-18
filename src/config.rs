@@ -37,9 +37,9 @@ pub async fn initialize_app_state_with_url(database_url: &str) -> Result<AppStat
     trace!("Initializing application cache");
     let cache = Cache::builder()
         .max_capacity(1000)
-        .time_to_live(Duration::from_secs(5)) // 5 minutes
+        .time_to_live(Duration::from_secs(86400)) // 24 hours; invalidated on mutations
         .build();
-    debug!("Cache initialized with max_capacity=1000, ttl=5s");
+    debug!("Cache initialized with max_capacity=1000, ttl=24h");
 
     let app_state = AppState { db, cache };
     info!("Application state initialized successfully");
