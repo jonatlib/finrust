@@ -7,9 +7,6 @@
     - New categories per account
 
 
-- import - add extra yaml file, which will map account types etc and help with actual improt being always the same
-
-
 - show per account current state, and state at the end of current month.
 
 
