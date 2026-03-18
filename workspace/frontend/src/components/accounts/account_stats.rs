@@ -1,5 +1,6 @@
 use crate::api_client::statistics::get_account_statistics_with_ignored;
 use crate::common::fetch_hook::use_fetch_with_refetch;
+use crate::formatting::fmt_amount_opt;
 use crate::hooks::FetchState;
 use yew::prelude::*;
 
@@ -48,7 +49,7 @@ pub fn account_stats(props: &Props) -> Html {
                                     <div class="stat bg-base-200 rounded-lg">
                                         <div class="stat-title">{"Current Balance"}</div>
                                         <div class={classes!("stat-value", "text-lg")}>
-                                            {format_decimal_option(stats.current_state)}
+                                            {fmt_amount_opt(stats.current_state)}
                                         </div>
                                         <div class="stat-desc">{"As of today"}</div>
                                     </div>
@@ -56,7 +57,7 @@ pub fn account_stats(props: &Props) -> Html {
                                     <div class="stat bg-base-200 rounded-lg">
                                         <div class="stat-title">{"End of Month"}</div>
                                         <div class={classes!("stat-value", "text-lg")}>
-                                            {format_decimal_option(stats.end_of_current_month_state)}
+                                            {fmt_amount_opt(stats.end_of_current_month_state)}
                                         </div>
                                         <div class="stat-desc">{"Projected balance at month end"}</div>
                                     </div>
@@ -64,7 +65,7 @@ pub fn account_stats(props: &Props) -> Html {
                                     <div class="stat bg-base-200 rounded-lg">
                                         <div class="stat-title">{"Upcoming Expenses"}</div>
                                         <div class="stat-value text-lg text-warning">
-                                            {format_decimal_option(stats.upcoming_expenses)}
+                                            {fmt_amount_opt(stats.upcoming_expenses)}
                                         </div>
                                         <div class="stat-desc">{"Remaining this period"}</div>
                                     </div>
@@ -72,7 +73,7 @@ pub fn account_stats(props: &Props) -> Html {
                                     <div class="stat bg-base-200 rounded-lg">
                                         <div class="stat-title">{"Avg. Monthly Income"}</div>
                                         <div class="stat-value text-lg text-success">
-                                            {format_decimal_option(stats.average_income)}
+                                            {fmt_amount_opt(stats.average_income)}
                                         </div>
                                         <div class="stat-desc">{"Total income averaged per month"}</div>
                                     </div>
@@ -80,7 +81,7 @@ pub fn account_stats(props: &Props) -> Html {
                                     <div class="stat bg-base-200 rounded-lg">
                                         <div class="stat-title">{"Avg. Monthly Expense"}</div>
                                         <div class="stat-value text-lg text-error">
-                                            {format_decimal_option(stats.average_expense)}
+                                            {fmt_amount_opt(stats.average_expense)}
                                         </div>
                                         <div class="stat-desc">{"Total expense averaged per month"}</div>
                                     </div>
@@ -88,7 +89,7 @@ pub fn account_stats(props: &Props) -> Html {
                                     <div class="stat bg-base-200 rounded-lg">
                                         <div class="stat-title">{"Monthly Net Flow"}</div>
                                         <div class={net_flow_class}>
-                                            {format_decimal_option(net_flow)}
+                                            {fmt_amount_opt(net_flow)}
                                         </div>
                                         <div class="stat-desc">{"Avg. income minus expense"}</div>
                                     </div>
@@ -111,9 +112,3 @@ pub fn account_stats(props: &Props) -> Html {
     }
 }
 
-fn format_decimal_option(value: Option<rust_decimal::Decimal>) -> String {
-    match value {
-        Some(d) => format!("{:.1}", d),
-        None => "N/A".to_string(),
-    }
-}

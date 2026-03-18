@@ -7,6 +7,7 @@ use crate::api_client::category::get_categories;
 use crate::api_client::scenario::get_scenarios;
 use crate::common::fetch_hook::use_fetch_with_refetch;
 use crate::components::common::pagination::Pagination;
+use crate::formatting::fmt_amount;
 use crate::hooks::FetchState;
 use super::transaction_modal::TransactionModal;
 use crate::Route;
@@ -498,9 +499,9 @@ fn render_transaction_row(transaction: &TransactionResponse, account_map: &HashM
     let transaction_id = transaction.id;
     let format_amount = |amount: rust_decimal::Decimal| -> String {
         if amount >= rust_decimal::Decimal::ZERO {
-            format!("+{:.1}", amount)
+            format!("+{}", fmt_amount(amount))
         } else {
-            format!("{:.1}", amount)
+            fmt_amount(amount)
         }
     };
 

@@ -1,5 +1,5 @@
 use yew::prelude::*;
-use crate::formatting::use_currency;
+use crate::formatting::{fmt_amount_f64, use_currency};
 use crate::mock_data::{get_mock_transactions, get_mock_categories, get_mock_accounts};
 use std::collections::HashMap;
 
@@ -21,7 +21,7 @@ pub fn transaction_table() -> Html {
     let format_currency = {
         let currency = currency.clone();
         move |amount: f64| -> String {
-            format!("{:.1} {}", amount.abs(), currency)
+            format!("{} {}", fmt_amount_f64(amount.abs()), currency)
         }
     };
 

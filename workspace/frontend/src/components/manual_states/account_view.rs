@@ -1,6 +1,7 @@
 use yew::prelude::*;
 use crate::api_client::manual_account_state::{get_account_manual_states, ManualAccountStateResponse};
 use crate::common::fetch_hook::use_fetch_with_refetch;
+use crate::formatting::fmt_amount;
 use crate::hooks::FetchState;
 
 #[derive(Properties, PartialEq)]
@@ -56,7 +57,7 @@ pub fn manual_states_account_view(props: &Props) -> Html {
                                                 html! {
                                                     <tr key={state.id}>
                                                         <td>{state.date.to_string()}</td>
-                                                        <td class="text-right font-mono">{format_amount(state.amount)}</td>
+                                                        <td class="text-right font-mono">{fmt_amount(state.amount)}</td>
                                                     </tr>
                                                 }
                                             }).collect::<Html>()}
@@ -73,6 +74,3 @@ pub fn manual_states_account_view(props: &Props) -> Html {
     }
 }
 
-fn format_amount(amount: rust_decimal::Decimal) -> String {
-    format!("{:.1}", amount)
-}

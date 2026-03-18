@@ -6,7 +6,7 @@ use crate::api_client::category::get_categories;
 use crate::api_client::account::get_accounts;
 use crate::common::fetch_hook::use_fetch_with_refetch;
 use crate::components::common::pagination::Pagination;
-use crate::formatting::use_currency;
+use crate::formatting::{fmt_amount_str, use_currency};
 use crate::hooks::FetchState;
 use crate::router::Route;
 
@@ -121,7 +121,7 @@ pub fn recurring_list(props: &RecurringListProps) -> Html {
         let currency = currency.clone();
         move |amount: &str| -> String {
             match amount.parse::<f64>() {
-                Ok(val) => format!("{:.1} {}", val.abs(), currency),
+                Ok(_) => format!("{} {}", fmt_amount_str(amount), currency),
                 Err(_) => amount.to_string(),
             }
         }

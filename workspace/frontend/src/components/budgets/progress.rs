@@ -1,5 +1,5 @@
 use yew::prelude::*;
-use crate::formatting::use_currency;
+use crate::formatting::{fmt_amount_f64, use_currency};
 
 #[derive(Properties, PartialEq)]
 pub struct BudgetProps {
@@ -29,7 +29,7 @@ pub fn budget_progress(props: &BudgetProps) -> Html {
         <div class="mb-4">
             <div class="flex justify-between mb-1">
                 <span class="text-sm font-medium">{&props.category}</span>
-                <span class="text-sm text-gray-500">{format!("{:.1} / {:.1} {}", props.spent, props.limit, currency)}</span>
+                <span class="text-sm text-gray-500">{format!("{} / {} {}", fmt_amount_f64(props.spent), fmt_amount_f64(props.limit), currency)}</span>
             </div>
             <progress class={classes!("progress", "w-full", color_class)} value={percentage.to_string()} max="100"></progress>
         </div>

@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use crate::api_client::manual_account_state::{get_all_manual_states, delete_manual_state, ManualAccountStateResponse};
 use crate::api_client::account::get_accounts;
 use crate::common::fetch_hook::use_fetch_with_refetch;
+use crate::formatting::fmt_amount;
 use crate::hooks::FetchState;
 use super::modal::ManualStateModal;
 
@@ -259,7 +260,7 @@ pub fn manual_states() -> Html {
                                                         <td>
                                                             <span class="badge badge-sm badge-ghost">{account_name}</span>
                                                         </td>
-                                                        <td class="font-mono font-semibold text-lg">{format!("{:.1}", state.amount)}</td>
+                                                        <td class="font-mono font-semibold text-lg">{fmt_amount(state.amount)}</td>
                                                         <td>
                                                             <div class="flex gap-2">
                                                                 <button

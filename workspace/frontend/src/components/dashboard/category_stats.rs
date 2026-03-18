@@ -1,6 +1,7 @@
 use yew::prelude::*;
 use crate::api_client::category::{get_category_stats, CategoryStatistics};
 use crate::common::fetch_hook::use_fetch_with_refetch;
+use crate::formatting::fmt_amount_f64;
 use crate::hooks::FetchState;
 use chrono::{Local, Datelike};
 
@@ -85,7 +86,7 @@ pub fn category_stats() -> Html {
                                                             </td>
                                                             <td class="text-right">{stat.transaction_count}</td>
                                                             <td class={classes!("text-right", "font-mono", amount_class)}>
-                                                                {format!("{:.1}", amount)}
+                                                                {fmt_amount_f64(amount)}
                                                             </td>
                                                         </tr>
                                                     }

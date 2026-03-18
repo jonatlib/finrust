@@ -4,6 +4,7 @@ use crate::api_client::category::get_categories;
 use crate::api_client::scenario::get_scenarios;
 use crate::api_client::transaction::{delete_transaction, get_transaction};
 use crate::common::fetch_hook::use_fetch_with_refetch;
+use crate::formatting::fmt_amount;
 use crate::hooks::FetchState;
 use crate::Route;
 use std::collections::HashMap;
@@ -276,7 +277,7 @@ pub fn transaction_edit(props: &Props) -> Html {
                                             <div>
                                                 <div class="text-sm text-gray-500">{"Amount"}</div>
                                                 <div class={classes!("text-xl", "font-bold", amount_class)}>
-                                                    {format!("{:.1}", transaction.amount)}
+                                                    {fmt_amount(transaction.amount)}
                                                 </div>
                                             </div>
                                             <div>

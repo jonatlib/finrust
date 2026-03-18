@@ -1,6 +1,7 @@
 use yew::prelude::*;
 use crate::api_client::account::AccountResponse;
 use crate::api_client::statistics::{AccountStatistics, AccountStatisticsCollection};
+use crate::formatting::fmt_amount_f64;
 use crate::hooks::FetchState;
 
 #[derive(Properties, PartialEq)]
@@ -53,14 +54,14 @@ fn render_goal_progress(account: &AccountResponse, stats: Option<&AccountStatist
                                     <div class="stat bg-base-200 rounded-lg">
                                         <div class="stat-title">{"Current Amount"}</div>
                                         <div class="stat-value text-2xl text-primary">
-                                            {format!("{:.1}", current)}
+                                            {fmt_amount_f64(current)}
                                         </div>
                                         <div class="stat-desc">{&account.currency_code}</div>
                                     </div>
                                     <div class="stat bg-base-200 rounded-lg">
                                         <div class="stat-title">{"Target Amount"}</div>
                                         <div class="stat-value text-2xl">
-                                            {format!("{:.1}", target)}
+                                            {fmt_amount_f64(target)}
                                         </div>
                                         <div class="stat-desc">{&account.currency_code}</div>
                                     </div>
@@ -68,7 +69,7 @@ fn render_goal_progress(account: &AccountResponse, stats: Option<&AccountStatist
                                         <div class="stat-title">{"Amount to Go"}</div>
                                         <div class={classes!("stat-value", "text-2xl", if remaining <= 0.0 { "text-success" } else { "text-warning" })}>
                                             {if remaining > 0.0 {
-                                                format!("{:.1}", remaining)
+                                                fmt_amount_f64(remaining)
                                             } else {
                                                 "Goal Reached!".to_string()
                                             }}

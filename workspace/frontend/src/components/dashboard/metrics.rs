@@ -1,25 +1,14 @@
 use crate::api_client::account::{get_accounts_with_ignored, AccountResponse};
 use crate::api_client::metrics::get_dashboard_metrics;
 use crate::common::fetch_hook::use_fetch_with_refetch;
+use crate::formatting::{fmt_amount, fmt_amount_opt};
 use crate::hooks::FetchState;
 use common::metrics::{AccountKindMetricsDto, DashboardMetricsDto};
 use rust_decimal::Decimal;
 use std::collections::HashMap;
 use yew::prelude::*;
 
-fn fmt_currency(amount: Decimal) -> String {
-    format!("{:.1}", amount)
-}
-
-/// Formats an optional Decimal as currency or "N/A".
-fn fmt_opt(value: Option<Decimal>) -> String {
-    match value {
-        Some(d) => fmt_currency(d),
-        None => "N/A".to_string(),
-    }
-}
-
-/// Formats a Decimal as a percentage (assumes the value is already 0–1 scale).
+/// Formats a Decimal as a percentage (assumes the value is already 0-1 scale).
 fn fmt_percent(value: Option<Decimal>) -> String {
     match value {
         Some(d) => {
@@ -149,44 +138,44 @@ fn render_dashboard(d: &DashboardMetricsDto, accounts: &[AccountResponse]) -> Ht
                     <div class="stat bg-base-200 rounded-lg p-3">
                         <div class="stat-title text-xs">{"Liquid Assets"}</div>
                         <div class="stat-value text-lg text-success">
-                            {fmt_currency(balance_stats.liquid_assets)}
+                            {fmt_amount(balance_stats.liquid_assets)}
                         </div>
                         <div class="stat-desc text-xs">{format!("{} accounts", balance_stats.liquid_count)}</div>
                     </div>
                     <div class="stat bg-base-200 rounded-lg p-3">
                         <div class="stat-title text-xs">{"Non-Liquid Assets"}</div>
                         <div class="stat-value text-lg text-secondary">
-                            {fmt_currency(balance_stats.non_liquid_assets)}
+                            {fmt_amount(balance_stats.non_liquid_assets)}
                         </div>
                         <div class="stat-desc text-xs">{format!("{} accounts", balance_stats.non_liquid_count)}</div>
                     </div>
                     <div class="stat bg-base-200 rounded-lg p-3">
                         <div class="stat-title text-xs">{"Investments"}</div>
                         <div class="stat-value text-lg text-primary">
-                            {fmt_currency(balance_stats.investment_balance)}
+                            {fmt_amount(balance_stats.investment_balance)}
                         </div>
                         <div class="stat-desc text-xs">
-                            {"Gain: "}{fmt_opt(balance_stats.investment_gain)}
+                            {"Gain: "}{fmt_amount_opt(balance_stats.investment_gain)}
                         </div>
                     </div>
                     <div class="stat bg-base-200 rounded-lg p-3">
                         <div class="stat-title text-xs">{"Equity"}</div>
                         <div class="stat-value text-lg text-accent">
-                            {fmt_currency(balance_stats.equity_balance)}
+                            {fmt_amount(balance_stats.equity_balance)}
                         </div>
                         <div class="stat-desc text-xs">{format!("{} accounts", balance_stats.equity_count)}</div>
                     </div>
                     <div class="stat bg-base-200 rounded-lg p-3">
                         <div class="stat-title text-xs">{"Total Debt"}</div>
                         <div class={classes!("stat-value", "text-lg", if balance_stats.debt_balance != Decimal::ZERO { "text-error" } else { "text-success" })}>
-                            {fmt_currency(balance_stats.debt_balance)}
+                            {fmt_amount(balance_stats.debt_balance)}
                         </div>
                         <div class="stat-desc text-xs">{format!("{} accounts", balance_stats.debt_count)}</div>
                     </div>
                     <div class="stat bg-base-200 rounded-lg p-3">
                         <div class="stat-title text-xs">{"House / Property"}</div>
                         <div class="stat-value text-lg">
-                            {fmt_currency(balance_stats.house_balance)}
+                            {fmt_amount(balance_stats.house_balance)}
                         </div>
                         <div class="stat-desc text-xs">{format!("{} accounts", balance_stats.house_count)}</div>
                     </div>
@@ -199,7 +188,7 @@ fn render_dashboard(d: &DashboardMetricsDto, accounts: &[AccountResponse]) -> Ht
                     <div class="stat bg-base-200 rounded-lg p-3">
                         <div class="stat-title text-xs">{"Net Worth"}</div>
                         <div class={classes!("stat-value", "text-lg", net_worth_class)}>
-                            {fmt_currency(d.total_net_worth)}
+                            {fmt_amount(d.total_net_worth)}
                         </div>
                         <div class="stat-desc text-xs">{"Assets minus debts"}</div>
                     </div>
@@ -208,7 +197,7 @@ fn render_dashboard(d: &DashboardMetricsDto, accounts: &[AccountResponse]) -> Ht
                     <div class="stat bg-base-200 rounded-lg p-3">
                         <div class="stat-title text-xs">{"Liquid Net Worth"}</div>
                         <div class={classes!("stat-value", "text-lg", liquid_class)}>
-                            {fmt_currency(d.liquid_net_worth)}
+                            {fmt_amount(d.liquid_net_worth)}
                         </div>
                         <div class="stat-desc text-xs">{"Cash & liquid assets"}</div>
                     </div>
@@ -217,7 +206,7 @@ fn render_dashboard(d: &DashboardMetricsDto, accounts: &[AccountResponse]) -> Ht
                     <div class="stat bg-base-200 rounded-lg p-3">
                         <div class="stat-title text-xs">{"Non-Liquid"}</div>
                         <div class="stat-value text-lg text-secondary">
-                            {fmt_currency(d.non_liquid_net_worth)}
+                            {fmt_amount(d.non_liquid_net_worth)}
                         </div>
                         <div class="stat-desc text-xs">{"House, equity, etc."}</div>
                     </div>
@@ -226,7 +215,7 @@ fn render_dashboard(d: &DashboardMetricsDto, accounts: &[AccountResponse]) -> Ht
                     <div class="stat bg-base-200 rounded-lg p-3">
                         <div class="stat-title text-xs">{"Essential Burn"}</div>
                         <div class="stat-value text-lg text-warning">
-                            {fmt_currency(d.essential_burn_rate)}
+                            {fmt_amount(d.essential_burn_rate)}
                         </div>
                         <div class="stat-desc text-xs">{"Monthly essentials"}</div>
                     </div>
@@ -235,7 +224,7 @@ fn render_dashboard(d: &DashboardMetricsDto, accounts: &[AccountResponse]) -> Ht
                     <div class="stat bg-base-200 rounded-lg p-3">
                         <div class="stat-title text-xs">{"Free Cashflow"}</div>
                         <div class={classes!("stat-value", "text-lg", free_cf_class)}>
-                            {fmt_currency(d.free_cashflow)}
+                            {fmt_amount(d.free_cashflow)}
                         </div>
                         <div class="stat-desc text-xs">{"Income minus expenses"}</div>
                     </div>
@@ -256,7 +245,7 @@ fn render_dashboard(d: &DashboardMetricsDto, accounts: &[AccountResponse]) -> Ht
                     <div class="stat bg-base-200 rounded-lg p-3">
                         <div class="stat-title text-xs">{"Goal Engine"}</div>
                         <div class="stat-value text-lg text-primary">
-                            {fmt_currency(d.goal_engine)}
+                            {fmt_amount(d.goal_engine)}
                         </div>
                         <div class="stat-desc text-xs">{"Monthly wealth building"}</div>
                     </div>
@@ -283,7 +272,7 @@ fn render_dashboard(d: &DashboardMetricsDto, accounts: &[AccountResponse]) -> Ht
                     <div class="stat bg-base-200 rounded-lg p-3">
                         <div class="stat-title text-xs">{"Sweep Potential"}</div>
                         <div class="stat-value text-lg text-accent">
-                            {fmt_opt(sweep_potential)}
+                            {fmt_amount_opt(sweep_potential)}
                         </div>
                         <div class="stat-desc text-xs">{"Main account surplus"}</div>
                     </div>
@@ -292,7 +281,7 @@ fn render_dashboard(d: &DashboardMetricsDto, accounts: &[AccountResponse]) -> Ht
                     <div class="stat bg-base-200 rounded-lg p-3">
                         <div class="stat-title text-xs">{"Debt Outstanding"}</div>
                         <div class={classes!("stat-value", "text-lg", if has_debt { "text-error" } else { "text-success" })}>
-                            {if has_debt { fmt_currency(total_outstanding) } else { "None".to_string() }}
+                            {if has_debt { fmt_amount(total_outstanding) } else { "None".to_string() }}
                         </div>
                         <div class="stat-desc text-xs">
                             {if has_debt {
@@ -325,7 +314,7 @@ fn render_dashboard(d: &DashboardMetricsDto, accounts: &[AccountResponse]) -> Ht
                     <div class="stat bg-base-200 rounded-lg p-3">
                         <div class="stat-title text-xs">{"Full Burn Rate"}</div>
                         <div class="stat-value text-lg text-error">
-                            {fmt_currency(d.full_burn_rate)}
+                            {fmt_amount(d.full_burn_rate)}
                         </div>
                         <div class="stat-desc text-xs">{"All monthly expenses"}</div>
                     </div>

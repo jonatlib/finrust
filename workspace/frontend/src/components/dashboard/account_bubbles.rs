@@ -2,6 +2,7 @@ use crate::api_client::account::{get_accounts_with_ignored, AccountKind, Account
 use crate::api_client::metrics::get_dashboard_metrics;
 use crate::api_client::statistics::{get_all_accounts_statistics, AccountStatisticsCollection};
 use crate::common::fetch_hook::use_fetch_with_refetch;
+use crate::formatting::{fmt_amount_opt, fmt_amount_f64_int};
 use crate::hooks::FetchState;
 use crate::router::Route;
 use common::metrics::DashboardMetricsDto;
@@ -71,7 +72,7 @@ pub fn account_type_bubbles() -> Html {
                                         <h3 class="text-sm font-semibold">{kind.display_name()}</h3>
                                         <span class="text-xs opacity-70">{format!("{} accounts", section_stats.count)}</span>
                                         <span class="text-xs font-medium">
-                                            {"Total: "}{format_decimal_option(section_stats.total_balance)}
+                                            {"Total: "}{fmt_amount_opt(section_stats.total_balance)}
                                         </span>
                                         {if let Some(avg) = section_stats.avg_cash_flow {
                                             let (arrow, color) = if avg >= Decimal::ZERO {
@@ -81,7 +82,7 @@ pub fn account_type_bubbles() -> Html {
                                             };
                                             html! {
                                                 <span class={classes!("text-xs", "font-medium", color)}>
-                                                    {format!("Avg flow: {} {:.0}/mo", arrow, avg)}
+                                                    {format!("Avg flow: {} {}/mo", arrow, fmt_amount_f64_int(avg.to_string().parse::<f64>().unwrap_or(0.0)))}
                                                 </span>
                                             }
                                         } else {
@@ -128,12 +129,12 @@ pub fn account_type_bubbles() -> Html {
                                                         </div>
 
                                                         <div class="text-base font-bold">
-                                                            {format_decimal_option(current_state)}
+                                                            {fmt_amount_opt(current_state)}
                                                         </div>
 
                                                         <div class="text-xs opacity-80 leading-tight">
                                                             {"End of month: "}
-                                                            {format_decimal_option(month_end_state)}
+                                                            {fmt_amount_opt(month_end_state)}
                                                         </div>
 
                                                         {render_avg_flow_badge(avg_flow)}
@@ -168,7 +169,7 @@ fn render_avg_flow_badge(avg_flow: Option<Decimal>) -> Html {
             };
             html! {
                 <div class={classes!("text-xs", "font-medium", color)} title="3-month average net flow">
-                    {format!("{} {:.0}/mo avg", arrow, flow)}
+                    {format!("{} {}/mo avg", arrow, fmt_amount_f64_int(flow.to_string().parse::<f64>().unwrap_or(0.0)))}
                 </div>
             }
         }
@@ -339,10 +340,3 @@ fn compute_section_stats(
     }
 }
 
-/// Formats optional monetary values for bubble labels.
-fn format_decimal_option(value: Option<Decimal>) -> String {
-    match value {
-        Some(decimal) => format!("{:.1}", decimal),
-        None => "N/A".to_string(),
-    }
-}

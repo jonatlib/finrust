@@ -1,5 +1,6 @@
 use crate::api_client::metrics::get_account_metrics;
 use crate::common::fetch_hook::use_fetch_with_refetch;
+use crate::formatting::{fmt_amount, fmt_amount_opt};
 use crate::hooks::FetchState;
 use common::metrics::{AccountKindMetricsDto, AccountMetricsDto};
 use rust_decimal::Decimal;
@@ -44,17 +45,6 @@ pub fn account_metrics_component(props: &Props) -> Html {
     }
 }
 
-fn fmt_currency(amount: Decimal) -> String {
-    format!("{:.1}", amount)
-}
-
-fn fmt_opt(value: Option<Decimal>) -> String {
-    match value {
-        Some(d) => fmt_currency(d),
-        None => "N/A".to_string(),
-    }
-}
-
 fn fmt_percent(value: Option<Decimal>) -> String {
     match value {
         Some(d) => {
@@ -87,7 +77,7 @@ fn render_account_metrics(m: &AccountMetricsDto) -> Html {
                 <div class="stat bg-base-200 rounded-lg p-3">
                     <div class="stat-title text-xs">{"Current Balance"}</div>
                     <div class={classes!("stat-value", "text-lg", balance_class)}>
-                        {fmt_currency(m.current_balance)}
+                        {fmt_amount(m.current_balance)}
                     </div>
                 </div>
 
@@ -95,7 +85,7 @@ fn render_account_metrics(m: &AccountMetricsDto) -> Html {
                     html! {
                         <div class="stat bg-base-200 rounded-lg p-3">
                             <div class="stat-title text-xs">{"Target Balance"}</div>
-                            <div class="stat-value text-lg">{fmt_currency(target)}</div>
+                            <div class="stat-value text-lg">{fmt_amount(target)}</div>
                         </div>
                     }
                 } else {
@@ -119,7 +109,7 @@ fn render_account_metrics(m: &AccountMetricsDto) -> Html {
                 <div class="stat bg-base-200 rounded-lg p-3">
                     <div class="stat-title text-xs">{"Monthly Net Flow"}</div>
                     <div class={classes!("stat-value", "text-lg", flow_class(m.monthly_net_flow))}>
-                        {fmt_opt(m.monthly_net_flow)}
+                        {fmt_amount_opt(m.monthly_net_flow)}
                     </div>
                     <div class="stat-desc text-xs">{"This month"}</div>
                 </div>
@@ -127,7 +117,7 @@ fn render_account_metrics(m: &AccountMetricsDto) -> Html {
                 <div class="stat bg-base-200 rounded-lg p-3">
                     <div class="stat-title text-xs">{"3M Avg Net Flow"}</div>
                     <div class={classes!("stat-value", "text-lg", flow_class(m.three_month_avg_net_flow))}>
-                        {fmt_opt(m.three_month_avg_net_flow)}
+                        {fmt_amount_opt(m.three_month_avg_net_flow)}
                     </div>
                     <div class="stat-desc text-xs">{"Rolling 3-month average"}</div>
                 </div>
@@ -135,7 +125,7 @@ fn render_account_metrics(m: &AccountMetricsDto) -> Html {
                 <div class="stat bg-base-200 rounded-lg p-3">
                     <div class="stat-title text-xs">{"Flow Volatility"}</div>
                     <div class="stat-value text-lg">
-                        {fmt_opt(m.flow_volatility)}
+                        {fmt_amount_opt(m.flow_volatility)}
                     </div>
                     <div class="stat-desc text-xs">{"Std deviation of net flow"}</div>
                 </div>
@@ -160,7 +150,7 @@ fn render_kind_metrics(kind: &AccountKindMetricsDto) -> Html {
                     <div class="stat bg-primary/10 rounded-lg p-3">
                         <div class="stat-title text-xs">{"Operating Buffer"}</div>
                         <div class={classes!("stat-value", "text-lg", buffer_color(op.operating_buffer))}>
-                            {fmt_opt(op.operating_buffer)}
+                            {fmt_amount_opt(op.operating_buffer)}
                         </div>
                         <div class="stat-desc text-xs">{"Balance above target"}</div>
                     </div>
@@ -168,7 +158,7 @@ fn render_kind_metrics(kind: &AccountKindMetricsDto) -> Html {
                     <div class="stat bg-primary/10 rounded-lg p-3">
                         <div class="stat-title text-xs">{"Sweep Potential"}</div>
                         <div class="stat-value text-lg text-accent">
-                            {fmt_opt(op.sweep_potential)}
+                            {fmt_amount_opt(op.sweep_potential)}
                         </div>
                         <div class="stat-desc text-xs">{"Safe to sweep out"}</div>
                     </div>
@@ -229,7 +219,7 @@ fn render_kind_metrics(kind: &AccountKindMetricsDto) -> Html {
                     <div class="stat bg-success/10 rounded-lg p-3">
                         <div class="stat-title text-xs">{"Net Contributions"}</div>
                         <div class="stat-value text-lg">
-                            {fmt_opt(inv.net_contributions)}
+                            {fmt_amount_opt(inv.net_contributions)}
                         </div>
                         <div class="stat-desc text-xs">{"Total invested"}</div>
                     </div>
@@ -237,7 +227,7 @@ fn render_kind_metrics(kind: &AccountKindMetricsDto) -> Html {
                     <div class="stat bg-success/10 rounded-lg p-3">
                         <div class="stat-title text-xs">{"Gain / Loss"}</div>
                         <div class={classes!("stat-value", "text-lg", gain_color(inv.gain_loss_absolute))}>
-                            {fmt_opt(inv.gain_loss_absolute)}
+                            {fmt_amount_opt(inv.gain_loss_absolute)}
                         </div>
                         <div class="stat-desc text-xs">{"Absolute"}</div>
                     </div>
@@ -259,14 +249,14 @@ fn render_kind_metrics(kind: &AccountKindMetricsDto) -> Html {
                     <div class="stat bg-error/10 rounded-lg p-3">
                         <div class="stat-title text-xs">{"Outstanding Principal"}</div>
                         <div class="stat-value text-lg text-error">
-                            {fmt_opt(debt.outstanding_principal)}
+                            {fmt_amount_opt(debt.outstanding_principal)}
                         </div>
                     </div>
 
                     <div class="stat bg-error/10 rounded-lg p-3">
                         <div class="stat-title text-xs">{"Monthly Payment"}</div>
                         <div class="stat-value text-lg">
-                            {fmt_opt(debt.required_monthly_payment)}
+                            {fmt_amount_opt(debt.required_monthly_payment)}
                         </div>
                         <div class="stat-desc text-xs">{"Required payment"}</div>
                     </div>

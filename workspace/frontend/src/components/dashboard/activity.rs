@@ -3,7 +3,7 @@ use rust_decimal::prelude::*;
 use chrono::Local;
 use crate::api_client::transaction::{get_transactions, TransactionFilters};
 use crate::common::fetch_hook::use_fetch_with_refetch;
-use crate::formatting::use_currency;
+use crate::formatting::{fmt_amount, use_currency};
 use crate::hooks::FetchState;
 
 #[function_component(RecentActivity)]
@@ -18,9 +18,9 @@ pub fn recent_activity() -> Html {
         let currency = currency.clone();
         move |amount: Decimal| -> String {
             if amount >= Decimal::ZERO {
-                format!("+{:.1} {}", amount, currency)
+                format!("+{} {}", fmt_amount(amount), currency)
             } else {
-                format!("-{:.1} {}", amount.abs(), currency)
+                format!("-{} {}", fmt_amount(amount.abs()), currency)
             }
         }
     };

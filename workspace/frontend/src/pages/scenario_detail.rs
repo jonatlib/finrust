@@ -12,6 +12,7 @@ use crate::api_client::recurring_transaction::{get_recurring_transactions, Recur
 use crate::api_client::timeseries::get_all_accounts_timeseries_with_scenario;
 use crate::common::fetch_hook::use_fetch_with_refetch;
 use crate::common::toast::ToastContext;
+use crate::formatting::{fmt_amount, fmt_amount_f64};
 use crate::hooks::FetchState;
 use chrono::{Local, NaiveDate};
 use plotly::{Plot, Scatter, Layout as PlotlyLayout};
@@ -297,7 +298,7 @@ pub fn scenario_detail_page(props: &ScenarioDetailPageProps) -> Html {
                                                                 <td>{tx.date.format("%Y-%m-%d").to_string()}</td>
                                                                 <td>{&tx.name}</td>
                                                                 <td class={if tx.amount.is_sign_negative() { "text-error" } else { "text-success" }}>
-                                                                    {format!("{:.1}", tx.amount)}
+                                                                    {fmt_amount(tx.amount)}
                                                                 </td>
                                                                 <td>{account_name}</td>
                                                                 <td><span class="badge badge-sm">{"One-off"}</span></td>
@@ -336,7 +337,7 @@ pub fn scenario_detail_page(props: &ScenarioDetailPageProps) -> Html {
                                                                 </td>
                                                                 <td>{&rec.name}</td>
                                                                 <td class={if amount < 0.0 { "text-error" } else { "text-success" }}>
-                                                                    {format!("{:.1}", amount)}
+                                                                    {fmt_amount_f64(amount)}
                                                                 </td>
                                                                 <td>{account_name}</td>
                                                                 <td><span class="badge badge-sm badge-primary">{"Recurring"}</span></td>

@@ -5,7 +5,7 @@ use crate::api_client::account::get_accounts_with_ignored;
 use crate::api_client::statistics::get_all_accounts_statistics;
 use crate::api_client::timeseries::get_all_accounts_timeseries_with_ignored;
 use crate::common::fetch_hook::use_fetch_with_refetch;
-use crate::formatting::use_currency;
+use crate::formatting::{fmt_amount, use_currency};
 use crate::hooks::FetchState;
 
 #[function_component(Stats)]
@@ -22,7 +22,7 @@ pub fn stats() -> Html {
     let format_currency = {
         let currency = currency.clone();
         move |amount: Decimal| -> String {
-            format!("{:.1} {}", amount, currency)
+            format!("{} {}", fmt_amount(amount), currency)
         }
     };
 

@@ -7,7 +7,7 @@ use crate::api_client::category::get_categories;
 use crate::api_client::scenario::get_scenarios;
 use crate::common::fetch_hook::use_fetch_with_refetch;
 use crate::common::toast::ToastContext;
-use crate::formatting::use_currency;
+use crate::formatting::{fmt_amount_str, use_currency};
 use crate::hooks::FetchState;
 use crate::components::instances::instance_edit_modal::InstanceEditModal;
 use std::collections::HashMap;
@@ -130,7 +130,7 @@ pub fn recurring_detail_page(props: &RecurringDetailPageProps) -> Html {
         let currency = currency.clone();
         move |amount: &str| -> String {
             match amount.parse::<f64>() {
-                Ok(val) => format!("{:.1} {}", val.abs(), currency),
+                Ok(_) => format!("{} {}", fmt_amount_str(amount), currency),
                 Err(_) => amount.to_string(),
             }
         }

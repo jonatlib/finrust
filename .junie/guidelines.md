@@ -155,8 +155,10 @@ Notes and conventions:
 
 # LLM guidelines
 
-If the project can't be compiled use `cargo check --message-format=json` to verify what are the compilation errors.
+If the project can't be compiled use `cargo check --message-format=json` to verify what are the backend compilation errors.
 Be sure to use the JSON format as it will be much more readable for LLM.
+For the frontend, use `cd workspace/frontend && trunk build` instead of cargo check,
+since trunk compiles to wasm32-unknown-unknown and catches WASM-target issues that cargo check for host may miss.
 
 # Documentations and code examples
 

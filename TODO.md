@@ -7,9 +7,6 @@
     - New categories per account
 
 
-- show per account current state, and state at the end of current month.
-
-
 - be able to create instance of recurring transaction early and then don't count it in the future.
     - For eample pay car service two months early
     - write test for this

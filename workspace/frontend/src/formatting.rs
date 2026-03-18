@@ -5,10 +5,44 @@ use crate::api_client::account::get_accounts;
 use crate::common::fetch_hook::use_fetch_with_refetch;
 use crate::hooks::FetchState;
 
-pub fn fmt_amount(amount: Decimal) -> String {
-    format!("{:.1}", amount)
+/// Inserts space as a thousands separator into the integer part of a
+/// pre-formatted number string (e.g. `"1234567.8"` → `"1 234 567.8"`).
+fn insert_thousands_sep(formatted: &str) -> String {
+    let (int_part, dec_part) = match formatted.find('.') {
+        Some(pos) => (&formatted[..pos], &formatted[pos..]),
+        None => (formatted, ""),
+    };
+    let negative = int_part.starts_with('-');
+    let digits = if negative { &int_part[1..] } else { int_part };
+
+    let separated: String = digits
+        .chars()
+        .rev()
+        .enumerate()
+        .fold(String::new(), |mut acc, (i, c)| {
+            if i > 0 && i % 3 == 0 {
+                acc.push(' ');
+            }
+            acc.push(c);
+            acc
+        })
+        .chars()
+        .rev()
+        .collect();
+
+    if negative {
+        format!("-{}{}", separated, dec_part)
+    } else {
+        format!("{}{}", separated, dec_part)
+    }
 }
 
+/// Formats a `Decimal` with one decimal place and thousands separators.
+pub fn fmt_amount(amount: Decimal) -> String {
+    insert_thousands_sep(&format!("{:.1}", amount))
+}
+
+/// Formats an optional `Decimal`, returning `"N/A"` for `None`.
 pub fn fmt_amount_opt(value: Option<Decimal>) -> String {
     match value {
         Some(d) => fmt_amount(d),
@@ -16,14 +50,35 @@ pub fn fmt_amount_opt(value: Option<Decimal>) -> String {
     }
 }
 
+/// Formats an `f64` with one decimal place and thousands separators.
 pub fn fmt_amount_f64(amount: f64) -> String {
-    format!("{:.1}", amount)
+    insert_thousands_sep(&format!("{:.1}", amount))
 }
 
+/// Parses a string as `f64`, takes absolute value, formats with thousands separators.
 pub fn fmt_amount_str(amount: &str) -> String {
     match amount.parse::<f64>() {
-        Ok(val) => format!("{:.1}", val.abs()),
+        Ok(val) => insert_thousands_sep(&format!("{:.1}", val.abs())),
         Err(_) => amount.to_string(),
+    }
+}
+
+/// Formats an `f64` with zero decimal places and thousands separators.
+pub fn fmt_amount_f64_int(amount: f64) -> String {
+    insert_thousands_sep(&format!("{:.0}", amount))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn thousands_separator_basic() {
+        assert_eq!(insert_thousands_sep("1234567.8"), "1 234 567.8");
+        assert_eq!(insert_thousands_sep("123.4"), "123.4");
+        assert_eq!(insert_thousands_sep("1234.5"), "1 234.5");
+        assert_eq!(insert_thousands_sep("-9876543.2"), "-9 876 543.2");
+        assert_eq!(insert_thousands_sep("0.0"), "0.0");
     }
 }
 
