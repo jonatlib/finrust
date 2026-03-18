@@ -3,7 +3,7 @@ use wasm_bindgen::prelude::*;
 use web_sys::Element;
 use chrono::{Local, Duration};
 use rust_decimal::prelude::*;
-use crate::api_client::account::{get_accounts_with_ignored, AccountResponse};
+use crate::api_client::account::{get_accounts_with_ignored, AccountKind, AccountResponse};
 use crate::api_client::timeseries::get_all_accounts_timeseries_with_ignored;
 use crate::common::fetch_hook::use_fetch_with_refetch;
 use crate::hooks::FetchState;
@@ -136,6 +136,8 @@ pub enum BreakdownFilter {
     LiquidOnly,
     NonLiquidOnly,
     IncludeIgnored,
+    DebtOnly,
+    InvestmentEquity,
 }
 
 #[derive(Properties, Clone, PartialEq)]
@@ -147,15 +149,19 @@ pub struct BreakdownProps {
 fn filter_accounts<'a>(accounts: &'a [AccountResponse], filter: &BreakdownFilter) -> Vec<&'a AccountResponse> {
     accounts.iter().filter(|a| {
         let stats_ok = match filter {
-            BreakdownFilter::IncludeIgnored => true,
-            _ => a.include_in_statistics,
-        };
-        let liquid_ok = match filter {
-            BreakdownFilter::LiquidOnly => a.is_liquid,
-            BreakdownFilter::NonLiquidOnly => !a.is_liquid,
+            BreakdownFilter::All => a.include_in_statistics,
             _ => true,
         };
-        stats_ok && liquid_ok
+        let kind_ok = match filter {
+            BreakdownFilter::LiquidOnly => a.is_liquid,
+            BreakdownFilter::NonLiquidOnly => !a.is_liquid,
+            BreakdownFilter::DebtOnly => a.account_kind == AccountKind::Debt,
+            BreakdownFilter::InvestmentEquity => {
+                a.account_kind == AccountKind::Investment || a.account_kind == AccountKind::Equity
+            }
+            _ => true,
+        };
+        stats_ok && kind_ok
     }).collect()
 }
 
@@ -164,7 +170,7 @@ pub fn filtered_breakdown_chart(props: &BreakdownProps) -> Html {
     let chart_ref = use_node_ref();
     let (accounts_state, _) = use_fetch_with_refetch(|| get_accounts_with_ignored(true));
 
-    let include_ignored = props.filter == BreakdownFilter::IncludeIgnored;
+    let include_ignored = props.filter != BreakdownFilter::All;
     let (timeseries_state, _) = use_fetch_with_refetch(move || async move {
         let today = Local::now().date_naive();
         let start_date = today - Duration::days(13 * 30);
@@ -288,4 +294,14 @@ pub fn non_liquid_breakdown_chart() -> Html {
 #[function_component(AllAccountsBreakdownChart)]
 pub fn all_accounts_breakdown_chart() -> Html {
     html! { <FilteredBreakdownChart filter={BreakdownFilter::IncludeIgnored} chart_id="chart-balance-all" /> }
+}
+
+#[function_component(DebtBreakdownChart)]
+pub fn debt_breakdown_chart() -> Html {
+    html! { <FilteredBreakdownChart filter={BreakdownFilter::DebtOnly} chart_id="chart-balance-debt" /> }
+}
+
+#[function_component(InvestmentEquityBreakdownChart)]
+pub fn investment_equity_breakdown_chart() -> Html {
+    html! { <FilteredBreakdownChart filter={BreakdownFilter::InvestmentEquity} chart_id="chart-balance-investment" /> }
 }
