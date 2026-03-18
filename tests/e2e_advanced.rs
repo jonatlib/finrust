@@ -627,10 +627,30 @@ async fn test_e2e_advanced_scenario() {
     let resp = server.get("/api/v1/metrics/dashboard").await;
     resp.assert_status_ok();
 
-    let resp = server
-        .get(&format!("/api/v1/accounts/{main_id}/metrics"))
-        .await;
+    // Verify kind_metrics types for each account kind
+    let resp = server.get(&format!("/api/v1/accounts/{main_id}/metrics")).await;
     resp.assert_status_ok();
+    let body: ApiResponse<serde_json::Value> = resp.json();
+    assert_eq!(body.data["account_kind"], "RealAccount");
+    assert_eq!(body.data["kind_metrics"]["type"], "Operating");
+
+    let resp = server.get(&format!("/api/v1/accounts/{emergency_id}/metrics")).await;
+    resp.assert_status_ok();
+    let body: ApiResponse<serde_json::Value> = resp.json();
+    assert_eq!(body.data["account_kind"], "Savings");
+    assert_eq!(body.data["kind_metrics"]["type"], "Reserve");
+
+    let resp = server.get(&format!("/api/v1/accounts/{stocks_id}/metrics")).await;
+    resp.assert_status_ok();
+    let body: ApiResponse<serde_json::Value> = resp.json();
+    assert_eq!(body.data["account_kind"], "Investment");
+    assert_eq!(body.data["kind_metrics"]["type"], "Investment");
+
+    let resp = server.get(&format!("/api/v1/accounts/{vacation_id}/metrics")).await;
+    resp.assert_status_ok();
+    let body: ApiResponse<serde_json::Value> = resp.json();
+    assert_eq!(body.data["account_kind"], "Goal");
+    assert_eq!(body.data["kind_metrics"]["type"], "Reserve");
 
     let resp = server
         .get(&format!(
@@ -867,7 +887,17 @@ async fn test_include_ignored_accounts_in_dashboard() {
 
     eprintln!("=== Phase 4: Verify account metrics for hidden account ===");
 
-    // Hidden account should still return metrics (no 404)
+    // Hidden account should still return metrics (no 404) with correct kind_metrics
+    let resp = server
+        .get(&format!("/api/v1/accounts/{checking_id}/metrics"))
+        .await;
+    resp.assert_status(StatusCode::OK);
+    let body: ApiResponse<serde_json::Value> = resp.json();
+    assert!(body.success);
+    assert_eq!(body.data["current_balance"], "100000");
+    assert_eq!(body.data["account_kind"], "RealAccount");
+    assert_eq!(body.data["kind_metrics"]["type"], "Operating");
+
     let resp = server
         .get(&format!("/api/v1/accounts/{retirement_id}/metrics"))
         .await;
@@ -875,6 +905,8 @@ async fn test_include_ignored_accounts_in_dashboard() {
     let body: ApiResponse<serde_json::Value> = resp.json();
     assert!(body.success);
     assert_eq!(body.data["current_balance"], "50000");
+    assert_eq!(body.data["account_kind"], "Investment");
+    assert_eq!(body.data["kind_metrics"]["type"], "Investment");
 
     let resp = server
         .get(&format!("/api/v1/accounts/{mortgage_id}/metrics"))
@@ -883,6 +915,8 @@ async fn test_include_ignored_accounts_in_dashboard() {
     let body: ApiResponse<serde_json::Value> = resp.json();
     assert!(body.success);
     assert_eq!(body.data["current_balance"], "-200000");
+    assert_eq!(body.data["account_kind"], "Debt");
+    assert_eq!(body.data["kind_metrics"]["type"], "Debt");
 
     eprintln!("=== Phase 5: Verify statistics with include_ignored ===");
 

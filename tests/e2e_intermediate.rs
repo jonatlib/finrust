@@ -317,7 +317,16 @@ async fn test_e2e_intermediate_scenario() {
     let body: ApiResponse<serde_json::Value> = resp.json();
     assert!(body.success);
 
-    // ── Phase 9: Verify statistics ────────────────────────────────────
+    // ── Phase 9: Verify statistics with frozen values ─────────────────
+    use std::str::FromStr;
+    let dec = |s: &str| Decimal::from_str(s).unwrap();
+    let json_dec = |v: &serde_json::Value| -> Decimal {
+        match v {
+            serde_json::Value::String(s) => Decimal::from_str(s).unwrap(),
+            serde_json::Value::Number(n) => Decimal::from_str(&n.to_string()).unwrap(),
+            other => panic!("Expected decimal, got {other}"),
+        }
+    };
 
     let resp = server
         .get(&format!(
@@ -328,6 +337,13 @@ async fn test_e2e_intermediate_scenario() {
     resp.assert_status(StatusCode::OK);
     let body: ApiResponse<serde_json::Value> = resp.json();
     assert!(body.success);
+    let cs = &body.data["statistics"][0];
+    // Year 2025 stats are fully historical — deterministic regardless of run date
+    assert_eq!(json_dec(&cs["min_state"]), dec("-2300"), "Checking 2025 min (Jan 20: groceries+restaurant)");
+    assert_eq!(json_dec(&cs["max_state"]), dec("29900"), "Checking 2025 max (Mar 1 after recurring)");
+    assert_eq!(json_dec(&cs["end_of_period_state"]), dec("27900"), "Checking 2025 end-of-year");
+    assert_eq!(json_dec(&cs["average_expense"]), dec("8700"), "Checking 2025 avg expense");
+    assert_eq!(json_dec(&cs["average_income"]), dec("54000"), "Checking 2025 avg income");
 
     let resp = server
         .get("/api/v1/accounts/statistics?year=2025")
@@ -335,16 +351,16 @@ async fn test_e2e_intermediate_scenario() {
     resp.assert_status(StatusCode::OK);
     let body: ApiResponse<Vec<serde_json::Value>> = resp.json();
     assert!(body.success);
-    assert!(
-        body.data.len() >= 4,
+    assert_eq!(
+        body.data.len(), 4,
         "Should have stats for all 4 accounts, got {}",
         body.data.len()
     );
 
-    // ── Phase 10: Verify timeseries ───────────────────────────────────
+    // ── Phase 10: Verify timeseries with frozen balance values ────────
 
     let resp = server
-        .get("/api/v1/accounts/timeseries?start_date=2025-01-01&end_date=2025-04-01")
+        .get("/api/v1/accounts/timeseries?start_date=2025-01-01&end_date=2025-04-01&include_ignored=true")
         .await;
     resp.assert_status(StatusCode::OK);
     let body: ApiResponse<::common::AccountStateTimeseries> = resp.json();
@@ -354,27 +370,59 @@ async fn test_e2e_intermediate_scenario() {
         "Should have timeseries data points for accounts"
     );
 
+    // Freeze checking balance at key dates (Q1 2025, all historical)
+    let find_balance = |account_id: i32, date_str: &str| -> Decimal {
+        let target = NaiveDate::parse_from_str(date_str, "%Y-%m-%d").unwrap();
+        body.data.data_points.iter()
+            .find(|p| p.account_id == account_id && p.date == target)
+            .map(|p| p.balance)
+            .unwrap_or_else(|| panic!("No data point for account {account_id} on {date_str}"))
+    };
+
+    assert_eq!(find_balance(checking_id, "2025-01-01"), dec("0"), "Checking Jan 1 (manual state)");
+    assert_eq!(find_balance(checking_id, "2025-01-20"), dec("-2300"), "Checking Jan 20 (after groceries+restaurant)");
+    assert_eq!(find_balance(checking_id, "2025-02-01"), dec("24700"), "Checking Feb 1 (after recurring)");
+    assert_eq!(find_balance(checking_id, "2025-02-15"), dec("2900"), "Checking Feb 15 (after investment purchase)");
+    assert_eq!(find_balance(checking_id, "2025-03-01"), dec("29900"), "Checking Mar 1 (after recurring)");
+    assert_eq!(find_balance(checking_id, "2025-03-10"), dec("27900"), "Checking Mar 10 (after groceries)");
+    assert_eq!(find_balance(checking_id, "2025-03-31"), dec("27900"), "Checking Mar 31 (stable)");
+
     // ── Phase 11: Verify dashboard metrics ────────────────────────────
 
     let resp = server.get("/api/v1/metrics/dashboard").await;
     resp.assert_status(StatusCode::OK);
     let body: ApiResponse<serde_json::Value> = resp.json();
     assert!(body.success);
-    assert!(
-        body.data.get("total_net_worth").is_some(),
-        "Dashboard should contain total_net_worth"
-    );
+    let dm = &body.data;
+
+    // Burn rates are deterministic (based on recurring definitions, not time):
+    // Rent (-15000) + Utilities (-3000) = 18000 essential burn
+    // Savings transfer has source_account_id so excluded from burn
+    assert_eq!(json_dec(&dm["essential_burn_rate"]), dec("18000"), "Essential burn = rent + utilities");
+    assert_eq!(json_dec(&dm["full_burn_rate"]), dec("18000"), "Full burn = rent + utilities");
 
     // ── Phase 12: Verify account metrics per type ─────────────────────
 
-    for &acct_id in &[checking_id, savings_id, investment_id] {
-        let resp = server
-            .get(&format!("/api/v1/accounts/{}/metrics", acct_id))
-            .await;
-        resp.assert_status(StatusCode::OK);
-        let body: ApiResponse<serde_json::Value> = resp.json();
-        assert!(body.success);
-    }
+    let resp = server.get(&format!("/api/v1/accounts/{checking_id}/metrics")).await;
+    resp.assert_status(StatusCode::OK);
+    let body: ApiResponse<serde_json::Value> = resp.json();
+    assert!(body.success);
+    assert_eq!(body.data["account_kind"], "RealAccount");
+    assert_eq!(body.data["kind_metrics"]["type"], "Operating");
+
+    let resp = server.get(&format!("/api/v1/accounts/{savings_id}/metrics")).await;
+    resp.assert_status(StatusCode::OK);
+    let body: ApiResponse<serde_json::Value> = resp.json();
+    assert!(body.success);
+    assert_eq!(body.data["account_kind"], "Savings");
+    assert_eq!(body.data["kind_metrics"]["type"], "Reserve");
+
+    let resp = server.get(&format!("/api/v1/accounts/{investment_id}/metrics")).await;
+    resp.assert_status(StatusCode::OK);
+    let body: ApiResponse<serde_json::Value> = resp.json();
+    assert!(body.success);
+    assert_eq!(body.data["account_kind"], "Investment");
+    assert_eq!(body.data["kind_metrics"]["type"], "Investment");
 
     // ── Phase 13: Verify category stats ───────────────────────────────
 

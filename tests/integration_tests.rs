@@ -1048,71 +1048,70 @@ async fn test_complex_timeseries_api_scenario() {
     // Verify that we have data
     assert!(!timeseries_data.data_points.is_empty(), "Timeseries data should not be empty");
 
-    // Check initial balance on 2025-01-01 for both accounts (should be 100,000)
-    let jan_1_data: Vec<_> = timeseries_data.data_points.iter()
-        .filter(|point| point.date == NaiveDate::from_ymd_opt(2025, 1, 1).unwrap())
-        .collect();
+    // Helper to find exact balance at a date for an account
+    let find_bal = |acc_id: i32, y: i32, m: u32, d: u32| -> Decimal {
+        let target = NaiveDate::from_ymd_opt(y, m, d).unwrap();
+        timeseries_data.data_points.iter()
+            .find(|p| p.account_id == acc_id && p.date == target)
+            .map(|p| p.balance)
+            .unwrap_or_else(|| panic!("No data point for account {acc_id} on {target}"))
+    };
 
-    // Should have data for both accounts on this date
-    assert!(jan_1_data.len() >= 2, "Should have data for both accounts on 2025-01-01");
+    // Freeze Account 1 balances at key dates:
+    //   Jan 1: +100000 = 100000
+    //   Jun 1: +100000 = 200000
+    //   Oct 11: -1000  = 199000
+    //   Nov 11: -1000  = 198000
+    //   Dec 11: -1000  = 197000
+    assert_eq!(find_bal(account1_id, 2025, 1, 1), Decimal::new(10000000, 2), "Account 1 initial = 100000");
+    assert_eq!(find_bal(account1_id, 2025, 3, 15), Decimal::new(10000000, 2), "Account 1 mid-Mar (stable)");
+    assert_eq!(find_bal(account1_id, 2025, 6, 1), Decimal::new(20000000, 2), "Account 1 Jun 1 = 200000");
+    assert_eq!(find_bal(account1_id, 2025, 9, 30), Decimal::new(20000000, 2), "Account 1 Sep 30 (pre-recurring)");
+    assert_eq!(find_bal(account1_id, 2025, 10, 11), Decimal::new(19900000, 2), "Account 1 Oct 11 = 199000");
+    assert_eq!(find_bal(account1_id, 2025, 11, 11), Decimal::new(19800000, 2), "Account 1 Nov 11 = 198000");
+    assert_eq!(find_bal(account1_id, 2025, 12, 11), Decimal::new(19700000, 2), "Account 1 Dec 11 = 197000");
+    assert_eq!(find_bal(account1_id, 2025, 12, 31), Decimal::new(19700000, 2), "Account 1 Dec 31 = 197000");
 
-    // Check that account 1 has correct balance after update on 2025-06-10
-    let june_data: Vec<_> = timeseries_data.data_points.iter()
-        .filter(|point| point.date >= NaiveDate::from_ymd_opt(2025, 6, 1).unwrap()
-            && point.date <= NaiveDate::from_ymd_opt(2025, 6, 30).unwrap()
-            && point.account_id == account1_id)
-        .collect();
+    // Freeze Account 2 balances:
+    //   Jan 1 2025: +100000 = 100000 (stable through end of 2025)
+    assert_eq!(find_bal(account2_id, 2025, 1, 1), Decimal::new(10000000, 2), "Account 2 initial = 100000");
+    assert_eq!(find_bal(account2_id, 2025, 12, 31), Decimal::new(10000000, 2), "Account 2 Dec 31 = 100000 (stable)");
 
-    if !june_data.is_empty() {
-        // Account 1 should have 200,000 after the June update
-        let june_balance = june_data.last().unwrap().balance;
-        assert!(june_balance >= Decimal::new(19000000, 2), // Should be around 200,000
-                "Account 1 balance in June should be around 200,000, got: {}", june_balance);
-    }
+    // Also verify 2026 balances after transfer
+    let ts_2026_query = TimeseriesQuery {
+        start_date: NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
+        end_date: NaiveDate::from_ymd_opt(2026, 2, 1).unwrap(),
+        include_ignored: true,
+        scenario_id: None,
+    };
+    let ts_2026_resp = server
+        .get("/api/v1/accounts/timeseries")
+        .add_query_params(&ts_2026_query)
+        .await;
+    ts_2026_resp.assert_status(StatusCode::OK);
+    let ts_2026_body: ApiResponse<AccountStateTimeseries> = ts_2026_resp.json();
+    assert!(ts_2026_body.success);
+    let ts_2026 = &ts_2026_body.data;
 
-    // Check balance after some recurring transactions
-    let oct_data: Vec<_> = timeseries_data.data_points.iter()
-        .filter(|point| point.date >= NaiveDate::from_ymd_opt(2025, 10, 12).unwrap()
-            && point.date <= NaiveDate::from_ymd_opt(2025, 10, 31).unwrap()
-            && point.account_id == account1_id)
-        .collect();
+    let find_bal_2026 = |acc_id: i32, y: i32, m: u32, d: u32| -> Decimal {
+        let target = NaiveDate::from_ymd_opt(y, m, d).unwrap();
+        ts_2026.data_points.iter()
+            .find(|p| p.account_id == acc_id && p.date == target)
+            .map(|p| p.balance)
+            .unwrap_or_else(|| panic!("No data point for account {acc_id} on {target}"))
+    };
 
-    if !oct_data.is_empty() {
-        // Account 1 should have 199,000 after first recurring transaction
-        let oct_balance = oct_data.last().unwrap().balance;
-        assert!(oct_balance <= Decimal::new(19900000, 2) && oct_balance >= Decimal::new(19800000, 2),
-                "Account 1 balance in October should be around 199,000, got: {}", oct_balance);
-    }
+    // Account 1 in Jan 2026:
+    //   Jan 11: 197000 - 1000 (loop) - 1000 (jan_tx) = 195000
+    //   Jan 20: 195000 - 1000 (transfer out) = 194000
+    assert_eq!(find_bal_2026(account1_id, 2026, 1, 11), Decimal::new(19500000, 2), "Account 1 Jan 11 2026 = 195000");
+    assert_eq!(find_bal_2026(account1_id, 2026, 1, 20), Decimal::new(19400000, 2), "Account 1 Jan 20 2026 = 194000");
 
-    // Verify that the transfer affected both accounts correctly
-    let jan_21_data: Vec<_> = timeseries_data.data_points.iter()
-        .filter(|point| point.date >= NaiveDate::from_ymd_opt(2026, 1, 21).unwrap()
-            && point.date <= NaiveDate::from_ymd_opt(2026, 1, 31).unwrap())
-        .collect();
-
-    if !jan_21_data.is_empty() {
-        // Find balances for both accounts after the transfer
-        let account1_jan_balance = jan_21_data.iter()
-            .filter(|point| point.account_id == account1_id)
-            .last()
-            .map(|point| point.balance);
-
-        let account2_jan_balance = jan_21_data.iter()
-            .filter(|point| point.account_id == account2_id)
-            .last()
-            .map(|point| point.balance);
-
-        if let (Some(acc1_balance), Some(acc2_balance)) = (account1_jan_balance, account2_jan_balance) {
-            // Account 1 should have lost 1,000 from the transfer
-            // Account 2 should have gained 1,000 from the transfer
-            println!("Account 1 balance after transfer: {}", acc1_balance);
-            println!("Account 2 balance after transfer: {}", acc2_balance);
-
-            // Basic sanity checks - the exact values depend on all transactions
-            assert!(acc1_balance > Decimal::new(0, 0), "Account 1 should have positive balance");
-            assert!(acc2_balance > Decimal::new(0, 0), "Account 2 should have positive balance");
-        }
-    }
+    // Account 2 in Jan 2026:
+    //   Jan 14: 100000 - 1000 = 99000
+    //   Jan 20: 99000 + 1000 (transfer in) = 100000
+    assert_eq!(find_bal_2026(account2_id, 2026, 1, 14), Decimal::new(9900000, 2), "Account 2 Jan 14 2026 = 99000");
+    assert_eq!(find_bal_2026(account2_id, 2026, 1, 20), Decimal::new(10000000, 2), "Account 2 Jan 20 2026 = 100000");
 
     println!("Complex timeseries API test completed successfully!");
     println!("Total data points in timeseries: {}", timeseries_data.data_points.len());
