@@ -487,7 +487,7 @@ pub async fn compute_dashboard_metrics(
                     db,
                     today,
                 )
-                .await?;
+                    .await?;
                 Some(AccountKindMetricsDto::Operating(m))
             }
             AccountKind::Savings | AccountKind::Goal | AccountKind::EmergencyFund => {
@@ -503,7 +503,7 @@ pub async fn compute_dashboard_metrics(
                     today,
                     current_balance,
                 )
-                .await?;
+                    .await?;
                 Some(AccountKindMetricsDto::Investment(m))
             }
             AccountKind::Debt => {
@@ -514,7 +514,7 @@ pub async fn compute_dashboard_metrics(
                     today,
                     current_balance,
                 )
-                .await?;
+                    .await?;
                 Some(AccountKindMetricsDto::Debt(m))
             }
             AccountKind::Tax | AccountKind::Other => None,
@@ -566,49 +566,78 @@ pub async fn compute_dashboard_metrics(
         "Filtered active recurring transactions"
     );
 
+    // Only RealAccount and Allowance are "operating" accounts.
+    // Everything else (debt, tax, savings, investment, …) is treated as
+    // committed allocation from the global cashflow perspective.
+    let operating_account_ids: Vec<i32> = all_accounts
+        .iter()
+        .filter(|a| {
+            matches!(
+                a.account_kind,
+                AccountKind::RealAccount | AccountKind::Allowance
+            )
+        })
+        .map(|a| a.id)
+        .collect();
+
+    // Full burn rate: all expenses (negative, no source) on operating accounts.
+    // Transfers to non-operating accounts are NOT counted as burn — they are
+    // committed allocations that leave the operating scope entirely.
     let full_burn_rate: Decimal = all_recurring
         .iter()
         .filter(|r| {
             r.amount.is_sign_negative()
                 && r.include_in_statistics
                 && r.source_account_id.is_none()
+                && operating_account_ids.contains(&r.target_account_id)
         })
         .map(|r| monthly_equivalent(r.amount.abs(), &r.period))
         .sum();
 
-    let real_account_ids: Vec<i32> = all_accounts
-        .iter()
-        .filter(|a| {
-            matches!(
-                a.account_kind,
-                AccountKind::RealAccount | AccountKind::Allowance | AccountKind::Shared
-            )
-        })
-        .map(|a| a.id)
-        .collect();
-
-    let essential_burn_rate: Decimal = all_recurring
-        .iter()
-        .filter(|r| {
-            r.amount.is_sign_negative()
-                && r.include_in_statistics
-                && r.source_account_id.is_none()
-                && real_account_ids.contains(&r.target_account_id)
-        })
-        .map(|r| monthly_equivalent(r.amount.abs(), &r.period))
-        .sum();
+    let essential_burn_rate = full_burn_rate;
 
     trace!(%essential_burn_rate, %full_burn_rate, "Burn rates computed");
 
-    let global_net_flow: Decimal = account_metrics_list
+    // Operating net flow includes transfer outflows to non-operating accounts
+    // (debt, savings, tax, …). These are committed allocations, not expenses,
+    // so we add them back to get the true free cashflow (income − expenses).
+    let operating_net_flow: Decimal = account_metrics_list
         .iter()
+        .filter(|m| operating_account_ids.contains(&m.account_id))
         .map(|m| m.monthly_net_flow.unwrap_or(Decimal::ZERO))
         .sum();
-    let free_cashflow = global_net_flow;
 
+    // Sum monthly-equivalent of recurring transfers leaving operating accounts
+    // toward non-operating accounts (modelled in two ways):
+    //   a) negative amount on an operating account with non-operating source
+    //   b) positive amount on a non-operating account with operating source
+    let committed_transfers_out: Decimal = all_recurring
+        .iter()
+        .filter(|r| {
+            r.include_in_statistics
+                && r.source_account_id.is_some()
+                && ((r.amount.is_sign_negative()
+                && operating_account_ids.contains(&r.target_account_id)
+                && r.source_account_id
+                .map_or(false, |sid| !operating_account_ids.contains(&sid)))
+                || (r.amount.is_sign_positive()
+                && !operating_account_ids.contains(&r.target_account_id)
+                && r.source_account_id
+                .map_or(false, |sid| operating_account_ids.contains(&sid))))
+        })
+        .map(|r| monthly_equivalent(r.amount.abs(), &r.period))
+        .sum();
+
+    let free_cashflow = operating_net_flow + committed_transfers_out;
     let monthly_income = free_cashflow + full_burn_rate;
 
-    trace!(%monthly_income, %free_cashflow, "Income and free cashflow computed");
+    trace!(
+        %operating_net_flow,
+        %committed_transfers_out,
+        %monthly_income,
+        %free_cashflow,
+        "Income and free cashflow computed"
+    );
 
     let savings_rate = if monthly_income > Decimal::ZERO {
         Some(free_cashflow / monthly_income)
@@ -669,10 +698,10 @@ pub async fn compute_dashboard_metrics(
         .filter(|r| {
             r.include_in_statistics
                 && ((r.amount.is_sign_positive()
-                    && debt_account_ids.contains(&r.target_account_id))
-                    || (r.amount.is_sign_negative()
-                        && r.source_account_id
-                            .map_or(false, |sid| debt_account_ids.contains(&sid))))
+                && debt_account_ids.contains(&r.target_account_id))
+                || (r.amount.is_sign_negative()
+                && r.source_account_id
+                .map_or(false, |sid| debt_account_ids.contains(&sid))))
         })
         .map(|r| monthly_equivalent(r.amount.abs(), &r.period))
         .sum();

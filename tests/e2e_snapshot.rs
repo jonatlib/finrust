@@ -175,7 +175,7 @@ async fn test_snapshot_frozen_balances() {
         true,
         Some(Decimal::new(50000, 0)),
     )
-    .await;
+        .await;
     let investment_id =
         create_account(&server, "Investment", AccountKind::Investment, false, true, None).await;
 
@@ -620,10 +620,11 @@ async fn test_snapshot_dashboard_burn_rates() {
         "Full burn = rent + utilities"
     );
 
-    // free_cashflow = monthly_net_flow summed for all accounts.
-    // With only expenses (-18000/month) and no income in THIS scenario,
-    // the net flow is -18000.
-    assert_eq!(json_dec(&dm["free_cashflow"]), dec("-18000"), "free_cashflow = net flow");
+    // free_cashflow = operating net flow + committed transfers out.
+    // Checking: rent(-15000) + utilities(-3000) + savings_mirror(-5000) = -23000
+    // Committed transfers out: savings transfer (+5000 on EF from Checking) = 5000
+    // free_cashflow = -23000 + 5000 = -18000 (expenses only, transfers excluded)
+    assert_eq!(json_dec(&dm["free_cashflow"]), dec("-18000"), "free_cashflow = income - expenses");
     assert!(dm["savings_rate"].is_null(), "No income → savings_rate null");
     assert_eq!(json_dec(&dm["goal_engine"]), dec("5000"), "goal_engine = EF transfer amount");
     assert!(dm["commitment_ratio"].is_null(), "No income → commitment_ratio null");
