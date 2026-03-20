@@ -70,6 +70,8 @@ impl From<AccountKind> for account::AccountKind {
 pub struct AccountOverlayEntry {
     pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub color: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub account_kind: Option<AccountKind>,
@@ -101,6 +103,7 @@ pub async fn export_account_overlay(database_url: &str, output_path: &str) -> Re
         .into_iter()
         .map(|a| AccountOverlayEntry {
             name: a.name,
+            description: a.description,
             color: a.color,
             account_kind: Some(a.account_kind.into()),
             target_amount: a.target_amount,
@@ -156,6 +159,10 @@ pub async fn apply_account_overlay(database_url: &str, overlay_path: &str) -> Re
 
         let mut changed = false;
 
+        if let Some(ref description) = entry.description {
+            model.description = Set(Some(description.clone()));
+            changed = true;
+        }
         if let Some(ref color) = entry.color {
             model.color = Set(Some(color.clone()));
             changed = true;
