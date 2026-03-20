@@ -11,6 +11,7 @@ use crate::handlers::{
         get_manual_account_state, get_manual_account_states, update_manual_account_state,
     },
     metrics::{get_account_metrics, get_dashboard_metrics},
+    prompt::get_financial_prompt,
     recurring_income::{
         create_recurring_income, delete_recurring_income, get_recurring_income,
         get_recurring_incomes, update_recurring_income,
@@ -197,6 +198,8 @@ fn build_routes(router: Router<AppState>) -> Router<AppState> {
         // Metrics routes
         .route("/api/v1/metrics/dashboard", get(get_dashboard_metrics))
         .route("/api/v1/accounts/:account_id/metrics", get(get_account_metrics))
+        // Prompt generation
+        .route("/api/v1/prompt", get(get_financial_prompt))
         // API v1 routes (existing statistics and timeseries)
         .route(
             "/api/v1/accounts/:account_id/statistics",

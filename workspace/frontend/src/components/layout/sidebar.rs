@@ -28,6 +28,7 @@ pub fn sidebar() -> Html {
                 <li><Link<Route> to={Route::Budgets} classes="nav-link"><i class="fas fa-chart-pie w-5"></i> {"Budgets"}</Link<Route>></li>
                 <li><Link<Route> to={Route::Forecast} classes="nav-link"><i class="fas fa-chart-area w-5"></i> {"Forecast"}</Link<Route>></li>
                 <li><Link<Route> to={Route::Reports} classes="nav-link"><i class="fas fa-chart-line w-5"></i> {"Reports"}</Link<Route>></li>
+                <li><Link<Route> to={Route::AiPrompt} classes="nav-link"><i class="fas fa-robot w-5"></i> {"AI Assessment"}</Link<Route>></li>
 
                 <div class="divider"></div>
 

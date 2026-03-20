@@ -3,7 +3,7 @@ use clap::{Parser, Subcommand};
 
 pub mod commands;
 
-use commands::{apply_account_overlay, export_account_overlay, import_django, init_database, migrate_and_serve, serve};
+use commands::{apply_account_overlay, export_account_overlay, generate_prompt, import_django, init_database, migrate_and_serve, serve};
 
 #[derive(Parser)]
 #[command(name = "finrust")]
@@ -102,6 +102,19 @@ pub enum Commands {
         #[arg(short, long)]
         overlay: Option<String>,
     },
+    /// Generate a prompt for an external LLM to assess financial situation
+    ///
+    /// Gathers account data, monthly balances, income, spending by category,
+    /// and formats it into a system+user prompt for financial assessment.
+    GeneratePrompt {
+        /// Database URL
+        #[arg(short, long, env = "DATABASE_URL", default_value = "sqlite://finrust.db")]
+        database_url: String,
+
+        /// Number of months of historical balance data to include (default: 24)
+        #[arg(short, long, default_value = "24")]
+        months: u32,
+    },
     /// Export account customizations to a YAML overlay file
     ///
     /// Produces a human-readable YAML file with per-account settings
@@ -144,6 +157,9 @@ impl Cli {
                 if let Some(overlay_path) = overlay {
                     apply_account_overlay(&database_url, &overlay_path).await?;
                 }
+            }
+            Commands::GeneratePrompt { database_url, months } => {
+                generate_prompt(&database_url, months).await?;
             }
             Commands::ExportAccountOverlay { output, database_url } => {
                 export_account_overlay(&database_url, &output).await?;

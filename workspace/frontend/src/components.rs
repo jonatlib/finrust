@@ -1,3 +1,4 @@
+pub mod ai_prompt;
 pub mod common;
 pub mod layout;
 pub mod dashboard;

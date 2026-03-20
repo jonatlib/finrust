@@ -4,6 +4,7 @@ pub mod categories;
 pub mod health;
 pub mod manual_account_states;
 pub mod metrics;
+pub mod prompt;
 pub mod recurring_income;
 pub mod scenarios;
 pub mod statistics;

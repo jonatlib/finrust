@@ -1,4 +1,5 @@
 pub mod accounts;
+pub mod ai_prompt;
 pub mod dashboard;
 pub mod transactions;
 pub mod transaction_edit;

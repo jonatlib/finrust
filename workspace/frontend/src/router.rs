@@ -8,6 +8,7 @@ use crate::components::layout::layout::Layout;
 use crate::components::reports::Reports;
 use crate::components::settings::Settings;
 use crate::pages::accounts::AccountsPage;
+use crate::pages::ai_prompt::AiPromptPage;
 use crate::pages::dashboard::DashboardPage;
 use crate::pages::transactions::TransactionsPage;
 use crate::pages::transaction_edit::TransactionEditPage;
@@ -47,6 +48,8 @@ pub enum Route {
     Scenarios,
     #[at("/scenarios/:id")]
     ScenarioDetail { id: i32 },
+    #[at("/ai-prompt")]
+    AiPrompt,
     #[at("/budgets")]
     Budgets,
     #[at("/forecast")]
@@ -112,6 +115,10 @@ pub fn switch(routes: Route) -> Html {
         Route::ScenarioDetail { id } => {
             log::trace!("Rendering Scenario Detail page for ID: {}", id);
             html! { <ScenarioDetailPage id={id} /> }
+        }
+        Route::AiPrompt => {
+            log::trace!("Rendering AI Prompt page");
+            html! { <AiPromptPage /> }
         }
         Route::Budgets => {
             log::trace!("Rendering Budgets page");

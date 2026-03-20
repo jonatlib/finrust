@@ -80,6 +80,10 @@ pub fn breadcrumb() -> Html {
                 BreadcrumbItem { label: "Home".to_string(), route: Route::Dashboard },
                 BreadcrumbItem { label: "Reports".to_string(), route: Route::Reports }
             ],
+            Route::AiPrompt => vec![
+                BreadcrumbItem { label: "Home".to_string(), route: Route::Dashboard },
+                BreadcrumbItem { label: "AI Assessment".to_string(), route: Route::AiPrompt }
+            ],
             Route::Settings => vec![
                 BreadcrumbItem { label: "Home".to_string(), route: Route::Dashboard },
                 BreadcrumbItem { label: "Settings".to_string(), route: Route::Settings }
