@@ -48,8 +48,8 @@ pub async fn build_prompt(db: &DatabaseConnection, months_back: u32) -> Result<S
         db,
         today,
     )
-    .await
-    .ok();
+        .await
+        .ok();
     if let Some(ref d) = dashboard {
         write_dashboard_metrics(&mut prompt, d, today);
     }
@@ -69,7 +69,7 @@ pub async fn build_prompt(db: &DatabaseConnection, months_back: u32) -> Result<S
         today,
         months_back,
     )
-    .await;
+        .await;
 
     // Recurring commitments
     write_recurring_commitments(&mut prompt, db, &accounts, &categories, today).await;
@@ -222,16 +222,37 @@ async fn write_account_details(
         .unwrap_or(today);
     let year_end = NaiveDate::from_ymd_opt(today.year(), 12, 31).unwrap();
 
-    // Compute balance for full range (historical + forecast) in one batch
-    let df = compute
-        .compute_account_state(db, accounts, range_start, year_end)
-        .await
-        .ok();
+    // Compute balances per-account using two separate calls (historical + forecast)
+    // matching the dashboard approach to avoid accumulation bugs with long ranges.
+    let mut all_balances: HashMap<i32, HashMap<String, Decimal>> = HashMap::new();
+    for a in accounts {
+        let single = vec![a.clone()];
+        let mut account_months: HashMap<String, Decimal> = HashMap::new();
 
-    let all_balances = df
-        .as_ref()
-        .and_then(|df| extract_all_end_of_month_balances(df, accounts).ok())
-        .unwrap_or_default();
+        // Historical: range_start → today
+        if let Ok(df) = compute
+            .compute_account_state(db, &single, range_start, today)
+            .await
+        {
+            if let Ok(months) = extract_last_per_month_balances(&df) {
+                account_months.extend(months);
+            }
+        }
+
+        // Forecast: today → year_end
+        if today < year_end {
+            if let Ok(df) = compute
+                .compute_account_state(db, &single, today, year_end)
+                .await
+            {
+                if let Ok(months) = extract_last_per_month_balances(&df) {
+                    account_months.extend(months);
+                }
+            }
+        }
+
+        all_balances.insert(a.id, account_months);
+    }
 
     // Build month labels
     let month_labels = build_month_labels(range_start, year_end);
@@ -917,15 +938,13 @@ fn build_month_labels(start: NaiveDate, end: NaiveDate) -> Vec<String> {
     labels
 }
 
-/// Extract end-of-month balances for ALL dates (including future/forecast).
-fn extract_all_end_of_month_balances(
+/// Extract the last balance per month from a DataFrame.
+///
+/// Groups data points by year-month and takes the last (latest date) balance
+/// for each month. This mirrors how the dashboard charts display balances.
+fn extract_last_per_month_balances(
     df: &DataFrame,
-    accounts: &[account::Model],
-) -> std::result::Result<HashMap<i32, HashMap<String, Decimal>>, String> {
-    let account_col = df
-        .column("account_id")
-        .or_else(|_| df.column("account"))
-        .map_err(|e| format!("Missing account column: {e}"))?;
+) -> std::result::Result<HashMap<String, Decimal>, String> {
     let date_col = df
         .column("date")
         .map_err(|e| format!("Missing date column: {e}"))?;
@@ -934,14 +953,9 @@ fn extract_all_end_of_month_balances(
         .map_err(|e| format!("Missing balance column: {e}"))?;
 
     let epoch = NaiveDate::from_ymd_opt(1970, 1, 1).unwrap();
-    let mut month_data: HashMap<i32, HashMap<String, (i64, Decimal)>> = HashMap::new();
+    let mut month_data: HashMap<String, (i64, Decimal)> = HashMap::new();
 
     for i in 0..df.height() {
-        let aid = account_col
-            .get(i)
-            .map_err(|e| format!("row {i}: {e}"))?
-            .try_extract::<i32>()
-            .map_err(|e| format!("row {i}: {e}"))?;
         let date_epoch = date_col
             .get(i)
             .map_err(|e| format!("row {i}: {e}"))?
@@ -962,28 +976,18 @@ fn extract_all_end_of_month_balances(
             .ok_or_else(|| format!("date overflow at row {i}"))?;
 
         let month_key = format!("{}-{:02}", date.year(), date.month());
-        let entry = month_data.entry(aid).or_default();
-        match entry.get(&month_key) {
+        match month_data.get(&month_key) {
             Some((existing_date, _)) if date_epoch > *existing_date => {
-                entry.insert(month_key, (date_epoch, bal));
+                month_data.insert(month_key, (date_epoch, bal));
             }
             None => {
-                entry.insert(month_key, (date_epoch, bal));
+                month_data.insert(month_key, (date_epoch, bal));
             }
             _ => {}
         }
     }
 
-    let mut result: HashMap<i32, HashMap<String, Decimal>> = HashMap::new();
-    for a in accounts {
-        let account_months = month_data.remove(&a.id).unwrap_or_default();
-        let simplified: HashMap<String, Decimal> = account_months
-            .into_iter()
-            .map(|(k, (_, bal))| (k, bal))
-            .collect();
-        result.insert(a.id, simplified);
-    }
-    Ok(result)
+    Ok(month_data.into_iter().map(|(k, (_, bal))| (k, bal)).collect())
 }
 
 /// Compute year-level statistics for all accounts in one pass.
