@@ -7,8 +7,9 @@ mod timeseries;
 pub mod metrics;
 
 pub use metrics::{
-    AccountKindMetricsDto, AccountMetricsDto, DashboardMetricsDto, DebtMetricsDto,
-    InvestmentMetricsDto, OperatingMetricsDto, ReserveMetricsDto,
+    AccountKindMetricsDto, AccountMetricsDto, CashflowBreakdownDto, CashflowContributionDto,
+    DashboardMetricsDto, DebtMetricsDto, InvestmentMetricsDto, OperatingMetricsDto,
+    ReserveMetricsDto,
 };
 pub use statistics::{
     AccountStatistics, AccountStatisticsCollection, MonthlyMinBalance, MonthlyMinBalanceSeries,

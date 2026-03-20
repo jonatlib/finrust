@@ -88,6 +88,36 @@ pub struct DebtMetricsDto {
     pub debt_free_date: Option<NaiveDate>,
 }
 
+/// Per-account contribution to the global cashflow breakdown.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+pub struct CashflowContributionDto {
+    /// Account identifier
+    pub account_id: i32,
+    /// Human-readable account name
+    pub account_name: String,
+    /// Account kind (e.g. "RealAccount", "Allowance")
+    pub account_kind: String,
+    /// Net flow for this account in the measurement period
+    pub net_flow: Decimal,
+}
+
+/// Breakdown of how the global free cashflow number is computed.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+pub struct CashflowBreakdownDto {
+    /// Human-readable description of what this metric represents
+    pub description: String,
+    /// The time window used for the measurement (e.g. "last calendar month")
+    pub timeframe: String,
+    /// Raw net flow across operating accounts before transfer adjustment
+    pub operating_net_flow: Decimal,
+    /// Monthly-equivalent of recurring transfers from operating to non-operating accounts
+    pub committed_transfers_out: Decimal,
+    /// Resulting free cashflow: operating_net_flow + committed_transfers_out
+    pub free_cashflow: Decimal,
+    /// Per-account contributions that make up the operating_net_flow
+    pub contributions: Vec<CashflowContributionDto>,
+}
+
 /// Cross-account dashboard metrics aggregated across all accounts.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 pub struct DashboardMetricsDto {
@@ -113,6 +143,8 @@ pub struct DashboardMetricsDto {
     pub liquidity_ratio_months: Option<Decimal>,
     /// Sum of monthly debt payments / net income
     pub total_debt_burden: Option<Decimal>,
+    /// Detailed breakdown of how free_cashflow is computed
+    pub cashflow_breakdown: CashflowBreakdownDto,
     /// Per-account metrics for all accounts
     pub account_metrics: Vec<AccountMetricsDto>,
 }
@@ -159,6 +191,14 @@ mod tests {
             commitment_ratio: Some(Decimal::new(55, 2)),
             liquidity_ratio_months: Some(Decimal::new(94, 1)),
             total_debt_burden: Some(Decimal::new(30, 2)),
+            cashflow_breakdown: CashflowBreakdownDto {
+                description: "Free cashflow = income − expenses on operating accounts".into(),
+                timeframe: "last calendar month".into(),
+                operating_net_flow: Decimal::new(10_000, 0),
+                committed_transfers_out: Decimal::new(20_000, 0),
+                free_cashflow: Decimal::new(30_000, 0),
+                contributions: vec![],
+            },
             account_metrics: vec![],
         };
 

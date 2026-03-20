@@ -172,6 +172,16 @@ fn write_dashboard_metrics(out: &mut String, d: &DashboardMetricsDto, today: Nai
     );
     let _ = writeln!(
         out,
+        "| ↳ Operating Net Flow | {} |",
+        d.cashflow_breakdown.operating_net_flow.round_dp(0)
+    );
+    let _ = writeln!(
+        out,
+        "| ↳ Committed Transfers Out | +{} |",
+        d.cashflow_breakdown.committed_transfers_out.round_dp(0)
+    );
+    let _ = writeln!(
+        out,
         "| Savings Rate | {} |",
         fmt_pct(d.savings_rate)
     );
@@ -196,6 +206,41 @@ fn write_dashboard_metrics(out: &mut String, d: &DashboardMetricsDto, today: Nai
         out,
         "| Total Debt Burden | {} |",
         fmt_pct(d.total_debt_burden)
+    );
+    out.push('\n');
+
+    // Cashflow breakdown: per-account contributions
+    let _ = writeln!(
+        out,
+        "**Cashflow Breakdown** ({})\n",
+        d.cashflow_breakdown.timeframe
+    );
+    let _ = writeln!(out, "{}\n", d.cashflow_breakdown.description);
+    out.push_str("| Account | Kind | Net Flow |\n");
+    out.push_str("|---------|------|----------|\n");
+    for c in &d.cashflow_breakdown.contributions {
+        let _ = writeln!(
+            out,
+            "| {} | {} | {} |",
+            c.account_name,
+            c.account_kind,
+            c.net_flow.round_dp(0)
+        );
+    }
+    let _ = writeln!(
+        out,
+        "| **Operating subtotal** | | **{}** |",
+        d.cashflow_breakdown.operating_net_flow.round_dp(0)
+    );
+    let _ = writeln!(
+        out,
+        "| **+ Committed transfers out** | | **+{}** |",
+        d.cashflow_breakdown.committed_transfers_out.round_dp(0)
+    );
+    let _ = writeln!(
+        out,
+        "| **= Free Cashflow** | | **{}** |",
+        d.cashflow_breakdown.free_cashflow.round_dp(0)
     );
     out.push('\n');
 }

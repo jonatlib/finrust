@@ -19,8 +19,9 @@ use std::str::FromStr;
 use tracing::{debug, instrument, trace, warn};
 
 use common::metrics::{
-    AccountKindMetricsDto, AccountMetricsDto, DashboardMetricsDto, DebtMetricsDto,
-    InvestmentMetricsDto, OperatingMetricsDto, ReserveMetricsDto,
+    AccountKindMetricsDto, AccountMetricsDto, CashflowBreakdownDto, CashflowContributionDto,
+    DashboardMetricsDto, DebtMetricsDto, InvestmentMetricsDto, OperatingMetricsDto,
+    ReserveMetricsDto,
 };
 use model::entities::account::{self, AccountKind};
 use model::entities::recurring_transaction;
@@ -417,6 +418,14 @@ pub async fn compute_dashboard_metrics(
             commitment_ratio: None,
             liquidity_ratio_months: None,
             total_debt_burden: None,
+            cashflow_breakdown: CashflowBreakdownDto {
+                description: "No accounts".to_string(),
+                timeframe: "N/A".to_string(),
+                operating_net_flow: Decimal::ZERO,
+                committed_transfers_out: Decimal::ZERO,
+                free_cashflow: Decimal::ZERO,
+                contributions: vec![],
+            },
             account_metrics: vec![],
         });
     }
@@ -639,6 +648,36 @@ pub async fn compute_dashboard_metrics(
         "Income and free cashflow computed"
     );
 
+    let account_name_map: HashMap<i32, &str> = all_accounts
+        .iter()
+        .map(|a| (a.id, a.name.as_str()))
+        .collect();
+
+    let contributions: Vec<CashflowContributionDto> = account_metrics_list
+        .iter()
+        .filter(|m| operating_account_ids.contains(&m.account_id))
+        .map(|m| CashflowContributionDto {
+            account_id: m.account_id,
+            account_name: account_name_map
+                .get(&m.account_id)
+                .unwrap_or(&"?")
+                .to_string(),
+            account_kind: m.account_kind.clone(),
+            net_flow: m.monthly_net_flow.unwrap_or(Decimal::ZERO),
+        })
+        .collect();
+
+    let cashflow_breakdown = CashflowBreakdownDto {
+        description: "Free cashflow = operating account net flow + committed transfers \
+                      to non-operating accounts (transfers are not expenses)"
+            .to_string(),
+        timeframe: "last calendar month".to_string(),
+        operating_net_flow,
+        committed_transfers_out,
+        free_cashflow,
+        contributions,
+    };
+
     let savings_rate = if monthly_income > Decimal::ZERO {
         Some(free_cashflow / monthly_income)
     } else {
@@ -741,6 +780,7 @@ pub async fn compute_dashboard_metrics(
         commitment_ratio,
         liquidity_ratio_months,
         total_debt_burden,
+        cashflow_breakdown,
         account_metrics: account_metrics_list,
     })
 }

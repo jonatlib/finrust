@@ -625,6 +625,14 @@ async fn test_snapshot_dashboard_burn_rates() {
     // Committed transfers out: savings transfer (+5000 on EF from Checking) = 5000
     // free_cashflow = -23000 + 5000 = -18000 (expenses only, transfers excluded)
     assert_eq!(json_dec(&dm["free_cashflow"]), dec("-18000"), "free_cashflow = income - expenses");
+
+    // Cashflow breakdown is present and consistent
+    let bd = &dm["cashflow_breakdown"];
+    assert_eq!(json_dec(&bd["operating_net_flow"]), dec("-23000"), "operating net flow");
+    assert_eq!(json_dec(&bd["committed_transfers_out"]), dec("5000"), "committed transfers out");
+    assert_eq!(json_dec(&bd["free_cashflow"]), dec("-18000"), "breakdown free_cashflow matches");
+    assert!(!bd["contributions"].as_array().unwrap().is_empty(), "has contributions");
+
     assert!(dm["savings_rate"].is_null(), "No income → savings_rate null");
     assert_eq!(json_dec(&dm["goal_engine"]), dec("5000"), "goal_engine = EF transfer amount");
     assert!(dm["commitment_ratio"].is_null(), "No income → commitment_ratio null");
