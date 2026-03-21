@@ -80,6 +80,25 @@ pub async fn build_prompt(db: &DatabaseConnection, months_back: u32) -> Result<S
     // Category breakdown
     write_category_breakdown(&mut prompt, db, &accounts, &categories, today, months_back).await;
 
+    // Shock readiness
+    if let Some(ref d) = dashboard {
+        write_shock_readiness(&mut prompt, d, &accounts);
+    }
+
+    // Mortgage refix readiness
+    write_mortgage_refix_readiness(&mut prompt, &accounts, &account_metrics_map);
+
+    // Goal engine split (safety / consumption / wealth)
+    if let Some(ref d) = dashboard {
+        write_goal_engine_split(&mut prompt, &accounts, &d.account_metrics);
+    }
+
+    // Recent financial changes
+    write_recent_financial_changes(&mut prompt, db, &accounts, today).await;
+
+    // Known future events
+    write_known_future_events(&mut prompt, &accounts);
+
     write_user_prompt(&mut prompt);
 
     Ok(prompt)
@@ -92,9 +111,25 @@ pub async fn build_prompt(db: &DatabaseConnection, months_back: u32) -> Result<S
 fn write_system_prompt(out: &mut String) {
     out.push_str(
         r#"<system>
-You are the world's best financial advisor with decades of experience in personal finance,
-wealth management, and financial planning. You are given structured financial data about a
-person's accounts, monthly balances, income, and spending by category.
+You are a rigorous, skeptical financial advisor specializing in household cashflow safety,
+liquidity management, and behavioral finance. You are given structured financial data about
+a family's accounts, monthly balances, income, and spending by category.
+
+CRITICAL MINDSET RULES:
+- Be skeptical of dashboard metrics and forecasts. Do not describe the situation as "strong"
+  or "healthy" if liquidity, emergency reserves, or cashflow discipline are weak.
+- Prioritize LIQUIDITY, RUNWAY, and CONTROLLABLE CASHFLOW over total net worth.
+- Treat home equity as non-operating wealth unless the user explicitly plans to sell or refinance.
+- Distinguish clearly between:
+  * true wealth building (long-term investments, retirement, extra principal payments)
+  * emergency reserves (only money available for genuine emergencies)
+  * sinking funds (vacation, car downpayment, annual bills — these WILL be spent)
+  * income smoothing reserves (buffer for variable-income months)
+  * tax reserves (committed liability, not savings)
+  * internal transfers (account reshuffling that creates no new wealth)
+- If assumptions are fragile, say so directly.
+- If forecast success depends on new habits or strict discipline, call that out explicitly.
+- Do NOT inflate free cashflow by counting internal transfers or sinking fund contributions as "saved."
 
 DATA FORMAT NOTES:
 - All monetary amounts are in the account's currency (see currency_code per account).
@@ -106,28 +141,65 @@ DATA FORMAT NOTES:
   The "Avg/Year" column is the sum of all transactions in that category across all years,
   divided by the number of years. Sub-categories show "Parent > Child" with their own
   average. Parent category totals INCLUDE child category totals (tree-aggregated).
-- Account kinds: RealAccount (checking/operating), Savings, Investment, Debt, Goal,
-  EmergencyFund, Allowance (personal spending), Shared (joint), Equity, House, Tax, Other.
+- Account purpose metadata: each account has a "role" field describing its structural type
+  and boolean flags indicating whether it counts as emergency reserve, income smoothing, etc.
+  IMPORTANT: These flags are derived from the account kind only. You MUST also read each
+  account's description to refine your interpretation. For example, an EmergencyFund account
+  whose description says "house maintenance" is really a maintenance reserve, not a true
+  emergency fund. A Savings account described as "vacation replacement / income buffer" is
+  really an income smoothing reserve. Do NOT assume all "savings" accounts are building wealth.
 - is_liquid = whether the account can be quickly converted to cash.
 - Dashboard metrics explained:
   - essential_burn_rate: monthly cost of mandatory expenses (from operating accounts only)
   - full_burn_rate: total monthly expenses across all accounts
-  - free_cashflow: net income minus full burn rate (what's left over each month)
-  - savings_rate: free_cashflow / total_income (fraction saved)
+  - free_cashflow: net income minus full burn rate — WARNING: this may include internal
+    transfers and sinking fund allocations; see "operating free cashflow" for a cleaner number
+  - savings_rate: free_cashflow / total_income — WARNING: may be inflated if sinking funds
+    and tax reserves are counted as "savings"
   - goal_engine: monthly net inflow going toward wealth-building accounts
   - commitment_ratio: fixed recurring expenses / net income
   - liquidity_ratio_months: liquid assets / essential_burn_rate (runway in months)
   - total_debt_burden: monthly debt payments / net income
+- Burn rate layers:
+  - Mandatory burn: mortgage, utilities, insurance, taxes, minimum debt payments, basic food, required transport
+  - Controllable burn: groceries, lunches, fuel, household supplies — necessary but adjustable
+  - Discretionary burn: gifts, hobbies, electronics, garden, streaming, family extras — optional
 
-YOUR TASK:
-1. Assess the current financial situation holistically
-2. Analyze the trajectory — are things improving or deteriorating?
-3. Check if money is scattered across too many accounts without clear purpose
-4. Review goals (target amounts) and whether they are realistic given current flows
-5. Suggest concrete, measurable goals for 12, 24, and 36 months
-6. Provide actionable recommendations prioritized by impact
-7. Flag any risks or concerns you see
-8. Comment on the forecast — is the projected trajectory sustainable?
+REQUIRED EVALUATION STRUCTURE (use these 4 layers in order):
+1. LIQUIDITY / SAFETY: Are there real emergency reserves? How many months of disruption
+   can the household survive? Is shock readiness adequate?
+2. CASHFLOW QUALITY: Is operating free cashflow positive after removing internal transfers?
+   What share of outflows are true wealth-building vs future spending allocations?
+3. BEHAVIORAL LEAKAGE / SPENDING CONTROL: What are the top historical leak categories?
+   Are control systems (allowance, shared account caps) proven or newly introduced?
+   Is discretionary spending actually contained or just temporarily paused?
+4. LONG-TERM WEALTH BUILDING: Is money going to real investments? Are debt paydowns on track?
+   Is retirement funded? Is the household building or just treading water?
+
+FORECAST CHALLENGE RULES:
+- Separate MECHANICALLY PROJECTED outcomes from BEHAVIORALLY CREDIBLE outcomes.
+- State whether forecast improvements are:
+  * already proven in historical behavior
+  * newly introduced but unproven
+  * dependent on strict future discipline
+- Highlight fragile assumptions explicitly.
+
+LEAK DETECTION RULES:
+- Identify top historical leak categories and quantify approximate yearly impact.
+- State whether each leak is: structurally solved, temporarily paused, or still unresolved.
+- Flag any discretionary spending that bypasses the control system (e.g., spending from
+  main/operating accounts that should go through allowance accounts).
+
+ACTION RECOMMENDATIONS FORMAT:
+Provide recommendations in this priority order:
+1. STOP — things to eliminate immediately
+2. PAUSE — things to suspend until a condition is met
+3. REDUCE — things to cut back
+4. KEEP — things that are working well
+5. INCREASE — things to do more of
+6. CREATE — new habits or systems to establish
+For each recommendation include: why it matters, monthly impact if known, and whether
+it improves liquidity, discipline, long-term growth, or debt/risk reduction.
 </system>
 
 "#,
@@ -330,6 +402,34 @@ async fn write_account_details(
                 let _ = writeln!(out, "- Description: {}", desc);
             }
         }
+        out.push('\n');
+
+        // Account role metadata
+        let role = derive_account_role(a.account_kind);
+        out.push_str("**Account Role Metadata:**\n");
+        let _ = writeln!(out, "- role: {}", role.role);
+        let _ = writeln!(out, "- purpose: {}", role.purpose);
+        let _ = writeln!(
+            out,
+            "- can_be_used_in_emergency: {}",
+            role.can_be_used_in_emergency
+        );
+        let _ = writeln!(
+            out,
+            "- counts_as_emergency_reserve: {}",
+            role.counts_as_emergency_reserve
+        );
+        let _ = writeln!(
+            out,
+            "- counts_as_income_smoothing: {}",
+            role.counts_as_income_smoothing
+        );
+        let _ = writeln!(
+            out,
+            "- counts_as_long_term_wealth: {}",
+            role.counts_as_long_term_wealth
+        );
+        let _ = writeln!(out, "- priority_level: {}", role.priority_level);
         out.push('\n');
 
         // Metrics from dashboard
@@ -891,37 +991,524 @@ async fn write_category_breakdown(
 }
 
 // ---------------------------------------------------------------------------
+// Shock readiness
+// ---------------------------------------------------------------------------
+
+fn write_shock_readiness(
+    out: &mut String,
+    d: &DashboardMetricsDto,
+    accounts: &[account::Model],
+) {
+    out.push_str("## SHOCK READINESS\n\n");
+    out.push_str("_How long can the household survive an income disruption?_\n\n");
+
+    // Compute emergency reserve total (only true emergency fund accounts)
+    let mut emergency_reserve = Decimal::ZERO;
+    let mut income_smoothing_reserve = Decimal::ZERO;
+    let mut operating_buffer = Decimal::ZERO;
+
+    for a in accounts {
+        let role = derive_account_role(a.account_kind);
+        let balance = d
+            .account_metrics
+            .iter()
+            .find(|m| m.account_id == a.id)
+            .map(|m| m.current_balance)
+            .unwrap_or(Decimal::ZERO);
+
+        if role.counts_as_emergency_reserve {
+            emergency_reserve += balance;
+        }
+        if role.counts_as_income_smoothing {
+            income_smoothing_reserve += balance;
+        }
+        if role.role == "operating" && balance > Decimal::ZERO {
+            operating_buffer += balance;
+        }
+    }
+
+    let essential_monthly = d.essential_burn_rate.abs();
+    let total_available = operating_buffer + emergency_reserve + income_smoothing_reserve;
+
+    out.push_str("| Resource | Amount |\n");
+    out.push_str("|----------|--------|\n");
+    let _ = writeln!(
+        out,
+        "| Operating account buffers | {} |",
+        operating_buffer.round_dp(0)
+    );
+    let _ = writeln!(
+        out,
+        "| Emergency fund (true) | {} |",
+        emergency_reserve.round_dp(0)
+    );
+    let _ = writeln!(
+        out,
+        "| Income smoothing reserve | {} |",
+        income_smoothing_reserve.round_dp(0)
+    );
+    let _ = writeln!(
+        out,
+        "| **Total available for disruption** | **{}** |",
+        total_available.round_dp(0)
+    );
+    let _ = writeln!(
+        out,
+        "| Essential monthly burn | {} |",
+        essential_monthly.round_dp(0)
+    );
+    out.push('\n');
+
+    if essential_monthly > Decimal::ZERO {
+        let months_1 = if total_available >= essential_monthly {
+            "YES"
+        } else {
+            "NO"
+        };
+        let months_3 = if total_available >= essential_monthly * Decimal::from(3) {
+            "YES"
+        } else {
+            "NO"
+        };
+        let months_6 = if total_available >= essential_monthly * Decimal::from(6) {
+            "YES"
+        } else {
+            "NO"
+        };
+        let coverage_months = total_available / essential_monthly;
+        let _ = writeln!(
+            out,
+            "- **1-month shock readiness**: {} (coverage: {:.1} months)",
+            months_1, coverage_months
+        );
+        let _ = writeln!(out, "- **3-month shock readiness**: {}", months_3);
+        let _ = writeln!(out, "- **6-month shock readiness**: {}", months_6);
+    } else {
+        out.push_str("- Essential burn rate is zero — cannot compute shock readiness.\n");
+    }
+
+    out.push_str("\n_Note: This excludes tax reserves, sinking funds, investments, and house equity._\n\n");
+}
+
+// ---------------------------------------------------------------------------
+// Mortgage refix readiness
+// ---------------------------------------------------------------------------
+
+fn write_mortgage_refix_readiness(
+    out: &mut String,
+    accounts: &[account::Model],
+    metrics_map: &HashMap<i32, &AccountMetricsDto>,
+) {
+    let mortgage_accounts: Vec<&account::Model> = accounts
+        .iter()
+        .filter(|a| {
+            a.account_kind == AccountKind::Debt
+                && a.name.to_lowercase().contains("mortgage")
+        })
+        .collect();
+
+    if mortgage_accounts.is_empty() {
+        return;
+    }
+
+    out.push_str("## MORTGAGE REFIX READINESS\n\n");
+
+    for a in &mortgage_accounts {
+        let _ = writeln!(out, "### {}\n", a.name);
+
+        if let Some(desc) = &a.description {
+            let _ = writeln!(out, "- Description: {}", desc);
+        }
+
+        if let Some(m) = metrics_map.get(&a.id) {
+            if let Some(AccountKindMetricsDto::Debt(ref debt)) = m.kind_metrics {
+                if let Some(principal) = debt.outstanding_principal {
+                    let _ = writeln!(
+                        out,
+                        "- Outstanding Principal: {}",
+                        principal.round_dp(0)
+                    );
+                }
+                if let Some(payment) = debt.required_monthly_payment {
+                    let _ = writeln!(
+                        out,
+                        "- Current Monthly Payment: {}",
+                        payment.round_dp(0)
+                    );
+                }
+                if let Some(date) = debt.debt_free_date {
+                    let _ = writeln!(out, "- Debt-Free Date: {}", date);
+                }
+            }
+        }
+
+        out.push_str("\n**Refix Scenario Estimates** _(approximate, for LLM analysis)_:\n");
+        out.push_str("- The LLM should estimate payment changes at 4%, 5%, and 6% interest rates\n");
+        out.push_str("  based on the outstanding principal and remaining term from the data above.\n");
+        out.push_str("- Check if any strike/prepayment fund exists and what impact it would have.\n\n");
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Goal engine split
+// ---------------------------------------------------------------------------
+
+fn write_goal_engine_split(
+    out: &mut String,
+    accounts: &[account::Model],
+    account_metrics: &[AccountMetricsDto],
+) {
+    out.push_str("## GOAL ENGINE BREAKDOWN\n\n");
+    out.push_str("_Splits monthly inflows by purpose: safety vs consumption vs wealth._\n\n");
+
+    let mut safety_total = Decimal::ZERO;
+    let mut consumption_total = Decimal::ZERO;
+    let mut wealth_total = Decimal::ZERO;
+
+    let mut safety_items: Vec<(String, Decimal)> = Vec::new();
+    let mut consumption_items: Vec<(String, Decimal)> = Vec::new();
+    let mut wealth_items: Vec<(String, Decimal)> = Vec::new();
+
+    for a in accounts {
+        let role = derive_account_role(a.account_kind);
+        let net_flow = account_metrics
+            .iter()
+            .find(|m| m.account_id == a.id)
+            .and_then(|m| m.monthly_net_flow)
+            .unwrap_or(Decimal::ZERO);
+
+        if net_flow <= Decimal::ZERO {
+            continue;
+        }
+
+        // Skip operating accounts — their inflows are income, not goal contributions
+        if role.role == "operating" {
+            continue;
+        }
+
+        match role.role {
+            "emergency_only" | "reserved_liability" | "income_smoothing"
+            | "maintenance_reserve" => {
+                safety_total += net_flow;
+                safety_items.push((a.name.clone(), net_flow));
+            }
+            "sinking_fund" | "personal_allowance" | "shared_discretionary" => {
+                consumption_total += net_flow;
+                consumption_items.push((a.name.clone(), net_flow));
+            }
+            "equity_investment" | "investment" | "retirement" => {
+                wealth_total += net_flow;
+                wealth_items.push((a.name.clone(), net_flow));
+            }
+            _ => {
+                consumption_total += net_flow;
+                consumption_items.push((a.name.clone(), net_flow));
+            }
+        }
+    }
+
+    out.push_str("| Engine | Monthly Total | Accounts |\n");
+    out.push_str("|--------|---------------|----------|\n");
+
+    let fmt_items = |items: &[(String, Decimal)]| -> String {
+        if items.is_empty() {
+            return "none".to_string();
+        }
+        items
+            .iter()
+            .map(|(name, flow)| format!("{} ({})", name, flow.round_dp(0)))
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+
+    let _ = writeln!(
+        out,
+        "| **Safety** (emergency + tax + income smoothing + maintenance) | {} | {} |",
+        safety_total.round_dp(0),
+        fmt_items(&safety_items)
+    );
+    let _ = writeln!(
+        out,
+        "| **Consumption goals** (vacation, sinking funds, allowances) | {} | {} |",
+        consumption_total.round_dp(0),
+        fmt_items(&consumption_items)
+    );
+    let _ = writeln!(
+        out,
+        "| **Wealth building** (investments, retirement, equity) | {} | {} |",
+        wealth_total.round_dp(0),
+        fmt_items(&wealth_items)
+    );
+    out.push_str("\n_WARNING: Do not count safety and consumption goals as \"savings\" or wealth building._\n\n");
+}
+
+// ---------------------------------------------------------------------------
+// Recent financial changes
+// ---------------------------------------------------------------------------
+
+async fn write_recent_financial_changes(
+    out: &mut String,
+    db: &DatabaseConnection,
+    accounts: &[account::Model],
+    today: NaiveDate,
+) {
+    out.push_str("## RECENT FINANCIAL CHANGES\n\n");
+    out.push_str("_Transactions that started or ended recently (last 90 days). ");
+    out.push_str("This is critical context: the LLM must know when systems changed recently ");
+    out.push_str("and forecast strength is not yet proven._\n\n");
+
+    let ninety_days_ago = today
+        .checked_sub_signed(chrono::Duration::days(90))
+        .unwrap_or(today);
+
+    let account_map: HashMap<i32, &account::Model> =
+        accounts.iter().map(|a| (a.id, a)).collect();
+
+    // Recently started recurring transactions
+    let recently_started: Vec<recurring_transaction::Model> =
+        match recurring_transaction::Entity::find()
+            .filter(recurring_transaction::Column::IsSimulated.eq(false))
+            .filter(recurring_transaction::Column::StartDate.between(ninety_days_ago, today))
+            .all(db)
+            .await
+        {
+            Ok(t) => t,
+            Err(_) => Vec::new(),
+        };
+
+    // Recently ended recurring transactions
+    let recently_ended: Vec<recurring_transaction::Model> =
+        match recurring_transaction::Entity::find()
+            .filter(recurring_transaction::Column::IsSimulated.eq(false))
+            .filter(recurring_transaction::Column::EndDate.between(ninety_days_ago, today))
+            .all(db)
+            .await
+        {
+            Ok(t) => t,
+            Err(_) => Vec::new(),
+        };
+
+    // Recently started recurring incomes
+    let recently_started_income: Vec<recurring_income::Model> =
+        match recurring_income::Entity::find()
+            .filter(recurring_income::Column::IsSimulated.eq(false))
+            .filter(recurring_income::Column::StartDate.between(ninety_days_ago, today))
+            .all(db)
+            .await
+        {
+            Ok(t) => t,
+            Err(_) => Vec::new(),
+        };
+
+    // Recently ended recurring incomes
+    let recently_ended_income: Vec<recurring_income::Model> =
+        match recurring_income::Entity::find()
+            .filter(recurring_income::Column::IsSimulated.eq(false))
+            .filter(recurring_income::Column::EndDate.between(ninety_days_ago, today))
+            .all(db)
+            .await
+        {
+            Ok(t) => t,
+            Err(_) => Vec::new(),
+        };
+
+    if recently_started.is_empty()
+        && recently_ended.is_empty()
+        && recently_started_income.is_empty()
+        && recently_ended_income.is_empty()
+    {
+        out.push_str("No recent changes detected in the last 90 days.\n\n");
+        return;
+    }
+
+    out.push_str("| Change | Type | Amount | Period | Account | Confidence |\n");
+    out.push_str("|--------|------|--------|--------|---------|------------|\n");
+
+    for t in &recently_started {
+        let acct = account_map
+            .get(&t.target_account_id)
+            .map(|a| a.name.as_str())
+            .unwrap_or("-");
+        let _ = writeln!(
+            out,
+            "| NEW: {} | expense/transfer | {} | {} | {} | low (newly introduced) |",
+            t.name,
+            t.amount.round_dp(0),
+            period_str(&t.period),
+            acct,
+        );
+    }
+
+    for t in &recently_ended {
+        let acct = account_map
+            .get(&t.target_account_id)
+            .map(|a| a.name.as_str())
+            .unwrap_or("-");
+        let _ = writeln!(
+            out,
+            "| ENDED: {} | expense/transfer | {} | {} | {} | medium (may be temporary pause) |",
+            t.name,
+            t.amount.round_dp(0),
+            period_str(&t.period),
+            acct,
+        );
+    }
+
+    for t in &recently_started_income {
+        let acct = account_map
+            .get(&t.target_account_id)
+            .map(|a| a.name.as_str())
+            .unwrap_or("-");
+        let _ = writeln!(
+            out,
+            "| NEW INCOME: {} | income | {} | {} | {} | low (newly introduced) |",
+            t.name,
+            t.amount.round_dp(0),
+            period_str(&t.period),
+            acct,
+        );
+    }
+
+    for t in &recently_ended_income {
+        let acct = account_map
+            .get(&t.target_account_id)
+            .map(|a| a.name.as_str())
+            .unwrap_or("-");
+        let _ = writeln!(
+            out,
+            "| ENDED INCOME: {} | income | {} | {} | {} | high (confirmed ended) |",
+            t.name,
+            t.amount.round_dp(0),
+            period_str(&t.period),
+            acct,
+        );
+    }
+
+    out.push_str("\n_Changes marked 'low' confidence mean the forecast depends on new behavior not yet proven historically._\n\n");
+}
+
+// ---------------------------------------------------------------------------
+// Known future events
+// ---------------------------------------------------------------------------
+
+fn write_known_future_events(out: &mut String, accounts: &[account::Model]) {
+    out.push_str("## KNOWN FUTURE EVENTS\n\n");
+    out.push_str("_Extracted from account descriptions. The LLM must factor these into the analysis._\n\n");
+
+    let mut events: Vec<String> = Vec::new();
+
+    for a in accounts {
+        let desc = a.description.as_deref().unwrap_or("");
+        let desc_lower = desc.to_lowercase();
+        let name_lower = a.name.to_lowercase();
+
+        // Detect mortgage refix events
+        if a.account_kind == AccountKind::Debt && name_lower.contains("mortgage") {
+            if desc_lower.contains("fixation") || desc_lower.contains("refix") || desc_lower.contains("interest rate") {
+                events.push(format!(
+                    "- **Mortgage refix** ({}): {}",
+                    a.name, desc
+                ));
+            }
+        }
+
+        // Detect car purchase / loan events
+        if (name_lower.contains("car") || desc_lower.contains("car"))
+            && (desc_lower.contains("buy") || desc_lower.contains("purchase")
+            || desc_lower.contains("down payment") || desc_lower.contains("september")
+            || a.account_kind == AccountKind::Debt)
+        {
+            events.push(format!(
+                "- **Car-related event** ({}): {}",
+                a.name, desc
+            ));
+        }
+
+        // Detect loan payoff targets
+        if a.account_kind == AccountKind::Debt
+            && (desc_lower.contains("get rid") || desc_lower.contains("pay off")
+            || desc_lower.contains("goal"))
+        {
+            events.push(format!(
+                "- **Debt payoff goal** ({}): {}",
+                a.name, desc
+            ));
+        }
+    }
+
+    if events.is_empty() {
+        out.push_str("No specific future events detected from account descriptions.\n");
+        out.push_str("_The LLM should ask the user about upcoming large expenses, income changes, ");
+        out.push_str("or life events that would affect the financial plan._\n\n");
+    } else {
+        for event in &events {
+            let _ = writeln!(out, "{}", event);
+        }
+        out.push_str("\n_The LLM must incorporate these events into its forecast challenge and action recommendations._\n\n");
+    }
+}
+
+// ---------------------------------------------------------------------------
 // User prompt
 // ---------------------------------------------------------------------------
 
 fn write_user_prompt(out: &mut String) {
     out.push_str(
         r#"<user>
-Based on all the financial data above, please:
+Based on all the financial data above, assess my financial situation — but be skeptical.
+Explicitly identify what looks good only on paper versus what is actually safe and proven.
 
-1. **Assess my current financial situation** — What is my net worth? How healthy are my finances?
-   Where am I heading based on the trends? How does the forecast look?
+START WITH A MANDATORY "BOTTOM LINE" SECTION that directly answers:
+- Are finances currently safe or fragile?
+- Is the household genuinely improving, or just forecasted to improve?
+- What is the single biggest problem right now?
+- What is the single most important next fix?
 
-2. **Account organization** — Are my funds well-organized or scattered across too many accounts?
-   Is each account serving a clear purpose? Should I consolidate anything?
+Then provide the full analysis using the required 4-layer evaluation structure:
 
-3. **Cash flow analysis** — Is my spending sustainable? What is my effective savings rate?
-   Are there accounts bleeding money? Comment on the burn rate vs income.
+1. **Liquidity / Safety assessment**
+   - What are my real liquid reserves (excluding tax reserves, sinking funds, earmarked money)?
+   - How safe am I against a 1-month, 3-month, and 6-month income disruption?
+   - Is my emergency fund adequate or just started?
 
-4. **Goal review** — For accounts with target amounts, am I on track? Are the targets realistic?
-   Are there accounts that should have goals but don't?
+2. **Cashflow quality analysis**
+   - What is my operating free cashflow after removing internal transfers and allocations?
+   - What is being counted as "savings" that is really future spending or internal routing?
+   - Break down: mandatory burn vs controllable burn vs discretionary burn.
 
-5. **12-month goals** — What specific, measurable targets should I aim for in the next 12 months?
+3. **Behavioral leakage / spending control**
+   - What historical spending leaks are the biggest threat to this plan?
+   - Which current improvements are structural vs only temporary?
+   - Are the control systems (allowance accounts, shared account caps) proven or newly introduced?
+   - What am I likely underestimating?
 
-6. **24-month goals** — What should my financial picture look like in 2 years?
+4. **Long-term wealth building**
+   - Is money actually going to real investments and retirement?
+   - Are debt paydowns on track? What about the mortgage refix risk?
+   - Am I genuinely building wealth or just reshuffling money between accounts?
 
-7. **36-month goals** — What is a realistic 3-year vision?
+Then answer these additional questions:
 
-8. **Priority actions** — What are the top 3-5 things I should do right now to improve my
-   financial trajectory?
+5. **Forecast challenge** — Which forecast assumptions are fragile or overly optimistic?
+   Separate mechanically projected outcomes from behaviorally credible ones.
 
-9. **Risk assessment** — What are the biggest financial risks I face? Do I have enough
-   emergency reserves? Is my liquidity ratio healthy?
+6. **Account organization** — Is each account serving a clear, distinct purpose?
+   Are any account types misleading (e.g., maintenance reserve labeled as emergency fund)?
+
+7. **Goal review** — For accounts with targets, am I on track? Are the targets realistic
+   given current cashflow quality (not just forecast)?
+
+8. **12 / 24 / 36 month goals** — Concrete, measurable targets. Be realistic, not optimistic.
+
+9. **Priority actions** — Use the Stop / Pause / Reduce / Keep / Increase / Create format.
+   For each action: why it matters, monthly impact, and what it improves
+   (liquidity / discipline / long-term growth / debt reduction).
+
+10. **Risk assessment** — What are the biggest financial risks? Include:
+    - Mortgage refix impact scenarios
+    - Known upcoming large expenses (car, etc.)
+    - What happens if the spending control system fails?
+    - What should I stop, pause, reduce, keep, increase, or create right now?
 </user>
 "#,
     );
@@ -940,12 +1527,141 @@ fn account_kind_str(kind: AccountKind) -> &'static str {
         AccountKind::Other => "Other",
         AccountKind::Goal => "Goal",
         AccountKind::Allowance => "Allowance (Personal Spending)",
-        AccountKind::Shared => "Shared (Joint)",
+        AccountKind::Shared => "SharedDiscretionary (Family Discretionary)",
         AccountKind::EmergencyFund => "Emergency Fund",
         AccountKind::Equity => "Equity",
         AccountKind::House => "House",
-        AccountKind::Tax => "Tax",
+        AccountKind::Tax => "TaxReserve (Reserved Liability)",
     }
+}
+
+/// Derives account role metadata purely from the `AccountKind` enum.
+///
+/// The LLM receives account descriptions separately and can refine its
+/// interpretation (e.g. distinguishing a maintenance reserve from a true
+/// emergency fund). This function only provides the structural baseline.
+fn derive_account_role(kind: AccountKind) -> AccountRoleMeta {
+    match kind {
+        AccountKind::RealAccount => AccountRoleMeta {
+            role: "operating",
+            purpose: "Main operating account — income arrives here, essentials paid from here",
+            can_be_used_in_emergency: true,
+            counts_as_emergency_reserve: false,
+            counts_as_income_smoothing: false,
+            counts_as_long_term_wealth: false,
+            priority_level: "critical",
+        },
+        AccountKind::Savings => AccountRoleMeta {
+            role: "savings",
+            purpose: "Savings account — may be a sinking fund, income smoothing, or general reserve; check description",
+            can_be_used_in_emergency: true,
+            counts_as_emergency_reserve: false,
+            counts_as_income_smoothing: false,
+            counts_as_long_term_wealth: false,
+            priority_level: "medium",
+        },
+        AccountKind::Investment => AccountRoleMeta {
+            role: "investment",
+            purpose: "Investment account — long-term wealth building",
+            can_be_used_in_emergency: false,
+            counts_as_emergency_reserve: false,
+            counts_as_income_smoothing: false,
+            counts_as_long_term_wealth: true,
+            priority_level: "medium",
+        },
+        AccountKind::Debt => AccountRoleMeta {
+            role: "debt",
+            purpose: "Outstanding debt obligation",
+            can_be_used_in_emergency: false,
+            counts_as_emergency_reserve: false,
+            counts_as_income_smoothing: false,
+            counts_as_long_term_wealth: false,
+            priority_level: "high",
+        },
+        AccountKind::Goal => AccountRoleMeta {
+            role: "goal",
+            purpose: "Goal-tracking account — check description for whether this is a sinking fund or wealth goal",
+            can_be_used_in_emergency: false,
+            counts_as_emergency_reserve: false,
+            counts_as_income_smoothing: false,
+            counts_as_long_term_wealth: false,
+            priority_level: "medium",
+        },
+        AccountKind::Allowance => AccountRoleMeta {
+            role: "personal_allowance",
+            purpose: "Personal discretionary spending allowance — spending control mechanism",
+            can_be_used_in_emergency: false,
+            counts_as_emergency_reserve: false,
+            counts_as_income_smoothing: false,
+            counts_as_long_term_wealth: false,
+            priority_level: "low",
+        },
+        AccountKind::Shared => AccountRoleMeta {
+            role: "shared_discretionary",
+            purpose: "Shared family discretionary spending — joint optional spending, NOT an allowance",
+            can_be_used_in_emergency: false,
+            counts_as_emergency_reserve: false,
+            counts_as_income_smoothing: false,
+            counts_as_long_term_wealth: false,
+            priority_level: "low",
+        },
+        AccountKind::EmergencyFund => AccountRoleMeta {
+            role: "emergency_reserve",
+            purpose: "Emergency reserve — check description to determine if this is a true emergency fund or a maintenance reserve",
+            can_be_used_in_emergency: true,
+            counts_as_emergency_reserve: true,
+            counts_as_income_smoothing: false,
+            counts_as_long_term_wealth: false,
+            priority_level: "critical",
+        },
+        AccountKind::Equity => AccountRoleMeta {
+            role: "equity_investment",
+            purpose: "Equity / stock market investment — illiquid, long-term",
+            can_be_used_in_emergency: false,
+            counts_as_emergency_reserve: false,
+            counts_as_income_smoothing: false,
+            counts_as_long_term_wealth: true,
+            priority_level: "medium",
+        },
+        AccountKind::House => AccountRoleMeta {
+            role: "house_value",
+            purpose: "Property value — completely illiquid, non-operating wealth, do NOT count as available",
+            can_be_used_in_emergency: false,
+            counts_as_emergency_reserve: false,
+            counts_as_income_smoothing: false,
+            counts_as_long_term_wealth: false,
+            priority_level: "low",
+        },
+        AccountKind::Tax => AccountRoleMeta {
+            role: "reserved_liability",
+            purpose: "Tax or annual obligation reserve — this money is already committed and WILL be spent",
+            can_be_used_in_emergency: false,
+            counts_as_emergency_reserve: false,
+            counts_as_income_smoothing: false,
+            counts_as_long_term_wealth: false,
+            priority_level: "high",
+        },
+        AccountKind::Other => AccountRoleMeta {
+            role: "other",
+            purpose: "Uncategorized account — check description",
+            can_be_used_in_emergency: false,
+            counts_as_emergency_reserve: false,
+            counts_as_income_smoothing: false,
+            counts_as_long_term_wealth: false,
+            priority_level: "low",
+        },
+    }
+}
+
+/// Metadata describing an account's true role for the LLM.
+struct AccountRoleMeta {
+    role: &'static str,
+    purpose: &'static str,
+    can_be_used_in_emergency: bool,
+    counts_as_emergency_reserve: bool,
+    counts_as_income_smoothing: bool,
+    counts_as_long_term_wealth: bool,
+    priority_level: &'static str,
 }
 
 fn period_str(period: &recurring_transaction::RecurrencePeriod) -> &'static str {
