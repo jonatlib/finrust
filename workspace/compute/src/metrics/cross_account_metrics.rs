@@ -918,14 +918,32 @@ pub async fn compute_dashboard_metrics(
 
     // ── Shock readiness ─────────────────────────────────────────────────
 
-    // Sum only true emergency reserves + operating buffers
+    // Sum emergency reserves, savings, and operating buffers
+    // Based purely on account_kind
     let mut shock_reserve_total = Decimal::ZERO;
+    let mut shock_reserve_accounts = Vec::new();
+
     for m in &account_metrics_list {
-        let role = account_roles.get(&m.account_id);
-        if role.map(|r| r.counts_as_emergency_reserve).unwrap_or(false)
-            || role.map(|r| r.role == "operating").unwrap_or(false)
-        {
-            shock_reserve_total += Decimal::max(Decimal::ZERO, m.current_balance);
+        // Include: EmergencyFund, Savings, RealAccount (operating), Allowance, Shared
+        let is_shock_reserve = matches!(
+            m.account_kind.as_str(),
+            "EmergencyFund" | "Savings" | "RealAccount" | "Allowance" | "Shared"
+        );
+
+        if is_shock_reserve {
+            let balance = Decimal::max(Decimal::ZERO, m.current_balance);
+            if !balance.is_zero() {
+                shock_reserve_total += balance;
+                shock_reserve_accounts.push(common::metrics::ShockReserveAccountDto {
+                    account_id: m.account_id,
+                    account_name: account_name_map
+                        .get(&m.account_id)
+                        .unwrap_or(&"?")
+                        .to_string(),
+                    account_kind: m.account_kind.clone(),
+                    balance,
+                });
+            }
         }
     }
 
@@ -968,6 +986,7 @@ pub async fn compute_dashboard_metrics(
             months: 1,
             progress_ratio: progress,
             projected_date: calculate_projected_date(shock_reserve_total, target, safety_reserve_rate),
+            account_contributions: shock_reserve_accounts.clone(),
         })
     } else {
         None
@@ -993,6 +1012,7 @@ pub async fn compute_dashboard_metrics(
             months: 3,
             progress_ratio: progress,
             projected_date: calculate_projected_date(shock_reserve_total, target, safety_reserve_rate),
+            account_contributions: shock_reserve_accounts.clone(),
         })
     } else {
         None
@@ -1018,6 +1038,7 @@ pub async fn compute_dashboard_metrics(
             months: 6,
             progress_ratio: progress,
             projected_date: calculate_projected_date(shock_reserve_total, target, safety_reserve_rate),
+            account_contributions: shock_reserve_accounts.clone(),
         })
     } else {
         None

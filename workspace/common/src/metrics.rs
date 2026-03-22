@@ -228,6 +228,21 @@ pub struct ShockReadinessDetailsDto {
     pub progress_ratio: Decimal,
     /// Estimated date when target will be reached (if safety_reserve_rate > 0)
     pub projected_date: Option<String>,
+    /// Per-account breakdown of shock reserves
+    pub account_contributions: Vec<ShockReserveAccountDto>,
+}
+
+/// Per-account contribution to shock reserves
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+pub struct ShockReserveAccountDto {
+    /// Account ID
+    pub account_id: i32,
+    /// Account name
+    pub account_name: String,
+    /// Account kind
+    pub account_kind: String,
+    /// Current balance in this account
+    pub balance: Decimal,
 }
 
 #[cfg(test)]

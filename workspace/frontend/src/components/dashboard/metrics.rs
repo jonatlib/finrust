@@ -36,6 +36,9 @@ enum BreakdownCategory {
     Wealth,
     Debt,
     Savings,
+    Shock1M,
+    Shock3M,
+    Shock6M,
 }
 
 #[function_component(DashboardMetrics)]
@@ -609,6 +612,27 @@ fn render_dashboard(
                             html! {}
                         }
                     },
+                    BreakdownCategory::Shock1M => {
+                        if let Some(ref details) = d.shock_readiness_1m_details {
+                            render_shock_breakdown("1-Month Shock Reserve Breakdown", details)
+                        } else {
+                            html! {}
+                        }
+                    },
+                    BreakdownCategory::Shock3M => {
+                        if let Some(ref details) = d.shock_readiness_3m_details {
+                            render_shock_breakdown("3-Month Shock Reserve Breakdown", details)
+                        } else {
+                            html! {}
+                        }
+                    },
+                    BreakdownCategory::Shock6M => {
+                        if let Some(ref details) = d.shock_readiness_6m_details {
+                            render_shock_breakdown("6-Month Shock Reserve Breakdown", details)
+                        } else {
+                            html! {}
+                        }
+                    },
                 }}
 
                 // Shock Readiness (NEW METRICS)
@@ -617,9 +641,18 @@ fn render_dashboard(
                     <span class="badge badge-sm badge-warning ml-2">{"CRITICAL"}</span>
                 </h3>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    {render_shock_readiness_card("1-Month", d.shock_readiness_1m, &d.shock_readiness_1m_details)}
-                    {render_shock_readiness_card("3-Month", d.shock_readiness_3m, &d.shock_readiness_3m_details)}
-                    {render_shock_readiness_card("6-Month", d.shock_readiness_6m, &d.shock_readiness_6m_details)}
+                    {render_shock_readiness_card("1-Month", d.shock_readiness_1m, &d.shock_readiness_1m_details, &selected_category, &Callback::from({
+                        let selected_category = selected_category.clone();
+                        move |_| selected_category.set(BreakdownCategory::Shock1M)
+                    }), **selected_category == BreakdownCategory::Shock1M)}
+                    {render_shock_readiness_card("3-Month", d.shock_readiness_3m, &d.shock_readiness_3m_details, &selected_category, &Callback::from({
+                        let selected_category = selected_category.clone();
+                        move |_| selected_category.set(BreakdownCategory::Shock3M)
+                    }), **selected_category == BreakdownCategory::Shock3M)}
+                    {render_shock_readiness_card("6-Month", d.shock_readiness_6m, &d.shock_readiness_6m_details, &selected_category, &Callback::from({
+                        let selected_category = selected_category.clone();
+                        move |_| selected_category.set(BreakdownCategory::Shock6M)
+                    }), **selected_category == BreakdownCategory::Shock6M)}
                 </div>
 
                 // Info alert explaining the new metrics
@@ -647,6 +680,9 @@ fn render_shock_readiness_card(
     timeframe: &str,
     ready: Option<bool>,
     details: &Option<common::metrics::ShockReadinessDetailsDto>,
+    _selected_category: &UseStateHandle<BreakdownCategory>,
+    onclick: &Callback<MouseEvent>,
+    is_selected: bool,
 ) -> Html {
     use crate::formatting::fmt_amount;
 
@@ -654,7 +690,14 @@ fn render_shock_readiness_card(
     let status_class = if is_ready { "text-success" } else { "text-error" };
 
     html! {
-        <div class="stat bg-base-200 rounded-lg p-3">
+        <button
+            class={classes!(
+                "stat", "bg-base-200", "rounded-lg", "p-3",
+                "border-2", "cursor-pointer", "hover:shadow-md", "transition-all", "text-left",
+                if is_selected { "border-warning" } else { "border-transparent" }
+            )}
+            onclick={onclick.clone()}
+        >
             <div class="stat-title text-xs">{format!("{} Income Disruption", timeframe)}</div>
             <div class={classes!("stat-value", "text-2xl", status_class)}>
                 {if is_ready { "✓ READY" } else { "✗ NOT READY" }}
@@ -704,7 +747,57 @@ fn render_shock_readiness_card(
                     </div>
                 }
             }}
-        </div>
+        </button>
+    }
+}
+
+/// Renders shock reserve account breakdown
+fn render_shock_breakdown(title: &str, details: &common::metrics::ShockReadinessDetailsDto) -> Html {
+    use crate::formatting::fmt_amount;
+
+    html! {
+        <>
+            <h3 class="text-sm font-semibold mt-4 mb-1 opacity-70">
+                {title}
+            </h3>
+            <div class="bg-base-200 rounded-lg p-4">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th class="text-xs">{"Account"}</th>
+                            <th class="text-xs text-right">{"Balance"}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {for details.account_contributions.iter().map(|account| {
+                            html! {
+                                <tr>
+                                    <td class="text-xs opacity-70">{format!("{} ({})", account.account_name, account.account_kind)}</td>
+                                    <td class="text-right font-mono text-sm text-success">
+                                        {fmt_amount(account.balance)}
+                                    </td>
+                                </tr>
+                            }
+                        })}
+                        <tr class="border-t-2">
+                            <td class="text-xs font-bold">{"= Total Shock Reserves"}</td>
+                            <td class="text-right font-mono font-bold text-sm text-info">
+                                {fmt_amount(details.current_reserves)}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="text-xs opacity-70">{format!("Target ({} months × monthly burn)", details.months)}</td>
+                            <td class="text-right font-mono text-sm opacity-70">
+                                {fmt_amount(details.target_reserves)}
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div class="text-xs opacity-70 mt-2">
+                    {"Emergency fund accounts + Operating account buffers"}
+                </div>
+            </div>
+        </>
     }
 }
 

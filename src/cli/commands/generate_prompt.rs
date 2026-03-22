@@ -375,6 +375,28 @@ fn write_dashboard_metrics(out: &mut String, d: &DashboardMetricsDto, today: Nai
             "| Shock Readiness (1-month) | {} |",
             if sr1 { "YES" } else { "NO" }
         );
+        if let Some(ref details) = d.shock_readiness_1m_details {
+            let progress_pct = (details.progress_ratio * rust_decimal::Decimal::new(100, 0)).round_dp(0);
+            let _ = writeln!(
+                out,
+                "| ↳ Progress | {} of {} ({}%) |",
+                details.current_reserves.round_dp(0),
+                details.target_reserves.round_dp(0),
+                progress_pct
+            );
+            if let Some(ref date) = details.projected_date {
+                let _ = writeln!(out, "| ↳ Target Date | {} |", date);
+            }
+            for account in &details.account_contributions {
+                let _ = writeln!(
+                    out,
+                    "| ↳ {} ({}) | {} |",
+                    account.account_name,
+                    account.account_kind,
+                    account.balance.round_dp(0)
+                );
+            }
+        }
     }
     if let Some(sr3) = d.shock_readiness_3m {
         let _ = writeln!(
@@ -382,6 +404,28 @@ fn write_dashboard_metrics(out: &mut String, d: &DashboardMetricsDto, today: Nai
             "| Shock Readiness (3-month) | {} |",
             if sr3 { "YES" } else { "NO" }
         );
+        if let Some(ref details) = d.shock_readiness_3m_details {
+            let progress_pct = (details.progress_ratio * rust_decimal::Decimal::new(100, 0)).round_dp(0);
+            let _ = writeln!(
+                out,
+                "| ↳ Progress | {} of {} ({}%) |",
+                details.current_reserves.round_dp(0),
+                details.target_reserves.round_dp(0),
+                progress_pct
+            );
+            if let Some(ref date) = details.projected_date {
+                let _ = writeln!(out, "| ↳ Target Date | {} |", date);
+            }
+            for account in &details.account_contributions {
+                let _ = writeln!(
+                    out,
+                    "| ↳ {} ({}) | {} |",
+                    account.account_name,
+                    account.account_kind,
+                    account.balance.round_dp(0)
+                );
+            }
+        }
     }
     if let Some(sr6) = d.shock_readiness_6m {
         let _ = writeln!(
@@ -389,6 +433,28 @@ fn write_dashboard_metrics(out: &mut String, d: &DashboardMetricsDto, today: Nai
             "| Shock Readiness (6-month) | {} |",
             if sr6 { "YES" } else { "NO" }
         );
+        if let Some(ref details) = d.shock_readiness_6m_details {
+            let progress_pct = (details.progress_ratio * rust_decimal::Decimal::new(100, 0)).round_dp(0);
+            let _ = writeln!(
+                out,
+                "| ↳ Progress | {} of {} ({}%) |",
+                details.current_reserves.round_dp(0),
+                details.target_reserves.round_dp(0),
+                progress_pct
+            );
+            if let Some(ref date) = details.projected_date {
+                let _ = writeln!(out, "| ↳ Target Date | {} |", date);
+            }
+            for account in &details.account_contributions {
+                let _ = writeln!(
+                    out,
+                    "| ↳ {} ({}) | {} |",
+                    account.account_name,
+                    account.account_kind,
+                    account.balance.round_dp(0)
+                );
+            }
+        }
     }
     out.push('\n');
 
