@@ -434,8 +434,11 @@ pub async fn compute_dashboard_metrics(
             liquidity_ratio_months: None,
             total_debt_burden: None,
             shock_readiness_1m: None,
+            shock_readiness_1m_details: None,
             shock_readiness_3m: None,
+            shock_readiness_3m_details: None,
             shock_readiness_6m: None,
+            shock_readiness_6m_details: None,
             cashflow_breakdown: CashflowBreakdownDto {
                 description: "No accounts".to_string(),
                 timeframe: "N/A".to_string(),
@@ -926,8 +929,46 @@ pub async fn compute_dashboard_metrics(
         }
     }
 
+    // Helper function to calculate projected date
+    let calculate_projected_date = |current: Decimal, target: Decimal, monthly_contribution: Decimal| -> Option<String> {
+        if monthly_contribution.is_zero() || monthly_contribution.is_sign_negative() || current >= target {
+            return None;
+        }
+        let shortfall = target - current;
+        let months_needed = (shortfall / monthly_contribution).ceil();
+
+        // Convert Decimal to i64 for date calculation
+        let months_i64 = months_needed.to_string().parse::<f64>().ok()?.round() as i64;
+        if months_i64 > 999 || months_i64 < 0 {
+            return None;
+        }
+
+        // Calculate future date
+        let future_date = today + chrono::Duration::days(months_i64 * 30); // Approximate
+        Some(future_date.format("%Y-%m-%d").to_string())
+    };
+
     let shock_readiness_1m = if !essential_burn_rate.is_zero() {
         Some(shock_reserve_total >= essential_burn_rate)
+    } else {
+        None
+    };
+
+    let shock_readiness_1m_details = if !essential_burn_rate.is_zero() {
+        let target = essential_burn_rate;
+        let progress = if !target.is_zero() {
+            shock_reserve_total / target
+        } else {
+            Decimal::ZERO
+        };
+        Some(common::metrics::ShockReadinessDetailsDto {
+            current_reserves: shock_reserve_total,
+            target_reserves: target,
+            monthly_burn: essential_burn_rate,
+            months: 1,
+            progress_ratio: progress,
+            projected_date: calculate_projected_date(shock_reserve_total, target, safety_reserve_rate),
+        })
     } else {
         None
     };
@@ -938,8 +979,46 @@ pub async fn compute_dashboard_metrics(
         None
     };
 
+    let shock_readiness_3m_details = if !essential_burn_rate.is_zero() {
+        let target = essential_burn_rate * Decimal::from(3);
+        let progress = if !target.is_zero() {
+            shock_reserve_total / target
+        } else {
+            Decimal::ZERO
+        };
+        Some(common::metrics::ShockReadinessDetailsDto {
+            current_reserves: shock_reserve_total,
+            target_reserves: target,
+            monthly_burn: essential_burn_rate,
+            months: 3,
+            progress_ratio: progress,
+            projected_date: calculate_projected_date(shock_reserve_total, target, safety_reserve_rate),
+        })
+    } else {
+        None
+    };
+
     let shock_readiness_6m = if !essential_burn_rate.is_zero() {
         Some(shock_reserve_total >= essential_burn_rate * Decimal::from(6))
+    } else {
+        None
+    };
+
+    let shock_readiness_6m_details = if !essential_burn_rate.is_zero() {
+        let target = essential_burn_rate * Decimal::from(6);
+        let progress = if !target.is_zero() {
+            shock_reserve_total / target
+        } else {
+            Decimal::ZERO
+        };
+        Some(common::metrics::ShockReadinessDetailsDto {
+            current_reserves: shock_reserve_total,
+            target_reserves: target,
+            monthly_burn: essential_burn_rate,
+            months: 6,
+            progress_ratio: progress,
+            projected_date: calculate_projected_date(shock_reserve_total, target, safety_reserve_rate),
+        })
     } else {
         None
     };
@@ -1017,8 +1096,11 @@ pub async fn compute_dashboard_metrics(
         liquidity_ratio_months,
         total_debt_burden,
         shock_readiness_1m,
+        shock_readiness_1m_details,
         shock_readiness_3m,
+        shock_readiness_3m_details,
         shock_readiness_6m,
+        shock_readiness_6m_details,
         cashflow_breakdown,
         account_metrics: account_metrics_list,
     })

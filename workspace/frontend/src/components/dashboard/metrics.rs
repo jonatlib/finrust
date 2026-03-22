@@ -617,38 +617,9 @@ fn render_dashboard(
                     <span class="badge badge-sm badge-warning ml-2">{"CRITICAL"}</span>
                 </h3>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <div class="stat bg-base-200 rounded-lg p-3">
-                        <div class="stat-title text-xs">{"1-Month Income Disruption"}</div>
-                        <div class={classes!(
-                            "stat-value", "text-2xl",
-                            if d.shock_readiness_1m.unwrap_or(false) { "text-success" } else { "text-error" }
-                        )}>
-                            {if d.shock_readiness_1m.unwrap_or(false) { "✓ READY" } else { "✗ NOT READY" }}
-                        </div>
-                        <div class="stat-desc text-xs">{"Can survive 1 month with true reserves"}</div>
-                    </div>
-
-                    <div class="stat bg-base-200 rounded-lg p-3">
-                        <div class="stat-title text-xs">{"3-Month Income Disruption"}</div>
-                        <div class={classes!(
-                            "stat-value", "text-2xl",
-                            if d.shock_readiness_3m.unwrap_or(false) { "text-success" } else { "text-error" }
-                        )}>
-                            {if d.shock_readiness_3m.unwrap_or(false) { "✓ READY" } else { "✗ NOT READY" }}
-                        </div>
-                        <div class="stat-desc text-xs">{"Can survive 3 months with true reserves"}</div>
-                    </div>
-
-                    <div class="stat bg-base-200 rounded-lg p-3">
-                        <div class="stat-title text-xs">{"6-Month Income Disruption"}</div>
-                        <div class={classes!(
-                            "stat-value", "text-2xl",
-                            if d.shock_readiness_6m.unwrap_or(false) { "text-success" } else { "text-error" }
-                        )}>
-                            {if d.shock_readiness_6m.unwrap_or(false) { "✓ READY" } else { "✗ NOT READY" }}
-                        </div>
-                        <div class="stat-desc text-xs">{"Can survive 6 months with true reserves"}</div>
-                    </div>
+                    {render_shock_readiness_card("1-Month", d.shock_readiness_1m, &d.shock_readiness_1m_details)}
+                    {render_shock_readiness_card("3-Month", d.shock_readiness_3m, &d.shock_readiness_3m_details)}
+                    {render_shock_readiness_card("6-Month", d.shock_readiness_6m, &d.shock_readiness_6m_details)}
                 </div>
 
                 // Info alert explaining the new metrics
@@ -667,6 +638,72 @@ fn render_dashboard(
                     </div>
                 </div>
             </div>
+        </div>
+    }
+}
+
+/// Renders a shock readiness card with progress bar and details
+fn render_shock_readiness_card(
+    timeframe: &str,
+    ready: Option<bool>,
+    details: &Option<common::metrics::ShockReadinessDetailsDto>,
+) -> Html {
+    use crate::formatting::fmt_amount;
+
+    let is_ready = ready.unwrap_or(false);
+    let status_class = if is_ready { "text-success" } else { "text-error" };
+
+    html! {
+        <div class="stat bg-base-200 rounded-lg p-3">
+            <div class="stat-title text-xs">{format!("{} Income Disruption", timeframe)}</div>
+            <div class={classes!("stat-value", "text-2xl", status_class)}>
+                {if is_ready { "✓ READY" } else { "✗ NOT READY" }}
+            </div>
+
+            {if let Some(ref d) = details {
+                let progress_pct = (d.progress_ratio * rust_decimal::Decimal::new(100, 0))
+                    .to_string()
+                    .parse::<f64>()
+                    .unwrap_or(0.0)
+                    .min(100.0);
+
+                html! {
+                    <>
+                        <div class="mt-2">
+                            <div class="text-xs opacity-70 mb-1">
+                                {format!("{} of {} ({:.0}%)",
+                                    fmt_amount(d.current_reserves),
+                                    fmt_amount(d.target_reserves),
+                                    progress_pct
+                                )}
+                            </div>
+                            <progress
+                                class={classes!(
+                                    "progress", "w-full",
+                                    if is_ready { "progress-success" } else { "progress-error" }
+                                )}
+                                value={progress_pct.to_string()}
+                                max="100"
+                            />
+                        </div>
+                        {if let Some(ref proj_date) = d.projected_date {
+                            html! {
+                                <div class="text-xs opacity-70 mt-1">
+                                    {format!("Target: {}", proj_date)}
+                                </div>
+                            }
+                        } else {
+                            html! {}
+                        }}
+                    </>
+                }
+            } else {
+                html! {
+                    <div class="stat-desc text-xs">
+                        {format!("Can survive {} with true reserves", timeframe.to_lowercase())}
+                    </div>
+                }
+            }}
         </div>
     }
 }

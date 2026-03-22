@@ -175,10 +175,16 @@ pub struct DashboardMetricsDto {
     pub total_debt_burden: Option<Decimal>,
     /// Can survive 1-month income disruption with available reserves
     pub shock_readiness_1m: Option<bool>,
+    /// Detailed breakdown for 1-month shock readiness
+    pub shock_readiness_1m_details: Option<ShockReadinessDetailsDto>,
     /// Can survive 3-month income disruption with available reserves
     pub shock_readiness_3m: Option<bool>,
+    /// Detailed breakdown for 3-month shock readiness
+    pub shock_readiness_3m_details: Option<ShockReadinessDetailsDto>,
     /// Can survive 6-month income disruption with available reserves
     pub shock_readiness_6m: Option<bool>,
+    /// Detailed breakdown for 6-month shock readiness
+    pub shock_readiness_6m_details: Option<ShockReadinessDetailsDto>,
     /// Detailed breakdown of how free_cashflow is computed
     pub cashflow_breakdown: CashflowBreakdownDto,
     /// Per-account metrics for all accounts
@@ -205,6 +211,23 @@ pub struct CategoryBreakdownDto {
     pub total: Decimal,
     /// Per-account contributions to this category
     pub contributions: Vec<CashflowContributionDto>,
+}
+
+/// Detailed breakdown for shock readiness
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+pub struct ShockReadinessDetailsDto {
+    /// Current amount in shock reserves (emergency funds + operating buffers)
+    pub current_reserves: Decimal,
+    /// Target amount needed for this timeframe
+    pub target_reserves: Decimal,
+    /// Monthly essential burn rate
+    pub monthly_burn: Decimal,
+    /// Number of months this timeframe covers
+    pub months: i32,
+    /// Progress ratio (0.0 to 1.0+)
+    pub progress_ratio: Decimal,
+    /// Estimated date when target will be reached (if safety_reserve_rate > 0)
+    pub projected_date: Option<String>,
 }
 
 #[cfg(test)]
@@ -268,8 +291,11 @@ mod tests {
             liquidity_ratio_months: Some(Decimal::new(94, 1)),
             total_debt_burden: Some(Decimal::new(30, 2)),
             shock_readiness_1m: Some(true),
+            shock_readiness_1m_details: None,
             shock_readiness_3m: Some(true),
+            shock_readiness_3m_details: None,
             shock_readiness_6m: Some(false),
+            shock_readiness_6m_details: None,
             cashflow_breakdown: CashflowBreakdownDto {
                 description: "Free cashflow = income − expenses on operating accounts".into(),
                 timeframe: "last calendar month".into(),
