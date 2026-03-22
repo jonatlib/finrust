@@ -2,8 +2,10 @@ use anyhow::Result;
 use chrono::{Datelike, Months, NaiveDate, Utc};
 use common::metrics::{AccountKindMetricsDto, AccountMetricsDto, DashboardMetricsDto};
 use compute::account::utils::generate_occurrences;
+use compute::metrics::account_metrics::monthly_equivalent;
 use compute::metrics::account_role::derive_account_role as compute_account_role;
 use compute::metrics::cross_account_metrics;
+use compute::metrics::filter_active_recurring;
 use compute::{account::AccountStateCalculator, account_stats, default_compute};
 use model::entities::{
     account::{self, AccountKind},
@@ -89,10 +91,12 @@ pub async fn build_prompt(db: &DatabaseConnection, months_back: u32) -> Result<S
     // Mortgage refix readiness
     write_mortgage_refix_readiness(&mut prompt, &accounts, &account_metrics_map);
 
-    // Goal engine split (safety / consumption / wealth)
-    if let Some(ref d) = dashboard {
-        write_goal_engine_split(&mut prompt, &accounts, &d.account_metrics);
-    }
+    // Goal engine split (safety / consumption / wealth) — uses recurring transactions only
+    let all_recurring: Vec<recurring_transaction::Model> = recurring_transaction::Entity::find()
+        .all(db)
+        .await
+        .unwrap_or_default();
+    write_goal_engine_split(&mut prompt, &accounts, &all_recurring, today);
 
     // Recent financial changes
     write_recent_financial_changes(&mut prompt, db, &accounts, today).await;
@@ -250,10 +254,13 @@ fn write_dashboard_metrics(out: &mut String, d: &DashboardMetricsDto, today: Nai
         "| Essential Burn Rate (monthly) | {} |",
         d.essential_burn_rate.round_dp(0)
     );
+    // Full burn = essential burn for now (controllable/discretionary not yet classified)
+    let burn_is_complete = d.essential_burn_rate != d.full_burn_rate;
     let _ = writeln!(
         out,
-        "| Full Burn Rate (monthly) | {} |",
-        d.full_burn_rate.round_dp(0)
+        "| Full Burn Rate (monthly) | {} | ⚠️ confidence: {} |",
+        d.full_burn_rate.round_dp(0),
+        if burn_is_complete { "HIGH" } else { "LOW — essential=full, controllable/discretionary not yet separated" }
     );
     let _ = writeln!(
         out,
@@ -320,21 +327,21 @@ fn write_dashboard_metrics(out: &mut String, d: &DashboardMetricsDto, today: Nai
     if let Some(sr) = d.safety_reserve_rate {
         let _ = writeln!(
             out,
-            "| ↳ Safety Reserve Rate | {} |",
+            "| ↳ Safety Reserve Rate (LEGACY) | {} | ⚠️ may include one-time flows |",
             sr.round_dp(0)
         );
     }
     if let Some(cr) = d.consumption_goal_rate {
         let _ = writeln!(
             out,
-            "| ↳ Consumption Goal Rate | {} |",
+            "| ↳ Consumption Goal Rate (LEGACY) | {} | ⚠️ may include one-time flows |",
             cr.round_dp(0)
         );
     }
     if let Some(wr) = d.wealth_building_rate {
         let _ = writeln!(
             out,
-            "| ↳ Wealth Building Rate | {} |",
+            "| ↳ Wealth Building Rate (LEGACY) | {} | ⚠️ may include one-time flows |",
             wr.round_dp(0)
         );
     }
@@ -686,8 +693,34 @@ fn write_account_metrics(out: &mut String, m: &AccountMetricsDto) {
                 if let Some(gl) = inv.gain_loss_absolute {
                     let _ = writeln!(out, "- Gain/Loss: {}", gl.round_dp(0));
                 }
+                // Detect unreliable returns: negative net contributions means
+                // withdrawals exceeded deposits, distorting simple return math.
+                // Also flag extreme returns (>100% or <-50%) as likely distorted.
+                let has_withdrawals = inv
+                    .net_contributions
+                    .map(|nc| nc < Decimal::ZERO)
+                    .unwrap_or(false);
+                let return_extreme = inv
+                    .gain_loss_percent
+                    .map(|p| p > Decimal::from(100) || p < Decimal::from(-50))
+                    .unwrap_or(false);
+                let return_reliable = !has_withdrawals && !return_extreme;
+
                 if let Some(pct) = inv.gain_loss_percent {
-                    let _ = writeln!(out, "- Return: {:.1}%", pct);
+                    if return_reliable {
+                        let _ = writeln!(out, "- Return: {:.1}%", pct);
+                    } else {
+                        let _ = writeln!(
+                            out,
+                            "- Return: {:.1}% ⚠️ LOW RELIABILITY ({})",
+                            pct,
+                            if has_withdrawals {
+                                "withdrawals distort net contribution math"
+                            } else {
+                                "extreme value suggests data anomaly"
+                            }
+                        );
+                    }
                 }
             }
             AccountKindMetricsDto::Debt(debt) => {
@@ -857,7 +890,11 @@ async fn write_income_summary(
     };
 
     if incomes.is_empty() {
-        out.push_str("No recurring income definitions found.\n\n");
+        out.push_str("**Explicit recurring income definitions:** not available.\n");
+        out.push_str("_This does NOT mean income is absent. Recurring income may exist as:_\n");
+        out.push_str("- Observed recurring salary/contract payments in transaction history\n");
+        out.push_str("- Forecast income assumptions built into recurring transaction projections\n");
+        out.push_str("_Check the recurring commitments section and account balance trends for implicit income signals._\n\n");
         return;
     }
 
@@ -1246,23 +1283,81 @@ fn write_shock_readiness(
     if essential_monthly > Decimal::ZERO {
         let coverage_months = total_available / essential_monthly;
 
-        // Use dashboard-computed shock readiness if available
-        let months_1 = d.shock_readiness_1m.map(|sr| if sr { "YES" } else { "NO" }).unwrap_or("N/A");
-        let months_3 = d.shock_readiness_3m.map(|sr| if sr { "YES" } else { "NO" }).unwrap_or("N/A");
-        let months_6 = d.shock_readiness_6m.map(|sr| if sr { "YES" } else { "NO" }).unwrap_or("N/A");
+        // Compute shock readiness locally from our own reserve totals (true reserves only).
+        // The dashboard booleans use a wider pool (all Savings, Allowances etc.) which
+        // can produce YES even when true emergency reserves are insufficient.
+        let ready_1m = total_available >= essential_monthly;
+        let ready_3m = total_available >= essential_monthly * Decimal::from(3);
+        let ready_6m = total_available >= essential_monthly * Decimal::from(6);
 
         let _ = writeln!(
             out,
-            "- **1-month shock readiness**: {} (coverage: {:.1} months)",
-            months_1, coverage_months
+            "- **1-month shock readiness**: {} (coverage: {:.1} months, need: {})",
+            if ready_1m { "YES" } else { "NO" },
+            coverage_months,
+            essential_monthly.round_dp(0)
         );
-        let _ = writeln!(out, "- **3-month shock readiness**: {}", months_3);
-        let _ = writeln!(out, "- **6-month shock readiness**: {}", months_6);
+        let _ = writeln!(
+            out,
+            "- **3-month shock readiness**: {} (need: {})",
+            if ready_3m { "YES" } else { "NO" },
+            (essential_monthly * Decimal::from(3)).round_dp(0)
+        );
+        let _ = writeln!(
+            out,
+            "- **6-month shock readiness**: {} (need: {})",
+            if ready_6m { "YES" } else { "NO" },
+            (essential_monthly * Decimal::from(6)).round_dp(0)
+        );
     } else {
         out.push_str("- Essential burn rate is zero — cannot compute shock readiness.\n");
     }
 
-    out.push_str("\n_Note: Uses ONLY true emergency reserves + operating buffers. Excludes tax reserves, sinking funds, investments, and house equity._\n\n");
+    // Reserve stack: explain what is included and excluded
+    out.push_str("\n**Reserve stack (what counts):**\n");
+    let mut secondary_reserves: Vec<(String, Decimal)> = Vec::new();
+    let mut excluded_items: Vec<(String, String)> = Vec::new();
+
+    for a in accounts {
+        let role = compute_account_role(a);
+        let balance = d
+            .account_metrics
+            .iter()
+            .find(|m| m.account_id == a.id)
+            .map(|m| m.current_balance)
+            .unwrap_or(Decimal::ZERO);
+
+        if role.counts_as_emergency_reserve || role.counts_as_income_smoothing || role.role == "operating" {
+            // Already counted above
+            continue;
+        }
+
+        if role.can_be_used_in_emergency && balance > Decimal::ZERO {
+            secondary_reserves.push((a.name.clone(), balance));
+        } else if balance > Decimal::ZERO {
+            excluded_items.push((a.name.clone(), role.role.clone()));
+        }
+    }
+
+    out.push_str("- ✅ Operating buffers (immediate liquidity)\n");
+    out.push_str("- ✅ True emergency reserves (dedicated emergency funds)\n");
+    out.push_str("- ✅ Income smoothing reserves (variable income buffer)\n");
+
+    if !secondary_reserves.is_empty() {
+        out.push_str("- ⚠️ Secondary reserves (usable in emergency but not counted above):\n");
+        for (name, balance) in &secondary_reserves {
+            let _ = writeln!(out, "  - {} ({})", name, balance.round_dp(0));
+        }
+    }
+
+    if !excluded_items.is_empty() {
+        out.push_str("- ❌ Excluded from reserves:\n");
+        for (name, role) in &excluded_items {
+            let _ = writeln!(out, "  - {} (role: {})", name, role);
+        }
+    }
+
+    out.push('\n');
 }
 
 // ---------------------------------------------------------------------------
@@ -1344,60 +1439,87 @@ fn write_mortgage_refix_readiness(
 fn write_goal_engine_split(
     out: &mut String,
     accounts: &[account::Model],
-    account_metrics: &[AccountMetricsDto],
+    recurring_txns: &[recurring_transaction::Model],
+    today: NaiveDate,
 ) {
-    out.push_str("## GOAL ENGINE BREAKDOWN\n\n");
-    out.push_str("_Splits monthly inflows by purpose: safety vs consumption vs wealth._\n\n");
+    out.push_str("## GOAL ENGINE BREAKDOWN (RECURRING ONLY)\n\n");
+    out.push_str("_Splits monthly **recurring** contributions by purpose: safety vs consumption vs wealth._\n");
+    out.push_str("_Uses ONLY active recurring transactions — one-time deposits/withdrawals are excluded._\n");
     out.push_str("_Uses DERIVED account roles (not just base types) to classify flows correctly._\n\n");
+
+    let active = filter_active_recurring(recurring_txns, today);
+
+    // Build account lookup by id
+    let account_map: HashMap<i32, &account::Model> =
+        accounts.iter().map(|a| (a.id, a)).collect();
+
+    // Compute net recurring monthly contribution per account
+    // Positive amount on target = inflow to that account
+    // source_account_id presence = transfer (outflow from source)
+    let mut account_recurring: HashMap<i32, Decimal> = HashMap::new();
+    for tx in &active {
+        let monthly = monthly_equivalent(tx.amount, &tx.period);
+        // Inflow to target account
+        *account_recurring.entry(tx.target_account_id).or_insert(Decimal::ZERO) += monthly;
+        // Outflow from source account (if transfer)
+        if let Some(src_id) = tx.source_account_id {
+            *account_recurring.entry(src_id).or_insert(Decimal::ZERO) -= monthly;
+        }
+    }
 
     let mut safety_total = Decimal::ZERO;
     let mut consumption_total = Decimal::ZERO;
     let mut wealth_total = Decimal::ZERO;
+    let mut debt_total = Decimal::ZERO;
 
     let mut safety_items: Vec<(String, Decimal)> = Vec::new();
     let mut consumption_items: Vec<(String, Decimal)> = Vec::new();
     let mut wealth_items: Vec<(String, Decimal)> = Vec::new();
+    let mut debt_items: Vec<(String, Decimal)> = Vec::new();
 
-    for a in accounts {
-        let role = compute_account_role(a);
-        let net_flow = account_metrics
-            .iter()
-            .find(|m| m.account_id == a.id)
-            .and_then(|m| m.monthly_net_flow)
-            .unwrap_or(Decimal::ZERO);
-
-        if net_flow <= Decimal::ZERO {
+    for (acct_id, &net_recurring) in &account_recurring {
+        let Some(a) = account_map.get(acct_id) else {
             continue;
-        }
+        };
+        let role = compute_account_role(a);
 
         // Skip operating accounts — their inflows are income, not goal contributions
         if role.role == "operating" {
             continue;
         }
 
+        // Only count positive net recurring inflows as "contributions"
+        if net_recurring <= Decimal::ZERO {
+            continue;
+        }
+
         match role.role.as_str() {
             "emergency_reserve" | "reserved_liability" | "income_smoothing"
             | "maintenance_reserve" => {
-                safety_total += net_flow;
-                safety_items.push((a.name.clone(), net_flow));
+                safety_total += net_recurring;
+                safety_items.push((a.name.clone(), net_recurring));
             }
             "sinking_fund" | "personal_allowance" | "family_discretionary" | "savings" => {
-                consumption_total += net_flow;
-                consumption_items.push((a.name.clone(), net_flow));
+                consumption_total += net_recurring;
+                consumption_items.push((a.name.clone(), net_recurring));
             }
             "investment" | "equity_investment" | "retirement" => {
-                wealth_total += net_flow;
-                wealth_items.push((a.name.clone(), net_flow));
+                wealth_total += net_recurring;
+                wealth_items.push((a.name.clone(), net_recurring));
+            }
+            "debt" => {
+                debt_total += net_recurring;
+                debt_items.push((a.name.clone(), net_recurring));
             }
             _ => {
-                consumption_total += net_flow;
-                consumption_items.push((a.name.clone(), net_flow));
+                consumption_total += net_recurring;
+                consumption_items.push((a.name.clone(), net_recurring));
             }
         }
     }
 
-    out.push_str("| Engine | Monthly Total | Accounts |\n");
-    out.push_str("|--------|---------------|----------|\n");
+    out.push_str("| Engine | Monthly Recurring | Accounts |\n");
+    out.push_str("|--------|-------------------|----------|\n");
 
     let fmt_items = |items: &[(String, Decimal)]| -> String {
         if items.is_empty() {
@@ -1428,7 +1550,16 @@ fn write_goal_engine_split(
         wealth_total.round_dp(0),
         fmt_items(&wealth_items)
     );
-    out.push_str("\n_WARNING: Do not count safety and consumption goals as \"savings\" or wealth building._\n\n");
+    if debt_total > Decimal::ZERO {
+        let _ = writeln!(
+            out,
+            "| **Debt payments** (mandatory, not savings) | {} | {} |",
+            debt_total.round_dp(0),
+            fmt_items(&debt_items)
+        );
+    }
+    out.push_str("\n_WARNING: These are RECURRING contributions only. One-time deposits (e.g., lump-sum investment) are excluded._\n");
+    out.push_str("_Do not count safety and consumption goals as \"savings\" or wealth building._\n\n");
 }
 
 // ---------------------------------------------------------------------------
@@ -1582,77 +1713,89 @@ async fn write_recent_financial_changes(
 
 fn write_known_future_events(out: &mut String, accounts: &[account::Model]) {
     out.push_str("## KNOWN FUTURE EVENTS\n\n");
-    out.push_str("_Extracted from account descriptions using generic keyword detection._\n\n");
+    out.push_str("_Extracted from account descriptions using role-aware keyword detection._\n");
+    out.push_str("_Only roles that logically produce future events are scanned._\n\n");
 
     let mut events: Vec<String> = Vec::new();
 
     for a in accounts {
         let desc = a.description.as_deref().unwrap_or("");
         let desc_lower = desc.to_lowercase();
+        let role = compute_account_role(a);
 
-        // Generic debt repricing detection
-        if a.account_kind == AccountKind::Debt
-            && (desc_lower.contains("fixation")
+        // --- Debt accounts: repricing, payoff goals ---
+        if role.role == "debt" {
+            if desc_lower.contains("fixation")
                 || desc_lower.contains("refix")
                 || desc_lower.contains("refinanc")
                 || desc_lower.contains("interest rate change")
                 || desc_lower.contains("strike")
                 || desc_lower.contains("rate change")
-                || desc_lower.contains("repricing"))
-        {
-            events.push(format!(
-                "- **Debt repricing / rate change** ({}): {}",
-                a.name, desc
-            ));
-        }
-
-        // Generic purchase / downpayment detection
-        if desc_lower.contains("down payment")
-            || desc_lower.contains("downpayment")
-            || desc_lower.contains("purchase")
-            || desc_lower.contains("buy")
-        {
-            events.push(format!(
-                "- **Planned purchase** ({}): {}",
-                a.name, desc
-            ));
-        }
-
-        // Generic loan payoff targets
-        if a.account_kind == AccountKind::Debt
-            && (desc_lower.contains("get rid")
+                || desc_lower.contains("repricing")
+            {
+                events.push(format!(
+                    "- **Debt repricing / rate change** ({}): {}",
+                    a.name, desc
+                ));
+            }
+            if desc_lower.contains("get rid")
                 || desc_lower.contains("pay off")
-                || desc_lower.contains("goal"))
-        {
-            events.push(format!(
-                "- **Debt payoff goal** ({}): {}",
-                a.name, desc
-            ));
+                || desc_lower.contains("goal")
+            {
+                events.push(format!(
+                    "- **Debt payoff goal** ({}): {}",
+                    a.name, desc
+                ));
+            }
         }
 
-        // Income seasonality / variable income
-        if desc_lower.contains("seasonal")
-            || desc_lower.contains("variable income")
-            || desc_lower.contains("low-income month")
-            || (desc_lower.contains("osvc") && desc_lower.contains("buffer"))
-        {
-            events.push(format!(
-                "- **Income variability** ({}): {}",
-                a.name, desc
-            ));
+        // --- Sinking funds: planned purchases / spending events ---
+        if role.role == "sinking_fund" {
+            if desc_lower.contains("down payment")
+                || desc_lower.contains("downpayment")
+                || desc_lower.contains("purchase")
+                || desc_lower.contains("buy")
+                || desc_lower.contains("saving for")
+            {
+                events.push(format!(
+                    "- **Planned purchase / spending goal** ({}): {}",
+                    a.name, desc
+                ));
+            }
         }
 
-        // Target date / goal date detection
+        // --- Income smoothing: income variability ---
+        if role.role == "income_smoothing" {
+            if desc_lower.contains("seasonal")
+                || desc_lower.contains("variable income")
+                || desc_lower.contains("low-income month")
+                || desc_lower.contains("not making money")
+                || desc_lower.contains("buffer")
+            {
+                events.push(format!(
+                    "- **Income variability / seasonality** ({}): {}",
+                    a.name, desc
+                ));
+            }
+        }
+
+        // --- Any account with a target and a date reference ---
         if a.target_amount.is_some()
             && (desc_lower.contains("by ")
-                || desc_lower.contains("target date")
-                || desc_lower.contains("goal date"))
+            || desc_lower.contains("target date")
+            || desc_lower.contains("goal date"))
         {
             events.push(format!(
                 "- **Target date goal** ({}): {}",
                 a.name, desc
             ));
         }
+
+        // Roles that should NOT generate events:
+        // - operating: normal spending, no future event
+        // - personal_allowance / family_discretionary: spending noise
+        // - house_value: not a spending event
+        // - emergency_reserve / maintenance_reserve: not a future event
     }
 
     if events.is_empty() {

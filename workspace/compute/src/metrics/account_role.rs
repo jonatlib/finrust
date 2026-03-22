@@ -76,40 +76,14 @@ pub fn derive_account_role(account: &account::Model) -> DerivedAccountRole {
     // Refinement layer: use description to override base kind classification
     match kind {
         AccountKind::Savings => {
-            // Check for sinking fund (future planned spending)
-            if (desc_lower.contains("vacation") && !desc_lower.contains("replacement"))
-                || desc_lower.contains("down payment")
-                || desc_lower.contains("downpayment")
-                || desc_lower.contains("saving for")
-                || (account.target_amount.is_some()
-                    && (desc_lower.contains("will be spend")
-                        || desc_lower.contains("spend")))
-            {
-                return DerivedAccountRole {
-                    role: "sinking_fund".to_string(),
-                    purpose: "Savings earmarked for specific future spending".to_string(),
-                    can_be_used_in_emergency: false,
-                    counts_as_emergency_reserve: false,
-                    counts_as_income_smoothing: false,
-                    counts_as_long_term_wealth: false,
-                    is_earmarked_spending: true,
-                    priority_level: "low".to_string(),
-                    classification_reason: format!(
-                        "Savings account with future spending keywords in description: '{}'",
-                        desc.chars().take(80).collect::<String>()
-                    ),
-                };
-            }
+            // Use weighted scoring to distinguish income smoothing from sinking fund.
+            // Smoothing: buffer for variable income (self-employment, freelance).
+            // Sinking: saving for a specific planned future expense.
+            let (smoothing_score, sinking_score) =
+                score_smoothing_vs_sinking(&desc_lower, account.target_amount.is_some());
 
-            // Check for income smoothing buffer
-            if desc_lower.contains("replacement")
-                || desc_lower.contains("buffer")
-                || desc_lower.contains("smoothing")
-                || desc_lower.contains("variable income")
-                || (desc_lower.contains("osvc") || desc_lower.contains("self-employed"))
-                    && desc_lower.contains("vacation")
-            {
-                return DerivedAccountRole {
+            if smoothing_score > sinking_score {
+                DerivedAccountRole {
                     role: "income_smoothing".to_string(),
                     purpose: "Buffer for variable income months (not true emergency fund)".to_string(),
                     can_be_used_in_emergency: true,
@@ -119,35 +93,55 @@ pub fn derive_account_role(account: &account::Model) -> DerivedAccountRole {
                     is_earmarked_spending: false,
                     priority_level: "high".to_string(),
                     classification_reason: format!(
-                        "Savings account with income smoothing keywords: '{}'",
+                        "Savings scored smoothing({}) > sinking({}): '{}'",
+                        smoothing_score,
+                        sinking_score,
                         desc.chars().take(80).collect::<String>()
                     ),
-                };
-            }
-
-            // Generic savings (ambiguous - needs LLM interpretation)
-            DerivedAccountRole {
-                role: "savings".to_string(),
-                purpose: "General savings account — check description to determine if sinking fund, reserve, or wealth building".to_string(),
-                can_be_used_in_emergency: true,
-                counts_as_emergency_reserve: false,
-                counts_as_income_smoothing: false,
-                counts_as_long_term_wealth: false,
-                is_earmarked_spending: false,
-                priority_level: "medium".to_string(),
-                classification_reason: "Savings account without clear refinement keywords".to_string(),
+                }
+            } else if sinking_score > 0 {
+                DerivedAccountRole {
+                    role: "sinking_fund".to_string(),
+                    purpose: "Savings earmarked for specific future spending".to_string(),
+                    can_be_used_in_emergency: false,
+                    counts_as_emergency_reserve: false,
+                    counts_as_income_smoothing: false,
+                    counts_as_long_term_wealth: false,
+                    is_earmarked_spending: true,
+                    priority_level: "low".to_string(),
+                    classification_reason: format!(
+                        "Savings scored sinking({}) >= smoothing({}): '{}'",
+                        sinking_score,
+                        smoothing_score,
+                        desc.chars().take(80).collect::<String>()
+                    ),
+                }
+            } else {
+                // Neither scored — ambiguous savings, needs LLM interpretation
+                DerivedAccountRole {
+                    role: "savings".to_string(),
+                    purpose: "General savings account — check description to determine if sinking fund, reserve, or wealth building".to_string(),
+                    can_be_used_in_emergency: true,
+                    counts_as_emergency_reserve: false,
+                    counts_as_income_smoothing: false,
+                    counts_as_long_term_wealth: false,
+                    is_earmarked_spending: false,
+                    priority_level: "medium".to_string(),
+                    classification_reason: "Savings account without clear refinement keywords".to_string(),
+                }
             }
         }
 
         AccountKind::EmergencyFund => {
-            // Check for maintenance reserve (not true emergency)
-            if desc_lower.contains("maintenance")
-                || desc_lower.contains("repair")
-                || desc_lower.contains("house")
-                || desc_lower.contains("roof")
-                || desc_lower.contains("appliance")
-            {
-                return DerivedAccountRole {
+            // Use weighted scoring to distinguish true emergency fund from maintenance reserve.
+            // Words like "burns", "job loss", "emergency" boost emergency score.
+            // Words like "maintenance", "repair", "upkeep" boost maintenance score.
+            // Context matters: "roof burns" is emergency, "roof repair" is maintenance.
+            let (emergency_score, maintenance_score) =
+                score_emergency_vs_maintenance(&desc_lower);
+
+            if maintenance_score > emergency_score {
+                DerivedAccountRole {
                     role: "maintenance_reserve".to_string(),
                     purpose: "Reserve for predictable home/vehicle maintenance — not a true emergency fund".to_string(),
                     can_be_used_in_emergency: true,
@@ -157,23 +151,30 @@ pub fn derive_account_role(account: &account::Model) -> DerivedAccountRole {
                     is_earmarked_spending: true,
                     priority_level: "high".to_string(),
                     classification_reason: format!(
-                        "EmergencyFund account with maintenance keywords: '{}'",
+                        "EmergencyFund scored maintenance({}) > emergency({}): '{}'",
+                        maintenance_score,
+                        emergency_score,
                         desc.chars().take(80).collect::<String>()
                     ),
-                };
-            }
-
-            // True emergency fund
-            DerivedAccountRole {
-                role: "emergency_reserve".to_string(),
-                purpose: "True emergency fund for income disruption or unexpected crises".to_string(),
-                can_be_used_in_emergency: true,
-                counts_as_emergency_reserve: true,
-                counts_as_income_smoothing: false,
-                counts_as_long_term_wealth: false,
-                is_earmarked_spending: false,
-                priority_level: "critical".to_string(),
-                classification_reason: "EmergencyFund account with emergency-related description".to_string(),
+                }
+            } else {
+                // Default: EmergencyFund kind → true emergency reserve
+                DerivedAccountRole {
+                    role: "emergency_reserve".to_string(),
+                    purpose: "True emergency fund for income disruption or unexpected crises".to_string(),
+                    can_be_used_in_emergency: true,
+                    counts_as_emergency_reserve: true,
+                    counts_as_income_smoothing: false,
+                    counts_as_long_term_wealth: false,
+                    is_earmarked_spending: false,
+                    priority_level: "critical".to_string(),
+                    classification_reason: format!(
+                        "EmergencyFund scored emergency({}) >= maintenance({}): '{}'",
+                        emergency_score,
+                        maintenance_score,
+                        desc.chars().take(80).collect::<String>()
+                    ),
+                }
             }
         }
 
@@ -217,6 +218,145 @@ pub fn derive_account_role(account: &account::Model) -> DerivedAccountRole {
         // Remaining kinds use base classification
         _ => derive_account_role_from_kind(kind),
     }
+}
+
+/// Scores emergency vs maintenance intent from description text.
+///
+/// Uses weighted keyword matching with context awareness:
+/// - Emergency keywords: crisis scenarios (job loss, fire, catastrophe, "goes wrong")
+/// - Maintenance keywords: predictable upkeep (repair, maintenance, appliance replacement)
+/// - Context modifiers: "burns" near "roof"/"house" boosts emergency (catastrophe),
+///   while "repair" near "roof"/"house" boosts maintenance
+///
+/// Returns `(emergency_score, maintenance_score)`. Higher score wins.
+/// On tie or both zero, the base AccountKind default applies (emergency for EmergencyFund).
+fn score_emergency_vs_maintenance(desc_lower: &str) -> (i32, i32) {
+    let mut emergency: i32 = 0;
+    let mut maintenance: i32 = 0;
+
+    // Strong emergency signals (crisis / catastrophe / income disruption)
+    let emergency_keywords = [
+        ("job loss", 3),
+        ("lose job", 3),
+        ("loose job", 3),      // common misspelling
+        ("lose my job", 3),
+        ("emergency", 3),
+        ("goes wrong", 3),
+        ("something happens", 2),
+        ("pillow", 2),         // "financial pillow" idiom
+        ("crisis", 3),
+        ("catastroph", 3),
+        ("unexpected", 2),
+        ("disaster", 3),
+        ("burns", 2),          // "house burns down" = emergency
+        ("fire", 2),
+        ("flood", 2),
+        ("insurance", 1),      // having insurance context suggests emergency planning
+        ("income disruption", 3),
+        ("safety net", 3),
+        ("rainy day", 2),
+    ];
+
+    // Strong maintenance signals (predictable, planned upkeep)
+    let maintenance_keywords = [
+        ("maintenance", 3),
+        ("repair", 3),
+        ("upkeep", 3),
+        ("fond oprav", 3),     // Czech "repair fund" concept
+        ("appliance", 2),
+        ("washing machine", 2),
+        ("replacement fund", 2),
+        ("wear and tear", 2),
+        ("regular upkeep", 3),
+        ("home improvement", 2),
+        ("renovation", 2),
+    ];
+
+    for (kw, weight) in &emergency_keywords {
+        if desc_lower.contains(kw) {
+            emergency += weight;
+        }
+    }
+
+    for (kw, weight) in &maintenance_keywords {
+        if desc_lower.contains(kw) {
+            maintenance += weight;
+        }
+    }
+
+    // Context-aware: "house" and "roof" are neutral on their own.
+    // They only matter in combination with emergency or maintenance context.
+    // If already scored by specific keywords above, no extra adjustment needed.
+    // If neither scored, these words alone don't determine the role.
+
+    (emergency, maintenance)
+}
+
+/// Scores income-smoothing vs sinking-fund intent for Savings accounts.
+///
+/// Income smoothing: buffer for variable income months (self-employment, freelance).
+/// Sinking fund: saving for a specific planned future expense.
+///
+/// Returns `(smoothing_score, sinking_score)`.
+fn score_smoothing_vs_sinking(desc_lower: &str, has_target: bool) -> (i32, i32) {
+    let mut smoothing: i32 = 0;
+    let mut sinking: i32 = 0;
+
+    let smoothing_keywords = [
+        ("buffer", 2),
+        ("smoothing", 3),
+        ("variable income", 3),
+        ("not making money", 3),
+        ("won't be making money", 3),    // typo-tolerant
+        ("won't be maing money", 3),     // actual data typo
+        ("not earning", 2),
+        ("income replacement", 3),
+        ("income buffer", 3),
+        ("low-income month", 3),
+        ("when i don't invoice", 3),
+        ("replacement", 2),
+        ("self-employed", 2),
+        ("osvc", 2),                     // Czech self-employment
+        ("freelanc", 2),
+    ];
+
+    let sinking_keywords = [
+        ("saving for", 2),
+        ("will be spend", 3),            // actual data phrasing
+        ("will be spent", 3),
+        ("down payment", 3),
+        ("downpayment", 3),
+        ("accommodation", 2),
+        ("planned purchase", 3),
+        ("trip", 1),
+        ("air condition", 2),
+        ("new car", 2),
+    ];
+
+    for (kw, weight) in &smoothing_keywords {
+        if desc_lower.contains(kw) {
+            smoothing += weight;
+        }
+    }
+
+    for (kw, weight) in &sinking_keywords {
+        if desc_lower.contains(kw) {
+            sinking += weight;
+        }
+    }
+
+    // "vacation" is ambiguous: vacation fund (sinking) vs vacation income replacement (smoothing)
+    // Only count it for sinking if no smoothing signals are present
+    if desc_lower.contains("vacation") && smoothing == 0 {
+        sinking += 2;
+    }
+
+    // Having a target amount is a weak signal toward sinking fund (saving toward a goal)
+    if has_target && sinking == 0 && smoothing == 0 {
+        sinking += 1;
+    }
+
+    (smoothing, sinking)
 }
 
 /// Baseline classification from AccountKind when no description refinement applies.
@@ -468,5 +608,97 @@ mod tests {
         let role = derive_account_role(&account);
         assert_eq!(role.role, "operating");
         assert_eq!(role.priority_level, "critical");
+    }
+
+    #[test]
+    fn test_emergency_fund_with_roof_burns_not_maintenance() {
+        // "roof burns" is a catastrophe scenario, not a maintenance scenario
+        let account = make_account(
+            AccountKind::EmergencyFund,
+            Some("This is the pillow when someting goes wrong. I loose job, our roof at house burns etc..".to_string()),
+            Some(Decimal::from(600000)),
+        );
+        let role = derive_account_role(&account);
+        assert_eq!(role.role, "emergency_reserve", "roof burns = emergency, not maintenance");
+        assert!(role.counts_as_emergency_reserve);
+        assert!(!role.is_earmarked_spending);
+    }
+
+    #[test]
+    fn test_maintenance_reserve_fond_oprav() {
+        // Czech "fond oprav" = repair fund, clearly maintenance
+        let account = make_account(
+            AccountKind::EmergencyFund,
+            Some("We have a house and the is maintenance. This is copying a fond oprav.".to_string()),
+            Some(Decimal::from(150000)),
+        );
+        let role = derive_account_role(&account);
+        assert_eq!(role.role, "maintenance_reserve", "fond oprav + maintenance = maintenance_reserve");
+        assert!(!role.counts_as_emergency_reserve);
+        assert!(role.is_earmarked_spending);
+    }
+
+    #[test]
+    fn test_osvc_vacation_replacement_is_income_smoothing() {
+        // Actual DB data: OSVC + buffer + not making money = income smoothing
+        let account = make_account(
+            AccountKind::Savings,
+            Some("This is special thing, as i'm OSVC, i'm not making money when i'm on a vacation, so this is to build a buffer for when i won't be maing money.".to_string()),
+            Some(Decimal::from(150000)),
+        );
+        let role = derive_account_role(&account);
+        assert_eq!(role.role, "income_smoothing", "OSVC + buffer + not making money = income smoothing");
+        assert!(role.counts_as_income_smoothing);
+        assert!(!role.is_earmarked_spending);
+    }
+
+    #[test]
+    fn test_saving_for_a_thing_is_sinking_fund() {
+        let account = make_account(
+            AccountKind::Savings,
+            Some("Saving for something, like air condition into house, new car down payment etc...".to_string()),
+            None,
+        );
+        let role = derive_account_role(&account);
+        assert_eq!(role.role, "sinking_fund", "saving for + down payment = sinking fund");
+        assert!(role.is_earmarked_spending);
+    }
+
+    #[test]
+    fn test_scoring_emergency_vs_maintenance() {
+        // Pure emergency context
+        let (e, m) = score_emergency_vs_maintenance("job loss, emergency, crisis");
+        assert!(e > m, "pure emergency should score higher");
+
+        // Pure maintenance context
+        let (e, m) = score_emergency_vs_maintenance("maintenance, repair, upkeep");
+        assert!(m > e, "pure maintenance should score higher");
+
+        // Mixed: emergency dominates
+        let (e, m) = score_emergency_vs_maintenance("pillow when something goes wrong, roof burns");
+        assert!(e > m, "emergency context should dominate even with roof mention");
+
+        // Empty description: both zero → default to base kind
+        let (e, m) = score_emergency_vs_maintenance("");
+        assert_eq!(e, 0);
+        assert_eq!(m, 0);
+    }
+
+    #[test]
+    fn test_scoring_smoothing_vs_sinking() {
+        // Pure smoothing context
+        let (s, k) = score_smoothing_vs_sinking("buffer for variable income, osvc", false);
+        assert!(s > k, "pure smoothing should score higher");
+
+        // Pure sinking context
+        let (s, k) = score_smoothing_vs_sinking("saving for vacation accommodation", false);
+        assert!(k > s, "pure sinking should score higher");
+
+        // Ambiguous vacation + OSVC + buffer → smoothing wins
+        let (s, k) = score_smoothing_vs_sinking(
+            "osvc, not making money on vacation, buffer",
+            true,
+        );
+        assert!(s > k, "OSVC + buffer should override vacation sinking signal");
     }
 }
