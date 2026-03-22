@@ -139,8 +139,12 @@ pub struct DashboardMetricsDto {
     pub discretionary_burn_rate: Option<Decimal>,
     /// Net income minus full burn rate
     pub free_cashflow: Decimal,
+    /// 3-month average free cashflow
+    pub avg_3m_free_cashflow: Option<Decimal>,
     /// Operating free cashflow excluding earmarked transfers
     pub operating_free_cashflow: Option<Decimal>,
+    /// 3-month average operating free cashflow
+    pub avg_3m_operating_free_cashflow: Option<Decimal>,
     /// Breakdown of operating free cashflow components
     pub operating_free_cashflow_breakdown: Option<OperatingFreeCashflowBreakdownDto>,
     /// (income - spending) / income
@@ -284,7 +288,9 @@ mod tests {
             controllable_burn_rate: Some(Decimal::new(30_000, 0)),
             discretionary_burn_rate: Some(Decimal::new(5_000, 0)),
             free_cashflow: Decimal::new(30_000, 0),
+            avg_3m_free_cashflow: Some(Decimal::new(28_000, 0)),
             operating_free_cashflow: Some(Decimal::new(25_000, 0)),
+            avg_3m_operating_free_cashflow: Some(Decimal::new(23_000, 0)),
             operating_free_cashflow_breakdown: Some(OperatingFreeCashflowBreakdownDto {
                 description: "Sum of operating account flows".into(),
                 total: Decimal::new(25_000, 0),

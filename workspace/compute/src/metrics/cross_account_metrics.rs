@@ -416,7 +416,9 @@ pub async fn compute_dashboard_metrics(
             controllable_burn_rate: None,
             discretionary_burn_rate: None,
             free_cashflow: Decimal::ZERO,
+            avg_3m_free_cashflow: None,
             operating_free_cashflow: None,
+            avg_3m_operating_free_cashflow: None,
             operating_free_cashflow_breakdown: None,
             savings_rate: None,
             goal_engine: Decimal::ZERO,
@@ -1044,6 +1046,25 @@ pub async fn compute_dashboard_metrics(
         None
     };
 
+    // ── 3-month average cashflow ─────────────────────────────────────────
+
+    let avg_3m_operating_net_flow: Option<Decimal> = {
+        let avgs: Vec<Decimal> = account_metrics_list
+            .iter()
+            .filter(|m| operating_account_ids.contains(&m.account_id))
+            .filter_map(|m| m.three_month_avg_net_flow)
+            .collect();
+        if avgs.is_empty() {
+            None
+        } else {
+            Some(avgs.iter().copied().sum())
+        }
+    };
+
+    let avg_3m_free_cashflow = avg_3m_operating_net_flow
+        .map(|avg_op| avg_op + committed_transfers_out);
+    let avg_3m_operating_free_cashflow = avg_3m_operating_net_flow;
+
     // ── Operating free cashflow ─────────────────────────────────────────
 
     // Operating free cashflow = just the sum of operating account net flows
@@ -1099,7 +1120,9 @@ pub async fn compute_dashboard_metrics(
         controllable_burn_rate,
         discretionary_burn_rate,
         free_cashflow,
+        avg_3m_free_cashflow,
         operating_free_cashflow,
+        avg_3m_operating_free_cashflow,
         operating_free_cashflow_breakdown,
         savings_rate,
         goal_engine,

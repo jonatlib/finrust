@@ -292,7 +292,13 @@ fn render_dashboard(
                         <div class={classes!("stat-value", "text-lg", free_cf_class)}>
                             {fmt_amount(d.free_cashflow)}
                         </div>
-                        <div class="stat-desc text-xs">{"Income minus expenses"}</div>
+                        <div class="stat-desc text-xs">
+                            {if let Some(avg) = d.avg_3m_free_cashflow {
+                                html! { <>{"3-mo avg: "}{fmt_amount(avg)}</> }
+                            } else {
+                                html! { <>{ "Income minus expenses" }</> }
+                            }}
+                        </div>
                     </div>
 
                     // 6. EF Coverage
@@ -417,7 +423,11 @@ fn render_dashboard(
                             {fmt_amount_opt(d.operating_free_cashflow)}
                         </div>
                         <div class="stat-desc text-xs">
-                            {"Sum of operating account flows"}
+                            {if let Some(avg) = d.avg_3m_operating_free_cashflow {
+                                html! { <>{"3-mo avg: "}{fmt_amount(avg)}</> }
+                            } else {
+                                html! { <>{"Sum of operating account flows"}</> }
+                            }}
                         </div>
                     </button>
 

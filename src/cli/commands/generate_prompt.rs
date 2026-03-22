@@ -161,8 +161,11 @@ DATA FORMAT NOTES:
   - discretionary_burn_rate: optional lifestyle expenses — not yet available
   - free_cashflow: net income minus full burn rate — WARNING: this may include internal
     transfers and sinking fund allocations; see "operating_free_cashflow" for a cleaner number
+  - avg_3m_free_cashflow: 3-month rolling average of free_cashflow — smooths out monthly volatility
   - operating_free_cashflow: operating net flow + transfers to TRUE WEALTH only (excludes
     sinking funds, tax reserves, allowances) — THIS IS THE REAL NUMBER
+  - avg_3m_operating_free_cashflow: 3-month rolling average of operating_free_cashflow — use this
+    alongside the current month value for a more stable picture of real cashflow
   - savings_rate: free_cashflow / total_income — WARNING: inflated if sinking funds counted
   - goal_engine: monthly net inflow to all wealth-like accounts (LEGACY METRIC - misleading)
   - safety_reserve_rate: monthly flow to emergency fund + income smoothing
@@ -267,6 +270,13 @@ fn write_dashboard_metrics(out: &mut String, d: &DashboardMetricsDto, today: Nai
         "| Free Cashflow (monthly) | {} |",
         d.free_cashflow.round_dp(0)
     );
+    if let Some(avg) = d.avg_3m_free_cashflow {
+        let _ = writeln!(
+            out,
+            "| Free Cashflow (3-mo avg) | {} |",
+            avg.round_dp(0)
+        );
+    }
     let _ = writeln!(
         out,
         "| ↳ Operating Net Flow | {} |",
@@ -282,6 +292,13 @@ fn write_dashboard_metrics(out: &mut String, d: &DashboardMetricsDto, today: Nai
             out,
             "| **Operating Free Cashflow (REAL)** | **{}** |",
             ofc.round_dp(0)
+        );
+    }
+    if let Some(avg_ofc) = d.avg_3m_operating_free_cashflow {
+        let _ = writeln!(
+            out,
+            "| **Operating Free Cashflow (3-mo avg)** | **{}** |",
+            avg_ofc.round_dp(0)
         );
     }
 
