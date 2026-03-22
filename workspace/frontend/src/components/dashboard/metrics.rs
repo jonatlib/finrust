@@ -319,6 +319,178 @@ fn render_dashboard(d: &DashboardMetricsDto, accounts: &[AccountResponse]) -> Ht
                         <div class="stat-desc text-xs">{"All monthly expenses"}</div>
                     </div>
                 </div>
+
+                // Advanced Cashflow Analysis (NEW METRICS)
+                <h3 class="text-sm font-semibold mt-4 mb-1 opacity-70">
+                    {"Advanced Cashflow Analysis"}
+                    <span class="badge badge-sm badge-primary ml-2">{"NEW"}</span>
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                    // Operating Free Cashflow (THE REAL NUMBER)
+                    <div class="stat bg-base-200 rounded-lg p-3 border-2 border-primary">
+                        <div class="stat-title text-xs font-bold">{"Operating Free Cashflow"}</div>
+                        <div class={classes!(
+                            "stat-value", "text-lg",
+                            if d.operating_free_cashflow.unwrap_or(Decimal::ZERO) >= Decimal::ZERO {
+                                "text-success"
+                            } else {
+                                "text-error"
+                            }
+                        )}>
+                            {fmt_amount_opt(d.operating_free_cashflow)}
+                        </div>
+                        <div class="stat-desc text-xs">
+                            {if let Some(ref breakdown) = d.operating_free_cashflow_breakdown {
+                                format!("= {} + {}",
+                                    fmt_amount(breakdown.operating_net_flow),
+                                    fmt_amount(breakdown.wealth_transfers)
+                                )
+                            } else {
+                                "REAL cashflow (excl. sinking funds)".to_string()
+                            }}
+                        </div>
+                    </div>
+
+                    // Safety Reserve Rate
+                    <div class="stat bg-base-200 rounded-lg p-3">
+                        <div class="stat-title text-xs">{"Safety Reserve Rate"}</div>
+                        <div class="stat-value text-lg text-info">
+                            {fmt_amount_opt(d.safety_reserve_rate)}
+                        </div>
+                        <div class="stat-desc text-xs">{"Emergency + income smoothing"}</div>
+                    </div>
+
+                    // Consumption Goal Rate
+                    <div class="stat bg-base-200 rounded-lg p-3">
+                        <div class="stat-title text-xs">{"Consumption Goal Rate"}</div>
+                        <div class="stat-value text-lg text-warning">
+                            {fmt_amount_opt(d.consumption_goal_rate)}
+                        </div>
+                        <div class="stat-desc text-xs">{"Sinking funds + allowances (WILL BE SPENT)"}</div>
+                    </div>
+
+                    // Wealth Building Rate (TRUE wealth)
+                    <div class="stat bg-base-200 rounded-lg p-3">
+                        <div class="stat-title text-xs">{"Wealth Building Rate"}</div>
+                        <div class="stat-value text-lg text-success">
+                            {fmt_amount_opt(d.wealth_building_rate)}
+                        </div>
+                        <div class="stat-desc text-xs">{"True long-term investments only"}</div>
+                    </div>
+                </div>
+
+                // Operating Cashflow Breakdown - Detailed view
+                {if let Some(ref breakdown) = d.operating_free_cashflow_breakdown {
+                    html! {
+                        <>
+                            <h3 class="text-sm font-semibold mt-4 mb-1 opacity-70">
+                                {"Operating Cashflow Breakdown"}
+                            </h3>
+                            <div class="bg-base-200 rounded-lg p-4">
+                                <table class="table table-sm">
+                                    <tbody>
+                                        {for breakdown.operating_account_contributions.iter().map(|contrib| {
+                                            let is_negative = contrib.net_flow.is_sign_negative();
+                                            html! {
+                                                <tr>
+                                                    <td class="text-xs opacity-70">{format!("{} ({})", contrib.account_name, contrib.account_kind)}</td>
+                                                    <td class={classes!(
+                                                        "text-right", "font-mono", "text-sm",
+                                                        if is_negative { "text-error" } else { "text-success" }
+                                                    )}>
+                                                        {fmt_amount(contrib.net_flow)}
+                                                    </td>
+                                                </tr>
+                                            }
+                                        })}
+                                        <tr class="border-t-2">
+                                            <td class="text-xs font-bold">{"= Operating Net Flow"}</td>
+                                            <td class={classes!(
+                                                "text-right", "font-mono", "font-bold", "text-sm",
+                                                if breakdown.operating_net_flow.is_sign_negative() { "text-error" } else { "text-success" }
+                                            )}>
+                                                {fmt_amount(breakdown.operating_net_flow)}
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="text-xs opacity-70">{"+ Wealth Transfers"}</td>
+                                            <td class="text-right font-mono text-sm text-success">
+                                                {format!("+{}", fmt_amount(breakdown.wealth_transfers))}
+                                            </td>
+                                        </tr>
+                                        <tr class="border-t-2">
+                                            <td class="text-xs font-bold">{"= Operating Free Cashflow"}</td>
+                                            <td class={classes!(
+                                                "text-right", "font-mono", "font-bold", "text-sm",
+                                                if breakdown.operating_free_cashflow.is_sign_negative() { "text-error" } else { "text-success" }
+                                            )}>
+                                                {fmt_amount(breakdown.operating_free_cashflow)}
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </>
+                    }
+                } else {
+                    html! {}
+                }}
+
+                // Shock Readiness (NEW METRICS)
+                <h3 class="text-sm font-semibold mt-4 mb-1 opacity-70">
+                    {"Shock Readiness"}
+                    <span class="badge badge-sm badge-warning ml-2">{"CRITICAL"}</span>
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div class="stat bg-base-200 rounded-lg p-3">
+                        <div class="stat-title text-xs">{"1-Month Income Disruption"}</div>
+                        <div class={classes!(
+                            "stat-value", "text-2xl",
+                            if d.shock_readiness_1m.unwrap_or(false) { "text-success" } else { "text-error" }
+                        )}>
+                            {if d.shock_readiness_1m.unwrap_or(false) { "✓ READY" } else { "✗ NOT READY" }}
+                        </div>
+                        <div class="stat-desc text-xs">{"Can survive 1 month with true reserves"}</div>
+                    </div>
+
+                    <div class="stat bg-base-200 rounded-lg p-3">
+                        <div class="stat-title text-xs">{"3-Month Income Disruption"}</div>
+                        <div class={classes!(
+                            "stat-value", "text-2xl",
+                            if d.shock_readiness_3m.unwrap_or(false) { "text-success" } else { "text-error" }
+                        )}>
+                            {if d.shock_readiness_3m.unwrap_or(false) { "✓ READY" } else { "✗ NOT READY" }}
+                        </div>
+                        <div class="stat-desc text-xs">{"Can survive 3 months with true reserves"}</div>
+                    </div>
+
+                    <div class="stat bg-base-200 rounded-lg p-3">
+                        <div class="stat-title text-xs">{"6-Month Income Disruption"}</div>
+                        <div class={classes!(
+                            "stat-value", "text-2xl",
+                            if d.shock_readiness_6m.unwrap_or(false) { "text-success" } else { "text-error" }
+                        )}>
+                            {if d.shock_readiness_6m.unwrap_or(false) { "✓ READY" } else { "✗ NOT READY" }}
+                        </div>
+                        <div class="stat-desc text-xs">{"Can survive 6 months with true reserves"}</div>
+                    </div>
+                </div>
+
+                // Info alert explaining the new metrics
+                <div class="alert alert-info mt-4">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <div>
+                        <h3 class="font-bold">{"New Advanced Metrics Explained"}</h3>
+                        <div class="text-xs">
+                            <p>{"• Operating Free Cashflow: The REAL number = operating net flow + true wealth transfers (excludes sinking funds, tax)"}</p>
+                            <p>{"• Safety Reserve Rate: Emergency funds + income smoothing buffers"}</p>
+                            <p>{"• Consumption Goal Rate: Sinking funds + allowances (will be spent)"}</p>
+                            <p>{"• Wealth Building Rate: True long-term investments only"}</p>
+                            <p>{"• Tax reserves are treated as mandatory spending (like paying taxes directly), not counted in any goal category"}</p>
+                            <p>{"• Shock Readiness: Uses ONLY true emergency reserves + operating buffers (excludes house, investments, earmarked funds)"}</p>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     }

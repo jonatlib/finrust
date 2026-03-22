@@ -44,9 +44,12 @@ pub fn account_type_bubbles() -> Html {
             let stats_by_account = build_stats_by_account_id(statistics);
             let grouped_accounts = group_accounts_by_kind(accounts);
 
-            let avg_flows = match &*metrics_state {
-                FetchState::Success(dashboard) => build_avg_flow_map(dashboard),
-                _ => HashMap::new(),
+            let (avg_flows, monthly_flows) = match &*metrics_state {
+                FetchState::Success(dashboard) => (
+                    build_avg_flow_map(dashboard),
+                    build_monthly_flow_map(dashboard)
+                ),
+                _ => (HashMap::new(), HashMap::new()),
             };
 
             html! {
@@ -97,6 +100,7 @@ pub fn account_type_bubbles() -> Html {
                                                 .unwrap_or((None, None));
 
                                             let avg_flow = avg_flows.get(&account.id).copied().flatten();
+                                            let monthly_flow = monthly_flows.get(&account.id).copied().flatten();
                                             let accent = account.color.clone()
                                                 .unwrap_or_else(|| crate::colors::color_by_index(idx).to_string());
                                             let border_style = format!("border-left: 4px solid {}", accent);
@@ -137,6 +141,7 @@ pub fn account_type_bubbles() -> Html {
                                                             {fmt_amount_opt(month_end_state)}
                                                         </div>
 
+                                                        {render_monthly_flow_badge(monthly_flow)}
                                                         {render_avg_flow_badge(avg_flow)}
 
                                                         <div class="card-actions justify-end">
@@ -158,6 +163,25 @@ pub fn account_type_bubbles() -> Html {
     }
 }
 
+/// Renders a small badge showing the current month's net flow.
+fn render_monthly_flow_badge(monthly_flow: Option<Decimal>) -> Html {
+    match monthly_flow {
+        Some(flow) => {
+            let (arrow, color) = if flow >= Decimal::ZERO {
+                ("↑", "text-success")
+            } else {
+                ("↓", "text-error")
+            };
+            html! {
+                <div class={classes!("text-xs", "font-bold", color)} title="Current month net flow">
+                    {format!("{} {}/mo", arrow, fmt_amount_f64_int(flow.to_string().parse::<f64>().unwrap_or(0.0)))}
+                </div>
+            }
+        }
+        None => html! {},
+    }
+}
+
 /// Renders a small badge showing the 3-month average net flow.
 fn render_avg_flow_badge(avg_flow: Option<Decimal>) -> Html {
     match avg_flow {
@@ -168,7 +192,7 @@ fn render_avg_flow_badge(avg_flow: Option<Decimal>) -> Html {
                 ("↓", "text-error")
             };
             html! {
-                <div class={classes!("text-xs", "font-medium", color)} title="3-month average net flow">
+                <div class={classes!("text-xs", "font-medium", "opacity-70", color)} title="3-month average net flow">
                     {format!("{} {}/mo avg", arrow, fmt_amount_f64_int(flow.to_string().parse::<f64>().unwrap_or(0.0)))}
                 </div>
             }
@@ -295,6 +319,15 @@ fn build_avg_flow_map(dashboard: &DashboardMetricsDto) -> HashMap<i32, Option<De
         .account_metrics
         .iter()
         .map(|m| (m.account_id, m.three_month_avg_net_flow))
+        .collect()
+}
+
+/// Builds a map of account ID to monthly_net_flow from dashboard metrics.
+fn build_monthly_flow_map(dashboard: &DashboardMetricsDto) -> HashMap<i32, Option<Decimal>> {
+    dashboard
+        .account_metrics
+        .iter()
+        .map(|m| (m.account_id, m.monthly_net_flow))
         .collect()
 }
 

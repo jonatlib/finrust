@@ -7,6 +7,7 @@ use chrono::NaiveDate;
 use model::entities::recurring_transaction;
 
 pub mod account_metrics;
+pub mod account_role;
 pub mod cross_account_metrics;
 
 /// Filters recurring transactions to only those active on the given date.

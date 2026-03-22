@@ -20,8 +20,8 @@ use tracing::{debug, instrument, trace, warn};
 
 use common::metrics::{
     AccountKindMetricsDto, AccountMetricsDto, CashflowBreakdownDto, CashflowContributionDto,
-    DashboardMetricsDto, DebtMetricsDto, InvestmentMetricsDto, OperatingMetricsDto,
-    ReserveMetricsDto,
+    DashboardMetricsDto, DebtMetricsDto, InvestmentMetricsDto, OperatingFreeCashflowBreakdownDto,
+    OperatingMetricsDto, ReserveMetricsDto,
 };
 use model::entities::account::{self, AccountKind};
 use model::entities::recurring_transaction;
@@ -31,6 +31,7 @@ use crate::account_stats;
 use crate::error::{ComputeError, Result};
 
 use super::account_metrics::{compute_stddev, monthly_equivalent};
+use super::account_role::derive_account_role;
 use super::filter_active_recurring;
 
 // ---------------------------------------------------------------------------
@@ -412,12 +413,22 @@ pub async fn compute_dashboard_metrics(
             non_liquid_net_worth: Decimal::ZERO,
             essential_burn_rate: Decimal::ZERO,
             full_burn_rate: Decimal::ZERO,
+            controllable_burn_rate: None,
+            discretionary_burn_rate: None,
             free_cashflow: Decimal::ZERO,
+            operating_free_cashflow: None,
+            operating_free_cashflow_breakdown: None,
             savings_rate: None,
             goal_engine: Decimal::ZERO,
+            safety_reserve_rate: None,
+            consumption_goal_rate: None,
+            wealth_building_rate: None,
             commitment_ratio: None,
             liquidity_ratio_months: None,
             total_debt_burden: None,
+            shock_readiness_1m: None,
+            shock_readiness_3m: None,
+            shock_readiness_6m: None,
             cashflow_breakdown: CashflowBreakdownDto {
                 description: "No accounts".to_string(),
                 timeframe: "N/A".to_string(),
@@ -664,6 +675,7 @@ pub async fn compute_dashboard_metrics(
                 .to_string(),
             account_kind: m.account_kind.clone(),
             net_flow: m.monthly_net_flow.unwrap_or(Decimal::ZERO),
+            three_month_avg_net_flow: m.three_month_avg_net_flow,
         })
         .collect();
 
@@ -684,6 +696,58 @@ pub async fn compute_dashboard_metrics(
         None
     };
 
+    // ── Goal engine split by purpose using derived roles ────────────────
+
+    // Compute derived roles for all accounts
+    let account_roles: std::collections::HashMap<i32, super::account_role::DerivedAccountRole> =
+        all_accounts
+            .iter()
+            .map(|a| (a.id, derive_account_role(a)))
+            .collect();
+
+    let mut safety_reserve_rate = Decimal::ZERO;
+    let mut consumption_goal_rate = Decimal::ZERO;
+    let mut wealth_building_rate = Decimal::ZERO;
+
+    for m in &account_metrics_list {
+        let role = account_roles.get(&m.account_id);
+        let net_flow = Decimal::max(Decimal::ZERO, m.monthly_net_flow.unwrap_or(Decimal::ZERO));
+
+        if net_flow.is_zero() {
+            continue;
+        }
+
+        // Skip operating accounts — their inflows are income, not goal contributions
+        if role.map(|r| r.role == "operating").unwrap_or(false) {
+            continue;
+        }
+
+        match role.map(|r| r.role.as_str()) {
+            Some("emergency_reserve") | Some("income_smoothing") | Some("maintenance_reserve") => {
+                // Safety reserves: emergency + income smoothing only
+                safety_reserve_rate += net_flow;
+            }
+            Some("sinking_fund") | Some("personal_allowance")
+            | Some("family_discretionary") | Some("savings") => {
+                // Consumption: sinking funds + allowances (will be spent)
+                consumption_goal_rate += net_flow;
+            }
+            Some("investment") | Some("equity_investment") | Some("retirement") => {
+                wealth_building_rate += net_flow;
+            }
+            Some("reserved_liability") => {
+                // Tax reserves: This is mandatory spending, NOT a goal
+                // It's effectively the same as paying taxes directly
+                // Don't count it in any of the three categories - it's just burn
+            }
+            _ => {
+                // Unknown roles default to consumption goal (conservative)
+                consumption_goal_rate += net_flow;
+            }
+        }
+    }
+
+    // Legacy goal_engine: sum of all (kept for backward compatibility, but misleading)
     let wealth_account_ids: Vec<i32> = all_accounts
         .iter()
         .filter(|a| {
@@ -761,10 +825,107 @@ pub async fn compute_dashboard_metrics(
         }
     }
 
+    // ── Shock readiness ─────────────────────────────────────────────────
+
+    // Sum only true emergency reserves + operating buffers
+    let mut shock_reserve_total = Decimal::ZERO;
+    for m in &account_metrics_list {
+        let role = account_roles.get(&m.account_id);
+        if role.map(|r| r.counts_as_emergency_reserve).unwrap_or(false)
+            || role.map(|r| r.role == "operating").unwrap_or(false)
+        {
+            shock_reserve_total += Decimal::max(Decimal::ZERO, m.current_balance);
+        }
+    }
+
+    let shock_readiness_1m = if !essential_burn_rate.is_zero() {
+        Some(shock_reserve_total >= essential_burn_rate)
+    } else {
+        None
+    };
+
+    let shock_readiness_3m = if !essential_burn_rate.is_zero() {
+        Some(shock_reserve_total >= essential_burn_rate * Decimal::from(3))
+    } else {
+        None
+    };
+
+    let shock_readiness_6m = if !essential_burn_rate.is_zero() {
+        Some(shock_reserve_total >= essential_burn_rate * Decimal::from(6))
+    } else {
+        None
+    };
+
+    // ── Operating free cashflow ─────────────────────────────────────────
+
+    // Operating free cashflow = operating_net_flow + transfers to WEALTH only
+    // Excludes transfers to sinking funds, tax reserves, allowances
+    let wealth_transfers: Decimal = all_recurring
+        .iter()
+        .filter(|r| {
+            r.include_in_statistics
+                && r.source_account_id.is_some()
+                && ((r.amount.is_sign_negative()
+                    && operating_account_ids.contains(&r.target_account_id)
+                    && r.source_account_id.map_or(false, |sid| {
+                        account_roles
+                            .get(&sid)
+                            .map(|role| role.counts_as_long_term_wealth)
+                            .unwrap_or(false)
+                    }))
+                    || (r.amount.is_sign_positive()
+                        && !operating_account_ids.contains(&r.target_account_id)
+                        && account_roles
+                            .get(&r.target_account_id)
+                            .map(|role| role.counts_as_long_term_wealth)
+                            .unwrap_or(false)
+                        && r.source_account_id
+                            .map_or(false, |sid| operating_account_ids.contains(&sid))))
+        })
+        .map(|r| monthly_equivalent(r.amount.abs(), &r.period))
+        .sum();
+
+    let operating_free_cashflow = Some(operating_net_flow + wealth_transfers);
+
+    // Reuse the contributions computed earlier
+    let operating_account_contributions: Vec<CashflowContributionDto> = account_metrics_list
+        .iter()
+        .filter(|m| operating_account_ids.contains(&m.account_id))
+        .map(|m| CashflowContributionDto {
+            account_id: m.account_id,
+            account_name: account_name_map
+                .get(&m.account_id)
+                .unwrap_or(&"?")
+                .to_string(),
+            account_kind: m.account_kind.clone(),
+            net_flow: m.monthly_net_flow.unwrap_or(Decimal::ZERO),
+            three_month_avg_net_flow: m.three_month_avg_net_flow,
+        })
+        .collect();
+
+    let operating_free_cashflow_breakdown = Some(OperatingFreeCashflowBreakdownDto {
+        description: "Operating free cashflow = operating net flow + transfers to TRUE wealth only (excludes sinking funds, tax reserves, allowances)".to_string(),
+        operating_net_flow,
+        wealth_transfers,
+        operating_free_cashflow: operating_free_cashflow.unwrap(),
+        operating_account_contributions,
+    });
+
+    // ── Burn rate split (placeholder - category data not available) ────
+
+    // For now: essential = full, controllable/discretionary = None
+    // TODO: Add category-based classification when metadata is available
+    let controllable_burn_rate = None;
+    let discretionary_burn_rate = None;
+
     debug!(
         %total_net_worth,
         %liquid_net_worth,
         %free_cashflow,
+        ?operating_free_cashflow,
+        %safety_reserve_rate,
+        %consumption_goal_rate,
+        %wealth_building_rate,
         "Dashboard metrics computed"
     );
 
@@ -774,12 +935,22 @@ pub async fn compute_dashboard_metrics(
         non_liquid_net_worth,
         essential_burn_rate,
         full_burn_rate,
+        controllable_burn_rate,
+        discretionary_burn_rate,
         free_cashflow,
+        operating_free_cashflow,
+        operating_free_cashflow_breakdown,
         savings_rate,
         goal_engine,
+        safety_reserve_rate: Some(safety_reserve_rate),
+        consumption_goal_rate: Some(consumption_goal_rate),
+        wealth_building_rate: Some(wealth_building_rate),
         commitment_ratio,
         liquidity_ratio_months,
         total_debt_burden,
+        shock_readiness_1m,
+        shock_readiness_3m,
+        shock_readiness_6m,
         cashflow_breakdown,
         account_metrics: account_metrics_list,
     })

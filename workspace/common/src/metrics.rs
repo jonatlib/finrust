@@ -99,6 +99,8 @@ pub struct CashflowContributionDto {
     pub account_kind: String,
     /// Net flow for this account in the measurement period
     pub net_flow: Decimal,
+    /// 3-month average net flow
+    pub three_month_avg_net_flow: Option<Decimal>,
 }
 
 /// Breakdown of how the global free cashflow number is computed.
@@ -131,22 +133,57 @@ pub struct DashboardMetricsDto {
     pub essential_burn_rate: Decimal,
     /// Total monthly expenses across all accounts
     pub full_burn_rate: Decimal,
+    /// Controllable but necessary monthly expenses (groceries, fuel, etc.)
+    pub controllable_burn_rate: Option<Decimal>,
+    /// Discretionary monthly expenses (optional, lifestyle)
+    pub discretionary_burn_rate: Option<Decimal>,
     /// Net income minus full burn rate
     pub free_cashflow: Decimal,
+    /// Operating free cashflow excluding earmarked transfers
+    pub operating_free_cashflow: Option<Decimal>,
+    /// Breakdown of operating free cashflow components
+    pub operating_free_cashflow_breakdown: Option<OperatingFreeCashflowBreakdownDto>,
     /// (income - spending) / income
     pub savings_rate: Option<Decimal>,
     /// Monthly total going toward wealth building (EF + investments + sinking funds)
     pub goal_engine: Decimal,
+    /// Monthly flow to safety reserves (emergency + income smoothing only)
+    pub safety_reserve_rate: Option<Decimal>,
+    /// Monthly flow to consumption goals (sinking funds + allowances; excludes tax - that's mandatory spending)
+    pub consumption_goal_rate: Option<Decimal>,
+    /// Monthly flow to true wealth building (investments, extra debt principal)
+    pub wealth_building_rate: Option<Decimal>,
     /// Fixed recurring obligations / net income
     pub commitment_ratio: Option<Decimal>,
     /// Liquid assets / monthly essential burn (in months)
     pub liquidity_ratio_months: Option<Decimal>,
     /// Sum of monthly debt payments / net income
     pub total_debt_burden: Option<Decimal>,
+    /// Can survive 1-month income disruption with available reserves
+    pub shock_readiness_1m: Option<bool>,
+    /// Can survive 3-month income disruption with available reserves
+    pub shock_readiness_3m: Option<bool>,
+    /// Can survive 6-month income disruption with available reserves
+    pub shock_readiness_6m: Option<bool>,
     /// Detailed breakdown of how free_cashflow is computed
     pub cashflow_breakdown: CashflowBreakdownDto,
     /// Per-account metrics for all accounts
     pub account_metrics: Vec<AccountMetricsDto>,
+}
+
+/// Breakdown of operating free cashflow components
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+pub struct OperatingFreeCashflowBreakdownDto {
+    /// Description of how this is calculated
+    pub description: String,
+    /// Operating account net flow (from main accounts)
+    pub operating_net_flow: Decimal,
+    /// Transfers to true wealth building accounts (investments)
+    pub wealth_transfers: Decimal,
+    /// Operating free cashflow = operating_net_flow + wealth_transfers
+    pub operating_free_cashflow: Decimal,
+    /// Per-account contributions to operating_net_flow
+    pub operating_account_contributions: Vec<CashflowContributionDto>,
 }
 
 #[cfg(test)]
@@ -185,12 +222,28 @@ mod tests {
             non_liquid_net_worth: Decimal::new(700_000, 0),
             essential_burn_rate: Decimal::new(85_000, 0),
             full_burn_rate: Decimal::new(120_000, 0),
+            controllable_burn_rate: Some(Decimal::new(30_000, 0)),
+            discretionary_burn_rate: Some(Decimal::new(5_000, 0)),
             free_cashflow: Decimal::new(30_000, 0),
+            operating_free_cashflow: Some(Decimal::new(25_000, 0)),
+            operating_free_cashflow_breakdown: Some(OperatingFreeCashflowBreakdownDto {
+                description: "Operating free cashflow = operating net flow + wealth transfers".into(),
+                operating_net_flow: Decimal::new(10_000, 0),
+                wealth_transfers: Decimal::new(15_000, 0),
+                operating_free_cashflow: Decimal::new(25_000, 0),
+                operating_account_contributions: vec![],
+            }),
             savings_rate: Some(Decimal::new(20, 2)),
             goal_engine: Decimal::new(25_000, 0),
+            safety_reserve_rate: Some(Decimal::new(10_000, 0)),
+            consumption_goal_rate: Some(Decimal::new(8_000, 0)),
+            wealth_building_rate: Some(Decimal::new(7_000, 0)),
             commitment_ratio: Some(Decimal::new(55, 2)),
             liquidity_ratio_months: Some(Decimal::new(94, 1)),
             total_debt_burden: Some(Decimal::new(30, 2)),
+            shock_readiness_1m: Some(true),
+            shock_readiness_3m: Some(true),
+            shock_readiness_6m: Some(false),
             cashflow_breakdown: CashflowBreakdownDto {
                 description: "Free cashflow = income − expenses on operating accounts".into(),
                 timeframe: "last calendar month".into(),
