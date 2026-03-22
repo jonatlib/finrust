@@ -164,7 +164,10 @@ DATA FORMAT NOTES:
   - safety_reserve_rate: monthly flow to emergency fund + income smoothing
   - consumption_goal_rate: monthly flow to sinking funds + allowances (will be spent)
   - wealth_building_rate: monthly flow to true long-term investments
-  - NOTE: Tax reserves are treated as mandatory spending (like paying taxes directly), NOT counted in any goal category
+  - debt_payment_rate: monthly debt payments (mandatory expenses, tracked separately)
+  - savings_rate_category: monthly flow to Savings/Goal account kinds
+  - NOTE: Tax reserves and debt payments are treated as mandatory spending, NOT counted in goal categories
+  - NOTE: Savings/Goal accounts are tracked separately from consumption
   - commitment_ratio: fixed recurring expenses / net income
   - liquidity_ratio_months: liquid assets / essential_burn_rate (runway in months)
   - total_debt_burden: monthly debt payments / net income
@@ -277,9 +280,9 @@ fn write_dashboard_metrics(out: &mut String, d: &DashboardMetricsDto, today: Nai
 
     // Operating free cashflow breakdown
     if let Some(ref breakdown) = d.operating_free_cashflow_breakdown {
-        let _ = writeln!(out, "|   |   |");
+        let _ = writeln!(out, "|   |   |   |");
         let _ = writeln!(out, "| **Operating Cashflow Breakdown:** | **This Month** | **3-mo Avg** |");
-        for contrib in &breakdown.operating_account_contributions {
+        for contrib in &breakdown.contributions {
             let sign = if contrib.net_flow.is_sign_negative() { "" } else { "+" };
             let avg_text = if let Some(avg) = contrib.three_month_avg_net_flow {
                 let avg_sign = if avg.is_sign_negative() { "" } else { "+" };
@@ -299,18 +302,8 @@ fn write_dashboard_metrics(out: &mut String, d: &DashboardMetricsDto, today: Nai
         }
         let _ = writeln!(
             out,
-            "| = Operating Net Flow | {} | |",
-            breakdown.operating_net_flow.round_dp(0)
-        );
-        let _ = writeln!(
-            out,
-            "| + Wealth Transfers | +{} | |",
-            breakdown.wealth_transfers.round_dp(0)
-        );
-        let _ = writeln!(
-            out,
-            "| = **Operating Free Cashflow** | **{}** | |",
-            breakdown.operating_free_cashflow.round_dp(0)
+            "| = **Total Operating Cashflow** | **{}** | |",
+            breakdown.total.round_dp(0)
         );
         let _ = writeln!(out, "|   |   |   |");
     }
@@ -343,6 +336,20 @@ fn write_dashboard_metrics(out: &mut String, d: &DashboardMetricsDto, today: Nai
             out,
             "| ↳ Wealth Building Rate | {} |",
             wr.round_dp(0)
+        );
+    }
+    if let Some(dr) = d.debt_payment_rate {
+        let _ = writeln!(
+            out,
+            "| ↳ Debt Payment Rate | {} |",
+            dr.round_dp(0)
+        );
+    }
+    if let Some(sr) = d.savings_rate_category {
+        let _ = writeln!(
+            out,
+            "| ↳ Savings Rate | {} |",
+            sr.round_dp(0)
         );
     }
     let _ = writeln!(

@@ -149,10 +149,24 @@ pub struct DashboardMetricsDto {
     pub goal_engine: Decimal,
     /// Monthly flow to safety reserves (emergency + income smoothing only)
     pub safety_reserve_rate: Option<Decimal>,
+    /// Breakdown of safety reserve rate components
+    pub safety_reserve_rate_breakdown: Option<CategoryBreakdownDto>,
     /// Monthly flow to consumption goals (sinking funds + allowances; excludes tax - that's mandatory spending)
     pub consumption_goal_rate: Option<Decimal>,
+    /// Breakdown of consumption goal rate components
+    pub consumption_goal_rate_breakdown: Option<CategoryBreakdownDto>,
     /// Monthly flow to true wealth building (investments, extra debt principal)
     pub wealth_building_rate: Option<Decimal>,
+    /// Breakdown of wealth building rate components
+    pub wealth_building_rate_breakdown: Option<CategoryBreakdownDto>,
+    /// Monthly flow to debt payments
+    pub debt_payment_rate: Option<Decimal>,
+    /// Breakdown of debt payment components
+    pub debt_payment_rate_breakdown: Option<CategoryBreakdownDto>,
+    /// Monthly flow to savings/goal accounts
+    pub savings_rate_category: Option<Decimal>,
+    /// Breakdown of savings rate components
+    pub savings_rate_breakdown: Option<CategoryBreakdownDto>,
     /// Fixed recurring obligations / net income
     pub commitment_ratio: Option<Decimal>,
     /// Liquid assets / monthly essential burn (in months)
@@ -176,14 +190,21 @@ pub struct DashboardMetricsDto {
 pub struct OperatingFreeCashflowBreakdownDto {
     /// Description of how this is calculated
     pub description: String,
-    /// Operating account net flow (from main accounts)
-    pub operating_net_flow: Decimal,
-    /// Transfers to true wealth building accounts (investments)
-    pub wealth_transfers: Decimal,
-    /// Operating free cashflow = operating_net_flow + wealth_transfers
-    pub operating_free_cashflow: Decimal,
-    /// Per-account contributions to operating_net_flow
-    pub operating_account_contributions: Vec<CashflowContributionDto>,
+    /// Operating free cashflow (sum of all operating account flows)
+    pub total: Decimal,
+    /// Per-account contributions from operating accounts (RealAccount, Allowance, Shared)
+    pub contributions: Vec<CashflowContributionDto>,
+}
+
+/// Breakdown of a category rate (safety, consumption, wealth building)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+pub struct CategoryBreakdownDto {
+    /// Description of what this category represents
+    pub description: String,
+    /// Total for this category
+    pub total: Decimal,
+    /// Per-account contributions to this category
+    pub contributions: Vec<CashflowContributionDto>,
 }
 
 #[cfg(test)]
@@ -227,17 +248,22 @@ mod tests {
             free_cashflow: Decimal::new(30_000, 0),
             operating_free_cashflow: Some(Decimal::new(25_000, 0)),
             operating_free_cashflow_breakdown: Some(OperatingFreeCashflowBreakdownDto {
-                description: "Operating free cashflow = operating net flow + wealth transfers".into(),
-                operating_net_flow: Decimal::new(10_000, 0),
-                wealth_transfers: Decimal::new(15_000, 0),
-                operating_free_cashflow: Decimal::new(25_000, 0),
-                operating_account_contributions: vec![],
+                description: "Sum of operating account flows".into(),
+                total: Decimal::new(25_000, 0),
+                contributions: vec![],
             }),
             savings_rate: Some(Decimal::new(20, 2)),
             goal_engine: Decimal::new(25_000, 0),
             safety_reserve_rate: Some(Decimal::new(10_000, 0)),
+            safety_reserve_rate_breakdown: None,
             consumption_goal_rate: Some(Decimal::new(8_000, 0)),
+            consumption_goal_rate_breakdown: None,
             wealth_building_rate: Some(Decimal::new(7_000, 0)),
+            wealth_building_rate_breakdown: None,
+            debt_payment_rate: None,
+            debt_payment_rate_breakdown: None,
+            savings_rate_category: None,
+            savings_rate_breakdown: None,
             commitment_ratio: Some(Decimal::new(55, 2)),
             liquidity_ratio_months: Some(Decimal::new(94, 1)),
             total_debt_burden: Some(Decimal::new(30, 2)),

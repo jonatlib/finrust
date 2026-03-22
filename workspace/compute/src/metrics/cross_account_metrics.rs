@@ -20,8 +20,8 @@ use tracing::{debug, instrument, trace, warn};
 
 use common::metrics::{
     AccountKindMetricsDto, AccountMetricsDto, CashflowBreakdownDto, CashflowContributionDto,
-    DashboardMetricsDto, DebtMetricsDto, InvestmentMetricsDto, OperatingFreeCashflowBreakdownDto,
-    OperatingMetricsDto, ReserveMetricsDto,
+    CategoryBreakdownDto, DashboardMetricsDto, DebtMetricsDto, InvestmentMetricsDto,
+    OperatingFreeCashflowBreakdownDto, OperatingMetricsDto, ReserveMetricsDto,
 };
 use model::entities::account::{self, AccountKind};
 use model::entities::recurring_transaction;
@@ -421,8 +421,15 @@ pub async fn compute_dashboard_metrics(
             savings_rate: None,
             goal_engine: Decimal::ZERO,
             safety_reserve_rate: None,
+            safety_reserve_rate_breakdown: None,
             consumption_goal_rate: None,
+            consumption_goal_rate_breakdown: None,
             wealth_building_rate: None,
+            wealth_building_rate_breakdown: None,
+            debt_payment_rate: None,
+            debt_payment_rate_breakdown: None,
+            savings_rate_category: None,
+            savings_rate_breakdown: None,
             commitment_ratio: None,
             liquidity_ratio_months: None,
             total_debt_burden: None,
@@ -708,44 +715,125 @@ pub async fn compute_dashboard_metrics(
     let mut safety_reserve_rate = Decimal::ZERO;
     let mut consumption_goal_rate = Decimal::ZERO;
     let mut wealth_building_rate = Decimal::ZERO;
+    let mut debt_payment_rate = Decimal::ZERO;
+    let mut savings_rate_category = Decimal::ZERO;
+
+    let mut safety_contributions = Vec::new();
+    let mut consumption_contributions = Vec::new();
+    let mut wealth_contributions = Vec::new();
+    let mut debt_contributions = Vec::new();
+    let mut savings_contributions = Vec::new();
 
     for m in &account_metrics_list {
         let role = account_roles.get(&m.account_id);
-        let net_flow = Decimal::max(Decimal::ZERO, m.monthly_net_flow.unwrap_or(Decimal::ZERO));
-
-        if net_flow.is_zero() {
-            continue;
-        }
 
         // Skip operating accounts — their inflows are income, not goal contributions
         if role.map(|r| r.role == "operating").unwrap_or(false) {
             continue;
         }
 
-        match role.map(|r| r.role.as_str()) {
-            Some("emergency_reserve") | Some("income_smoothing") | Some("maintenance_reserve") => {
-                // Safety reserves: emergency + income smoothing only
+        // For debt accounts, use absolute value of net flow (payments are typically positive)
+        // For other accounts, only count positive flows (contributions)
+        let is_debt = m.account_kind == "Debt";
+        let raw_flow = m.monthly_net_flow.unwrap_or(Decimal::ZERO);
+        let net_flow = if is_debt {
+            raw_flow.abs()
+        } else {
+            Decimal::max(Decimal::ZERO, raw_flow)
+        };
+
+        if net_flow.is_zero() {
+            continue;
+        }
+
+        let contribution = CashflowContributionDto {
+            account_id: m.account_id,
+            account_name: account_name_map
+                .get(&m.account_id)
+                .unwrap_or(&"?")
+                .to_string(),
+            account_kind: m.account_kind.clone(),
+            net_flow,
+            three_month_avg_net_flow: m.three_month_avg_net_flow.map(|f| if is_debt { f.abs() } else { Decimal::max(Decimal::ZERO, f) }),
+        };
+
+        // Categorize purely by account_kind (no role-based logic)
+        match m.account_kind.as_str() {
+            "Debt" => {
+                // Debt payments are mandatory expenses, tracked separately
+                debt_payment_rate += net_flow;
+                debt_contributions.push(contribution);
+            }
+            "Savings" | "Goal" => {
+                // Savings/Goal accounts tracked separately from consumption
+                savings_rate_category += net_flow;
+                savings_contributions.push(contribution);
+            }
+            "EmergencyFund" => {
+                // Emergency funds are safety reserves
                 safety_reserve_rate += net_flow;
+                safety_contributions.push(contribution);
             }
-            Some("sinking_fund") | Some("personal_allowance")
-            | Some("family_discretionary") | Some("savings") => {
-                // Consumption: sinking funds + allowances (will be spent)
+            "Allowance" | "Shared" => {
+                // Allowances and shared accounts are consumption (will be spent)
                 consumption_goal_rate += net_flow;
+                consumption_contributions.push(contribution);
             }
-            Some("investment") | Some("equity_investment") | Some("retirement") => {
+            "Investment" | "Equity" => {
+                // Investments and equity are wealth building
                 wealth_building_rate += net_flow;
+                wealth_contributions.push(contribution);
             }
-            Some("reserved_liability") => {
+            "Tax" => {
                 // Tax reserves: This is mandatory spending, NOT a goal
-                // It's effectively the same as paying taxes directly
-                // Don't count it in any of the three categories - it's just burn
+                // Don't count it in any category - it's just burn
+            }
+            "RealAccount" => {
+                // Real accounts are operating, already filtered out above
+                // This should not be reached
+            }
+            "House" => {
+                // House/property - not a cashflow goal, it's an asset
+                // Don't count it
+            }
+            "Other" => {
+                // Unknown - don't categorize to avoid mistakes
             }
             _ => {
-                // Unknown roles default to consumption goal (conservative)
-                consumption_goal_rate += net_flow;
+                // Unknown account kind - don't categorize to avoid mistakes
             }
         }
     }
+
+    let safety_reserve_rate_breakdown = Some(CategoryBreakdownDto {
+        description: "EmergencyFund accounts only".to_string(),
+        total: safety_reserve_rate,
+        contributions: safety_contributions,
+    });
+
+    let consumption_goal_rate_breakdown = Some(CategoryBreakdownDto {
+        description: "Allowance and Shared accounts (will be spent)".to_string(),
+        total: consumption_goal_rate,
+        contributions: consumption_contributions,
+    });
+
+    let wealth_building_rate_breakdown = Some(CategoryBreakdownDto {
+        description: "Investment and Equity accounts only".to_string(),
+        total: wealth_building_rate,
+        contributions: wealth_contributions,
+    });
+
+    let debt_payment_rate_breakdown = Some(CategoryBreakdownDto {
+        description: "Monthly debt payments (mandatory expenses)".to_string(),
+        total: debt_payment_rate,
+        contributions: debt_contributions,
+    });
+
+    let savings_rate_breakdown = Some(CategoryBreakdownDto {
+        description: "Savings and goal account contributions".to_string(),
+        total: savings_rate_category,
+        contributions: savings_contributions,
+    });
 
     // Legacy goal_engine: sum of all (kept for backward compatibility, but misleading)
     let wealth_account_ids: Vec<i32> = all_accounts
@@ -858,34 +946,9 @@ pub async fn compute_dashboard_metrics(
 
     // ── Operating free cashflow ─────────────────────────────────────────
 
-    // Operating free cashflow = operating_net_flow + transfers to WEALTH only
-    // Excludes transfers to sinking funds, tax reserves, allowances
-    let wealth_transfers: Decimal = all_recurring
-        .iter()
-        .filter(|r| {
-            r.include_in_statistics
-                && r.source_account_id.is_some()
-                && ((r.amount.is_sign_negative()
-                    && operating_account_ids.contains(&r.target_account_id)
-                    && r.source_account_id.map_or(false, |sid| {
-                        account_roles
-                            .get(&sid)
-                            .map(|role| role.counts_as_long_term_wealth)
-                            .unwrap_or(false)
-                    }))
-                    || (r.amount.is_sign_positive()
-                        && !operating_account_ids.contains(&r.target_account_id)
-                        && account_roles
-                            .get(&r.target_account_id)
-                            .map(|role| role.counts_as_long_term_wealth)
-                            .unwrap_or(false)
-                        && r.source_account_id
-                            .map_or(false, |sid| operating_account_ids.contains(&sid))))
-        })
-        .map(|r| monthly_equivalent(r.amount.abs(), &r.period))
-        .sum();
-
-    let operating_free_cashflow = Some(operating_net_flow + wealth_transfers);
+    // Operating free cashflow = just the sum of operating account net flows
+    // No synthetic calculations, just actual account flows
+    let operating_free_cashflow = Some(operating_net_flow);
 
     // Reuse the contributions computed earlier
     let operating_account_contributions: Vec<CashflowContributionDto> = account_metrics_list
@@ -904,11 +967,9 @@ pub async fn compute_dashboard_metrics(
         .collect();
 
     let operating_free_cashflow_breakdown = Some(OperatingFreeCashflowBreakdownDto {
-        description: "Operating free cashflow = operating net flow + transfers to TRUE wealth only (excludes sinking funds, tax reserves, allowances)".to_string(),
-        operating_net_flow,
-        wealth_transfers,
-        operating_free_cashflow: operating_free_cashflow.unwrap(),
-        operating_account_contributions,
+        description: "Sum of all operating account flows (RealAccount, Allowance, Shared kinds)".to_string(),
+        total: operating_free_cashflow.unwrap(),
+        contributions: operating_account_contributions,
     });
 
     // ── Burn rate split (placeholder - category data not available) ────
@@ -943,8 +1004,15 @@ pub async fn compute_dashboard_metrics(
         savings_rate,
         goal_engine,
         safety_reserve_rate: Some(safety_reserve_rate),
+        safety_reserve_rate_breakdown,
         consumption_goal_rate: Some(consumption_goal_rate),
+        consumption_goal_rate_breakdown,
         wealth_building_rate: Some(wealth_building_rate),
+        wealth_building_rate_breakdown,
+        debt_payment_rate: Some(debt_payment_rate),
+        debt_payment_rate_breakdown,
+        savings_rate_category: Some(savings_rate_category),
+        savings_rate_breakdown,
         commitment_ratio,
         liquidity_ratio_months,
         total_debt_burden,

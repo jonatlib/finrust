@@ -6,6 +6,7 @@ use crate::hooks::FetchState;
 use common::metrics::{AccountKindMetricsDto, DashboardMetricsDto};
 use rust_decimal::Decimal;
 use std::collections::HashMap;
+use web_sys::MouseEvent;
 use yew::prelude::*;
 
 /// Formats a Decimal as a percentage (assumes the value is already 0-1 scale).
@@ -27,10 +28,52 @@ fn fmt_months(value: Option<Decimal>) -> String {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum BreakdownCategory {
+    Operating,
+    Safety,
+    Consumption,
+    Wealth,
+    Debt,
+    Savings,
+}
+
 #[function_component(DashboardMetrics)]
 pub fn dashboard_metrics() -> Html {
     let (fetch_state, _refetch) = use_fetch_with_refetch(get_dashboard_metrics);
     let (accounts_state, _) = use_fetch_with_refetch(|| get_accounts_with_ignored(true));
+
+    let selected_category = use_state(|| BreakdownCategory::Operating);
+
+    let select_operating = {
+        let selected_category = selected_category.clone();
+        Callback::from(move |_| selected_category.set(BreakdownCategory::Operating))
+    };
+
+    let select_safety = {
+        let selected_category = selected_category.clone();
+        Callback::from(move |_| selected_category.set(BreakdownCategory::Safety))
+    };
+
+    let select_consumption = {
+        let selected_category = selected_category.clone();
+        Callback::from(move |_| selected_category.set(BreakdownCategory::Consumption))
+    };
+
+    let select_wealth = {
+        let selected_category = selected_category.clone();
+        Callback::from(move |_| selected_category.set(BreakdownCategory::Wealth))
+    };
+
+    let select_debt = {
+        let selected_category = selected_category.clone();
+        Callback::from(move |_| selected_category.set(BreakdownCategory::Debt))
+    };
+
+    let select_savings = {
+        let selected_category = selected_category.clone();
+        Callback::from(move |_| selected_category.set(BreakdownCategory::Savings))
+    };
 
     match (&*fetch_state, &*accounts_state) {
         (FetchState::Loading, _) | (_, FetchState::Loading) => html! {
@@ -53,12 +96,32 @@ pub fn dashboard_metrics() -> Html {
                 </div>
             </div>
         },
-        (FetchState::Success(dashboard), FetchState::Success(accounts)) => render_dashboard(dashboard, accounts),
+        (FetchState::Success(dashboard), FetchState::Success(accounts)) => render_dashboard(
+            dashboard,
+            accounts,
+            &selected_category,
+            &select_operating,
+            &select_safety,
+            &select_consumption,
+            &select_wealth,
+            &select_debt,
+            &select_savings,
+        ),
         _ => html! { <></> },
     }
 }
 
-fn render_dashboard(d: &DashboardMetricsDto, accounts: &[AccountResponse]) -> Html {
+fn render_dashboard(
+    d: &DashboardMetricsDto,
+    accounts: &[AccountResponse],
+    selected_category: &UseStateHandle<BreakdownCategory>,
+    select_operating: &Callback<MouseEvent>,
+    select_safety: &Callback<MouseEvent>,
+    select_consumption: &Callback<MouseEvent>,
+    select_wealth: &Callback<MouseEvent>,
+    select_debt: &Callback<MouseEvent>,
+    select_savings: &Callback<MouseEvent>,
+) -> Html {
     let net_worth_class = if d.total_net_worth >= Decimal::ZERO {
         "text-success"
     } else {
@@ -325,9 +388,20 @@ fn render_dashboard(d: &DashboardMetricsDto, accounts: &[AccountResponse]) -> Ht
                     {"Advanced Cashflow Analysis"}
                     <span class="badge badge-sm badge-primary ml-2">{"NEW"}</span>
                 </h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                     // Operating Free Cashflow (THE REAL NUMBER)
-                    <div class="stat bg-base-200 rounded-lg p-3 border-2 border-primary">
+                    <button
+                        class={classes!(
+                            "stat", "bg-base-200", "rounded-lg", "p-3",
+                            "border-2", "cursor-pointer", "hover:shadow-md", "transition-all",
+                            if **selected_category == BreakdownCategory::Operating {
+                                "border-primary"
+                            } else {
+                                "border-transparent"
+                            }
+                        )}
+                        onclick={select_operating.clone()}
+                    >
                         <div class="stat-title text-xs font-bold">{"Operating Free Cashflow"}</div>
                         <div class={classes!(
                             "stat-value", "text-lg",
@@ -340,100 +414,201 @@ fn render_dashboard(d: &DashboardMetricsDto, accounts: &[AccountResponse]) -> Ht
                             {fmt_amount_opt(d.operating_free_cashflow)}
                         </div>
                         <div class="stat-desc text-xs">
-                            {if let Some(ref breakdown) = d.operating_free_cashflow_breakdown {
-                                format!("= {} + {}",
-                                    fmt_amount(breakdown.operating_net_flow),
-                                    fmt_amount(breakdown.wealth_transfers)
-                                )
-                            } else {
-                                "REAL cashflow (excl. sinking funds)".to_string()
-                            }}
+                            {"Sum of operating account flows"}
                         </div>
-                    </div>
+                    </button>
 
                     // Safety Reserve Rate
-                    <div class="stat bg-base-200 rounded-lg p-3">
+                    <button
+                        class={classes!(
+                            "stat", "bg-base-200", "rounded-lg", "p-3",
+                            "border-2", "cursor-pointer", "hover:shadow-md", "transition-all",
+                            if **selected_category == BreakdownCategory::Safety {
+                                "border-info"
+                            } else {
+                                "border-transparent"
+                            }
+                        )}
+                        onclick={select_safety.clone()}
+                    >
                         <div class="stat-title text-xs">{"Safety Reserve Rate"}</div>
                         <div class="stat-value text-lg text-info">
                             {fmt_amount_opt(d.safety_reserve_rate)}
                         </div>
                         <div class="stat-desc text-xs">{"Emergency + income smoothing"}</div>
-                    </div>
+                    </button>
 
                     // Consumption Goal Rate
-                    <div class="stat bg-base-200 rounded-lg p-3">
+                    <button
+                        class={classes!(
+                            "stat", "bg-base-200", "rounded-lg", "p-3",
+                            "border-2", "cursor-pointer", "hover:shadow-md", "transition-all",
+                            if **selected_category == BreakdownCategory::Consumption {
+                                "border-warning"
+                            } else {
+                                "border-transparent"
+                            }
+                        )}
+                        onclick={select_consumption.clone()}
+                    >
                         <div class="stat-title text-xs">{"Consumption Goal Rate"}</div>
                         <div class="stat-value text-lg text-warning">
                             {fmt_amount_opt(d.consumption_goal_rate)}
                         </div>
                         <div class="stat-desc text-xs">{"Sinking funds + allowances (WILL BE SPENT)"}</div>
-                    </div>
+                    </button>
 
                     // Wealth Building Rate (TRUE wealth)
-                    <div class="stat bg-base-200 rounded-lg p-3">
+                    <button
+                        class={classes!(
+                            "stat", "bg-base-200", "rounded-lg", "p-3",
+                            "border-2", "cursor-pointer", "hover:shadow-md", "transition-all",
+                            if **selected_category == BreakdownCategory::Wealth {
+                                "border-success"
+                            } else {
+                                "border-transparent"
+                            }
+                        )}
+                        onclick={select_wealth.clone()}
+                    >
                         <div class="stat-title text-xs">{"Wealth Building Rate"}</div>
                         <div class="stat-value text-lg text-success">
                             {fmt_amount_opt(d.wealth_building_rate)}
                         </div>
                         <div class="stat-desc text-xs">{"True long-term investments only"}</div>
-                    </div>
+                    </button>
+
+                    // Debt Payment Rate
+                    <button
+                        class={classes!(
+                            "stat", "bg-base-200", "rounded-lg", "p-3",
+                            "border-2", "cursor-pointer", "hover:shadow-md", "transition-all",
+                            if **selected_category == BreakdownCategory::Debt {
+                                "border-error"
+                            } else {
+                                "border-transparent"
+                            }
+                        )}
+                        onclick={select_debt.clone()}
+                    >
+                        <div class="stat-title text-xs">{"Debt Payments"}</div>
+                        <div class="stat-value text-lg text-error">
+                            {fmt_amount_opt(d.debt_payment_rate)}
+                        </div>
+                        <div class="stat-desc text-xs">{"Monthly debt payments (mandatory)"}</div>
+                    </button>
+
+                    // Savings Rate
+                    <button
+                        class={classes!(
+                            "stat", "bg-base-200", "rounded-lg", "p-3",
+                            "border-2", "cursor-pointer", "hover:shadow-md", "transition-all",
+                            if **selected_category == BreakdownCategory::Savings {
+                                "border-accent"
+                            } else {
+                                "border-transparent"
+                            }
+                        )}
+                        onclick={select_savings.clone()}
+                    >
+                        <div class="stat-title text-xs">{"Savings Rate"}</div>
+                        <div class="stat-value text-lg text-accent">
+                            {fmt_amount_opt(d.savings_rate_category)}
+                        </div>
+                        <div class="stat-desc text-xs">{"Savings/Goal account contributions"}</div>
+                    </button>
                 </div>
 
-                // Operating Cashflow Breakdown - Detailed view
-                {if let Some(ref breakdown) = d.operating_free_cashflow_breakdown {
-                    html! {
-                        <>
-                            <h3 class="text-sm font-semibold mt-4 mb-1 opacity-70">
-                                {"Operating Cashflow Breakdown"}
-                            </h3>
-                            <div class="bg-base-200 rounded-lg p-4">
-                                <table class="table table-sm">
-                                    <tbody>
-                                        {for breakdown.operating_account_contributions.iter().map(|contrib| {
-                                            let is_negative = contrib.net_flow.is_sign_negative();
-                                            html! {
+                // Category Breakdown - Dynamic based on selection
+                {match **selected_category {
+                    BreakdownCategory::Operating => {
+                        if let Some(ref breakdown) = d.operating_free_cashflow_breakdown {
+                            html! {
+                                <>
+                                    <h3 class="text-sm font-semibold mt-4 mb-1 opacity-70">
+                                        {"Operating Free Cashflow Breakdown"}
+                                    </h3>
+                                    <div class="bg-base-200 rounded-lg p-4">
+                                        <table class="table table-sm">
+                                            <thead>
                                                 <tr>
-                                                    <td class="text-xs opacity-70">{format!("{} ({})", contrib.account_name, contrib.account_kind)}</td>
-                                                    <td class={classes!(
-                                                        "text-right", "font-mono", "text-sm",
-                                                        if is_negative { "text-error" } else { "text-success" }
-                                                    )}>
-                                                        {fmt_amount(contrib.net_flow)}
-                                                    </td>
+                                                    <th class="text-xs">{"Account"}</th>
+                                                    <th class="text-xs text-right">{"This Month"}</th>
+                                                    <th class="text-xs text-right">{"3-mo Avg"}</th>
                                                 </tr>
-                                            }
-                                        })}
-                                        <tr class="border-t-2">
-                                            <td class="text-xs font-bold">{"= Operating Net Flow"}</td>
-                                            <td class={classes!(
-                                                "text-right", "font-mono", "font-bold", "text-sm",
-                                                if breakdown.operating_net_flow.is_sign_negative() { "text-error" } else { "text-success" }
-                                            )}>
-                                                {fmt_amount(breakdown.operating_net_flow)}
-                                            </td>
-                                        </tr>
-                                        <tr>
-                                            <td class="text-xs opacity-70">{"+ Wealth Transfers"}</td>
-                                            <td class="text-right font-mono text-sm text-success">
-                                                {format!("+{}", fmt_amount(breakdown.wealth_transfers))}
-                                            </td>
-                                        </tr>
-                                        <tr class="border-t-2">
-                                            <td class="text-xs font-bold">{"= Operating Free Cashflow"}</td>
-                                            <td class={classes!(
-                                                "text-right", "font-mono", "font-bold", "text-sm",
-                                                if breakdown.operating_free_cashflow.is_sign_negative() { "text-error" } else { "text-success" }
-                                            )}>
-                                                {fmt_amount(breakdown.operating_free_cashflow)}
-                                            </td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </>
-                    }
-                } else {
-                    html! {}
+                                            </thead>
+                                            <tbody>
+                                                {for breakdown.contributions.iter().map(|contrib| {
+                                                    let is_negative = contrib.net_flow.is_sign_negative();
+                                                    html! {
+                                                        <tr>
+                                                            <td class="text-xs opacity-70">{format!("{} ({})", contrib.account_name, contrib.account_kind)}</td>
+                                                            <td class={classes!(
+                                                                "text-right", "font-mono", "text-sm",
+                                                                if is_negative { "text-error" } else { "text-success" }
+                                                            )}>
+                                                                {fmt_amount(contrib.net_flow)}
+                                                            </td>
+                                                            <td class="text-right font-mono text-sm opacity-70">
+                                                                {fmt_amount_opt(contrib.three_month_avg_net_flow)}
+                                                            </td>
+                                                        </tr>
+                                                    }
+                                                })}
+                                                <tr class="border-t-2">
+                                                    <td class="text-xs font-bold">{"= Total"}</td>
+                                                    <td class={classes!(
+                                                        "text-right", "font-mono", "font-bold", "text-sm",
+                                                        if breakdown.total.is_sign_negative() { "text-error" } else { "text-success" }
+                                                    )}>
+                                                        {fmt_amount(breakdown.total)}
+                                                    </td>
+                                                    <td></td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </>
+                            }
+                        } else {
+                            html! {}
+                        }
+                    },
+                    BreakdownCategory::Safety => {
+                        if let Some(ref breakdown) = d.safety_reserve_rate_breakdown {
+                            render_category_breakdown("Safety Reserve Breakdown", breakdown, "info")
+                        } else {
+                            html! {}
+                        }
+                    },
+                    BreakdownCategory::Consumption => {
+                        if let Some(ref breakdown) = d.consumption_goal_rate_breakdown {
+                            render_category_breakdown("Consumption Goal Breakdown", breakdown, "warning")
+                        } else {
+                            html! {}
+                        }
+                    },
+                    BreakdownCategory::Wealth => {
+                        if let Some(ref breakdown) = d.wealth_building_rate_breakdown {
+                            render_category_breakdown("Wealth Building Breakdown", breakdown, "success")
+                        } else {
+                            html! {}
+                        }
+                    },
+                    BreakdownCategory::Debt => {
+                        if let Some(ref breakdown) = d.debt_payment_rate_breakdown {
+                            render_category_breakdown("Debt Payment Breakdown", breakdown, "error")
+                        } else {
+                            html! {}
+                        }
+                    },
+                    BreakdownCategory::Savings => {
+                        if let Some(ref breakdown) = d.savings_rate_breakdown {
+                            render_category_breakdown("Savings Rate Breakdown", breakdown, "accent")
+                        } else {
+                            html! {}
+                        }
+                    },
                 }}
 
                 // Shock Readiness (NEW METRICS)
@@ -493,6 +668,64 @@ fn render_dashboard(d: &DashboardMetricsDto, accounts: &[AccountResponse]) -> Ht
                 </div>
             </div>
         </div>
+    }
+}
+
+/// Renders a generic category breakdown table
+fn render_category_breakdown(title: &str, breakdown: &common::metrics::CategoryBreakdownDto, color: &str) -> Html {
+    use crate::formatting::fmt_amount;
+
+    let total_color = match color {
+        "info" => "text-info",
+        "warning" => "text-warning",
+        "success" => "text-success",
+        "error" => "text-error",
+        "accent" => "text-accent",
+        _ => "text-primary",
+    };
+
+    html! {
+        <>
+            <h3 class="text-sm font-semibold mt-4 mb-1 opacity-70">
+                {title}
+            </h3>
+            <div class="bg-base-200 rounded-lg p-4">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th class="text-xs">{"Account"}</th>
+                            <th class="text-xs text-right">{"This Month"}</th>
+                            <th class="text-xs text-right">{"3-mo Avg"}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {for breakdown.contributions.iter().map(|contrib| {
+                            html! {
+                                <tr>
+                                    <td class="text-xs opacity-70">{format!("{} ({})", contrib.account_name, contrib.account_kind)}</td>
+                                    <td class="text-right font-mono text-sm text-success">
+                                        {fmt_amount(contrib.net_flow)}
+                                    </td>
+                                    <td class="text-right font-mono text-sm opacity-70">
+                                        {fmt_amount_opt(contrib.three_month_avg_net_flow)}
+                                    </td>
+                                </tr>
+                            }
+                        })}
+                        <tr class="border-t-2">
+                            <td class="text-xs font-bold">{"= Total"}</td>
+                            <td class={classes!("text-right", "font-mono", "font-bold", "text-sm", total_color)}>
+                                {fmt_amount(breakdown.total)}
+                            </td>
+                            <td></td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div class="text-xs opacity-70 mt-2">
+                    {&breakdown.description}
+                </div>
+            </div>
+        </>
     }
 }
 
